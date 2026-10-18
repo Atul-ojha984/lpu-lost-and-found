@@ -1,0 +1,99 @@
+# ==============================================================================
+# LPU Lost & Found Property Recovery Platform — Git Ignore Configuration
+# ==============================================================================
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python Virtual Environments
+.venv/
+venv/
+backend/.venv/
+ENV/
+env/
+
+# Python Bytecode and Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+backend/.pytest_cache/
+
+# Testing and Coverage
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+coverage/
+htmlcov/
+.nyc_output/
+
+# Environment files and credentials (CRITICAL: NEVER COMMIT SECRETS)
+.env
+.env.*
+apps/api/.env
+apps/api/.env.*
+apps/web/.env
+apps/web/.env.*
+apps/web/.env.local
+backend/.env
+backend/.env.*
+*.pem
+*.key
+*.cert
+*.crt
+
+# Always track sanitized example templates
+!.env.example
+!apps/api/.env.example
+!apps/web/.env.example
+!backend/.env.example
+
+# Local Database Files
+*.sqlite3
+*.db
+db.sqlite3
+backend/db.sqlite3
+
+# Build outputs
+apps/api/dist/
+apps/web/.next/
+apps/web/out/
+apps/web/build/
+dist/
+build/
+staticfiles/
+backend/staticfiles/
+*.tsbuildinfo
+.turbo/
+.vercel/
+
+# Media, user-uploaded evidence photos and temporary files
+uploads/
+apps/api/uploads/
+/media/
+backend/media/*
+!backend/media/.gitkeep
+*.tmp
+*.temp
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

@@ -1,0 +1,26 @@
+{
+  "name": "lpu-lost-and-found-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace=apps/web run dev",
+    "dev:django": "node scripts/run-django-manage.mjs runserver 127.0.0.1:8000",
+    "dev:api": "npm --workspace=apps/api run dev",
+    "build:web": "npm --workspace=apps/web run build",
+    "build:api": "npm --workspace=apps/api run build",
+    "test:django": "node scripts/run-django-tests.mjs",
+    "test:api": "npm --workspace=apps/api run test",
+    "check:django": "node scripts/run-django-manage.mjs check",
+    "typecheck:web": "npm --workspace=apps/web run typecheck",
+    "typecheck:api": "npm --workspace=apps/api run typecheck",
+    "dev": "npm --workspace=apps/web run dev",
+    "build": "npm --workspace=apps/web run build",
+    "lint": "npm --workspace=apps/web run lint",
+    "smoke:api": "node scripts/deployment-smoke-test.mjs",
+    "smoke:e2e": "node scripts/e2e-workflow-smoke-test.mjs",
+    "setup:db": "node scripts/setup-db-indexes.mjs"
+  }
+}

@@ -1,0 +1,3919 @@
+openapi: 3.0.3
+info:
+  title: LPU Lost & Found Property Recovery API
+  version: 1.0.0
+  description: Comprehensive REST API documentation for Lovely Professional University
+    campus lost and found management platform.
+paths:
+  /:
+    get:
+      operationId: root_retrieve
+      description: |-
+        Public Welcome Endpoint
+        Matches the Express root endpoint for deployment smoke tests and perimeter health checks.
+      summary: Root Welcome & Service Status
+      tags:
+      - Health
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Welcome message
+  /api/v1:
+    get:
+      operationId: api_v1_retrieve
+      description: |-
+        API v1 Root Discovery & Service Catalog Endpoint
+        Serves requests to http://localhost:8000/api/v1 and http://localhost:8000/api/v1/.
+      summary: API v1 Root Service Discovery & Endpoints Catalog
+      tags:
+      - Health
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: API v1 service catalog and links
+  /api/v1/:
+    get:
+      operationId: api_v1_retrieve_2
+      description: |-
+        API v1 Root Discovery & Service Catalog Endpoint
+        Serves requests to http://localhost:8000/api/v1 and http://localhost:8000/api/v1/.
+      summary: API v1 Root Service Discovery & Endpoints Catalog
+      tags:
+      - Health
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: API v1 service catalog and links
+  /api/v1/admin/analytics:
+    get:
+      operationId: api_v1_admin_analytics_retrieve
+      description: |-
+        Live analytics dashboard calculated strictly from live database records.
+        Restricted to campus and system administrators.
+      summary: Get Campus Lost & Found Analytics
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Calculated campus property analytics
+  /api/v1/admin/analytics/:
+    get:
+      operationId: api_v1_admin_analytics_retrieve_2
+      description: |-
+        Live analytics dashboard calculated strictly from live database records.
+        Restricted to campus and system administrators.
+      summary: Get Campus Lost & Found Analytics
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Calculated campus property analytics
+  /api/v1/admin/audit-logs:
+    get:
+      operationId: api_v1_admin_audit_logs_retrieve
+      description: Authorized audit history search with strict redaction of sensitive
+        credentials.
+      summary: Search Audit History Logs
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: Filter by audit action
+      - in: query
+        name: actorId
+        schema:
+          type: string
+        description: Actor UUID
+      - in: query
+        name: endDate
+        schema:
+          type: string
+        description: ISO 8601 end timestamp
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size (default 20, max 100)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: startDate
+        schema:
+          type: string
+        description: ISO 8601 start timestamp
+      - in: query
+        name: targetEntity
+        schema:
+          type: string
+        description: Target entity name (Item, Claim, User)
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Paginated audit logs
+  /api/v1/admin/audit-logs/:
+    get:
+      operationId: api_v1_admin_audit_logs_retrieve_2
+      description: Authorized audit history search with strict redaction of sensitive
+        credentials.
+      summary: Search Audit History Logs
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: Filter by audit action
+      - in: query
+        name: actorId
+        schema:
+          type: string
+        description: Actor UUID
+      - in: query
+        name: endDate
+        schema:
+          type: string
+        description: ISO 8601 end timestamp
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size (default 20, max 100)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: startDate
+        schema:
+          type: string
+        description: ISO 8601 start timestamp
+      - in: query
+        name: targetEntity
+        schema:
+          type: string
+        description: Target entity name (Item, Claim, User)
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Paginated audit logs
+  /api/v1/admin/categories:
+    get:
+      operationId: api_v1_admin_categories_list
+      description: Administrative management for item categories.
+      summary: Admin List Categories
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemCategory'
+          description: ''
+    post:
+      operationId: api_v1_admin_categories_create
+      description: Administrative management for item categories.
+      summary: Admin Create Category
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCategory'
+          description: ''
+  /api/v1/admin/categories/:
+    get:
+      operationId: api_v1_admin_categories_list_2
+      description: Administrative management for item categories.
+      summary: Admin List Categories
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemCategory'
+          description: ''
+    post:
+      operationId: api_v1_admin_categories_create_2
+      description: Administrative management for item categories.
+      summary: Admin Create Category
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCategory'
+          description: ''
+  /api/v1/admin/categories/{id}:
+    patch:
+      operationId: api_v1_admin_categories_partial_update
+      description: Administrative update for a category.
+      summary: Admin Update Category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateCategoryRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCategory'
+          description: ''
+  /api/v1/admin/categories/{id}/:
+    patch:
+      operationId: api_v1_admin_categories_partial_update_2
+      description: Administrative update for a category.
+      summary: Admin Update Category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateCategoryRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCategory'
+          description: ''
+  /api/v1/admin/disposal/approve:
+    post:
+      operationId: api_v1_admin_disposal_approve_create
+      description: |-
+        Formal administrative disposal approval.
+        Requires human committee signoff with disposal method and justification.
+        Never permits automated disposal.
+      summary: Approve Property Disposal
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisposalApprovalInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DisposalApprovalInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DisposalApprovalInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Disposal executed and logged
+  /api/v1/admin/disposal/approve/:
+    post:
+      operationId: api_v1_admin_disposal_approve_create_2
+      description: |-
+        Formal administrative disposal approval.
+        Requires human committee signoff with disposal method and justification.
+        Never permits automated disposal.
+      summary: Approve Property Disposal
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisposalApprovalInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DisposalApprovalInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DisposalApprovalInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Disposal executed and logged
+  /api/v1/admin/locations:
+    get:
+      operationId: api_v1_admin_locations_list
+      description: Administrative management terminal for campus locations.
+      summary: Admin List Locations
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+          description: ''
+    post:
+      operationId: api_v1_admin_locations_create
+      description: Administrative management terminal for campus locations.
+      summary: Admin Create Location
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/admin/locations/:
+    get:
+      operationId: api_v1_admin_locations_list_2
+      description: Administrative management terminal for campus locations.
+      summary: Admin List Locations
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+          description: ''
+    post:
+      operationId: api_v1_admin_locations_create_2
+      description: Administrative management terminal for campus locations.
+      summary: Admin Create Location
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/admin/locations/{id}:
+    patch:
+      operationId: api_v1_admin_locations_partial_update
+      description: Administrative update terminal for a campus location.
+      summary: Admin Update Location
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLocationRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/admin/locations/{id}/:
+    patch:
+      operationId: api_v1_admin_locations_partial_update_2
+      description: Administrative update terminal for a campus location.
+      summary: Admin Update Location
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Taxonomy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLocationRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/admin/retention/queue:
+    get:
+      operationId: api_v1_admin_retention_queue_retrieve
+      description: Ageing queue with statutory retention tracking and escalation states.
+      summary: Get Property Retention Ageing Queue
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category code or UUID
+      - in: query
+        name: escalationState
+        schema:
+          type: string
+        description: IN_RETENTION, NOTICE_PERIOD, DISPOSAL_PENDING, DISPOSED, or ALL
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search term
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Retention queue items and state counts
+  /api/v1/admin/retention/queue/:
+    get:
+      operationId: api_v1_admin_retention_queue_retrieve_2
+      description: Ageing queue with statutory retention tracking and escalation states.
+      summary: Get Property Retention Ageing Queue
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category code or UUID
+      - in: query
+        name: escalationState
+        schema:
+          type: string
+        description: IN_RETENTION, NOTICE_PERIOD, DISPOSAL_PENDING, DISPOSED, or ALL
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search term
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Retention queue items and state counts
+  /api/v1/admin/users:
+    get:
+      operationId: api_v1_admin_users_list
+      description: Paginated campus user directory with role and status management.
+      summary: List Campus Users
+      parameters:
+      - in: query
+        name: isActive
+        schema:
+          type: boolean
+        description: Filter active or deactivated accounts
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: role
+        schema:
+          type: string
+        description: Filter by user role
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by name, email, reg no, or post
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/:
+    get:
+      operationId: api_v1_admin_users_list_2
+      description: Paginated campus user directory with role and status management.
+      summary: List Campus Users
+      parameters:
+      - in: query
+        name: isActive
+        schema:
+          type: boolean
+        description: Filter active or deactivated accounts
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: role
+        schema:
+          type: string
+        description: Filter by user role
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by name, email, reg no, or post
+      tags:
+      - Administration
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/{id}:
+    patch:
+      operationId: api_v1_admin_users_partial_update
+      description: |-
+        Update campus user role, security post, and account status.
+        Guards against self-deactivation or demotion of current active administrator.
+      summary: Update User Role and Status
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUserAdminRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/{id}/:
+    patch:
+      operationId: api_v1_admin_users_partial_update_2
+      description: |-
+        Update campus user role, security post, and account status.
+        Guards against self-deactivation or demotion of current active administrator.
+      summary: Update User Role and Status
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUserAdminRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/auth/login:
+    post:
+      operationId: api_v1_auth_login_create
+      description: Authentication endpoint accepting email or student registration
+        number.
+      summary: Login to Campus Portal
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Login successful
+  /api/v1/auth/login/:
+    post:
+      operationId: api_v1_auth_login_create_2
+      description: Authentication endpoint accepting email or student registration
+        number.
+      summary: Login to Campus Portal
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Login successful
+  /api/v1/auth/logout:
+    post:
+      operationId: api_v1_auth_logout_create
+      description: Session invalidation endpoint clearing HttpOnly cookie.
+      summary: Sign out from session
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Logged out successfully
+  /api/v1/auth/logout/:
+    post:
+      operationId: api_v1_auth_logout_create_2
+      description: Session invalidation endpoint clearing HttpOnly cookie.
+      summary: Sign out from session
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Logged out successfully
+  /api/v1/auth/me:
+    get:
+      operationId: api_v1_auth_me_retrieve
+      description: Session profile inspection endpoint returning authenticated user
+        details.
+      summary: Get Current User Profile
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/me/:
+    get:
+      operationId: api_v1_auth_me_retrieve_2
+      description: Session profile inspection endpoint returning authenticated user
+        details.
+      summary: Get Current User Profile
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/register:
+    post:
+      operationId: api_v1_auth_register_create
+      description: Public registration endpoint for university students and staff.
+      summary: Register Student / Staff Account
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          description: Account created successfully
+  /api/v1/auth/register/:
+    post:
+      operationId: api_v1_auth_register_create_2
+      description: Public registration endpoint for university students and staff.
+      summary: Register Student / Staff Account
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          description: Account created successfully
+  /api/v1/auth/token/refresh:
+    post:
+      operationId: api_v1_auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: api_v1_auth_token_refresh_create_2
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/categories:
+    get:
+      operationId: api_v1_categories_list
+      description: Public catalog of active property categories.
+      summary: Get Public Categories
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemCategory'
+          description: ''
+  /api/v1/categories/:
+    get:
+      operationId: api_v1_categories_list_2
+      description: Public catalog of active property categories.
+      summary: Get Public Categories
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemCategory'
+          description: ''
+  /api/v1/claims:
+    post:
+      operationId: api_v1_claims_create
+      description: Submit a new ownership claim with evidence and challenge answers.
+      summary: Submit Ownership Claim
+      tags:
+      - Claims
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/:
+    post:
+      operationId: api_v1_claims_create_2
+      description: Submit a new ownership claim with evidence and challenge answers.
+      summary: Submit Ownership Claim
+      tags:
+      - Claims
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/{id}/challenges/{challenge_id}/answer:
+    post:
+      operationId: api_v1_claims_challenges_answer_create
+      description: Answer a verification challenge for an active claim.
+      summary: Answer Verification Challenge
+      parameters:
+      - in: path
+        name: challenge_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Claims
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerChallengeInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnswerChallengeInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnswerChallengeInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Challenge evaluation result
+  /api/v1/claims/{id}/challenges/{challenge_id}/answer/:
+    post:
+      operationId: api_v1_claims_challenges_answer_create_2
+      description: Answer a verification challenge for an active claim.
+      summary: Answer Verification Challenge
+      parameters:
+      - in: path
+        name: challenge_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Claims
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerChallengeInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnswerChallengeInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnswerChallengeInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Challenge evaluation result
+  /api/v1/claims/{id}/review:
+    post:
+      operationId: api_v1_claims_review_create
+      description: 'Security Adjudication: Approve or Reject an ownership claim.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: api_v1_claims_review_partial_update
+      description: 'Security Adjudication: Approve or Reject an ownership claim.'
+      summary: Review and Adjudicate Claim
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Claims
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewClaimInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewClaimInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewClaimInputRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/{id}/review/:
+    post:
+      operationId: api_v1_claims_review_create_2
+      description: 'Security Adjudication: Approve or Reject an ownership claim.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: api_v1_claims_review_partial_update_2
+      description: 'Security Adjudication: Approve or Reject an ownership claim.'
+      summary: Review and Adjudicate Claim
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Claims
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewClaimInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewClaimInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewClaimInputRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/item/{item_id}:
+    get:
+      operationId: api_v1_claims_item_list
+      description: 'Security inspection: Retrieve all competing claims for a specific
+        item.'
+      summary: Get Competing Claims for Item
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Claims
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/item/{item_id}/:
+    get:
+      operationId: api_v1_claims_item_list_2
+      description: 'Security inspection: Retrieve all competing claims for a specific
+        item.'
+      summary: Get Competing Claims for Item
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Claims
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/my-claims:
+    get:
+      operationId: api_v1_claims_my_claims_list
+      description: Retrieve all claims submitted by the currently authenticated user.
+      summary: Get My Claims
+      tags:
+      - Claims
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/my-claims/:
+    get:
+      operationId: api_v1_claims_my_claims_list_2
+      description: Retrieve all claims submitted by the currently authenticated user.
+      summary: Get My Claims
+      tags:
+      - Claims
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/pending:
+    get:
+      operationId: api_v1_claims_pending_list
+      description: 'Security Queue: Retrieve pending claims awaiting adjudication.'
+      summary: Security Pending Claims Queue
+      tags:
+      - Claims
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/claims/pending/:
+    get:
+      operationId: api_v1_claims_pending_list_2
+      description: 'Security Queue: Retrieve pending claims awaiting adjudication.'
+      summary: Security Pending Claims Queue
+      tags:
+      - Claims
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Claim'
+          description: ''
+  /api/v1/custody/inventory:
+    get:
+      operationId: api_v1_custody_inventory_retrieve
+      description: Retrieve campus property currently in security physical custody.
+      summary: Get Security Custody Inventory
+      parameters:
+      - in: query
+        name: campusZone
+        schema:
+          type: string
+        description: Campus zone
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category code or ID
+      - in: query
+        name: desk
+        schema:
+          type: string
+        description: Specific custody desk
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by reference, title, desk
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Status filter
+      tags:
+      - Custody
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Custody inventory list
+  /api/v1/custody/inventory/:
+    get:
+      operationId: api_v1_custody_inventory_retrieve_2
+      description: Retrieve campus property currently in security physical custody.
+      summary: Get Security Custody Inventory
+      parameters:
+      - in: query
+        name: campusZone
+        schema:
+          type: string
+        description: Campus zone
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category code or ID
+      - in: query
+        name: desk
+        schema:
+          type: string
+        description: Specific custody desk
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by reference, title, desk
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Status filter
+      tags:
+      - Custody
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Custody inventory list
+  /api/v1/custody/items/{item_id}/history:
+    get:
+      operationId: api_v1_custody_items_history_list
+      description: Retrieve chronological append-only custody movement history.
+      summary: Get Item Custody History Timeline
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Custody
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustodyRecord'
+          description: ''
+  /api/v1/custody/items/{item_id}/history/:
+    get:
+      operationId: api_v1_custody_items_history_list_2
+      description: Retrieve chronological append-only custody movement history.
+      summary: Get Item Custody History Timeline
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Custody
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustodyRecord'
+          description: ''
+  /api/v1/custody/transfer:
+    post:
+      operationId: api_v1_custody_transfer_create
+      description: Record physical custody movement or intake into a security desk/locker.
+      summary: Transfer Custody Location
+      tags:
+      - Custody
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustodyTransferInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustodyTransferInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustodyTransferInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustodyRecord'
+          description: ''
+  /api/v1/custody/transfer/:
+    post:
+      operationId: api_v1_custody_transfer_create_2
+      description: Record physical custody movement or intake into a security desk/locker.
+      summary: Transfer Custody Location
+      tags:
+      - Custody
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustodyTransferInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustodyTransferInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustodyTransferInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustodyRecord'
+          description: ''
+  /api/v1/handovers/pending:
+    get:
+      operationId: api_v1_handovers_pending_list
+      description: Retrieve all approved claims awaiting supervised physical handover.
+      summary: Get Pending Handovers
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by recipient or reference
+      tags:
+      - Custody
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingHandoverItem'
+          description: ''
+  /api/v1/handovers/pending/:
+    get:
+      operationId: api_v1_handovers_pending_list_2
+      description: Retrieve all approved claims awaiting supervised physical handover.
+      summary: Get Pending Handovers
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search by recipient or reference
+      tags:
+      - Custody
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingHandoverItem'
+          description: ''
+  /api/v1/handovers/verify-otp:
+    post:
+      operationId: api_v1_handovers_verify_otp_create
+      description: Authenticate 6-digit OTP and complete physical property release.
+      summary: Verify OTP and Complete Handover
+      tags:
+      - Custody
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverReceipt'
+          description: ''
+  /api/v1/handovers/verify-otp/:
+    post:
+      operationId: api_v1_handovers_verify_otp_create_2
+      description: Authenticate 6-digit OTP and complete physical property release.
+      summary: Verify OTP and Complete Handover
+      tags:
+      - Custody
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverReceipt'
+          description: ''
+  /api/v1/health:
+    get:
+      operationId: api_v1_health_retrieve
+      description: |-
+        Public Health & Diagnostics Endpoint
+        Provides real-time database connectivity status and process metrics.
+      summary: Service Health & Database Connectivity Check
+      tags:
+      - Health
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Service is healthy and database is connected
+        '503':
+          description: Service degraded or database disconnected
+  /api/v1/health/:
+    get:
+      operationId: api_v1_health_retrieve_2
+      description: |-
+        Public Health & Diagnostics Endpoint
+        Provides real-time database connectivity status and process metrics.
+      summary: Service Health & Database Connectivity Check
+      tags:
+      - Health
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Service is healthy and database is connected
+        '503':
+          description: Service degraded or database disconnected
+  /api/v1/items:
+    get:
+      operationId: api_v1_items_retrieve
+      description: |-
+        Public Property Recovery Board
+        Supports dynamic multi-filtering, search, safe server-side sorting, and pagination.
+        Strictly redacts sensitive fields and private vault data.
+      summary: Search Public Lost & Found Board
+      parameters:
+      - in: query
+        name: campusZone
+        schema:
+          type: string
+        description: Campus zone filter
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category code or UUID
+      - in: query
+        name: itemType
+        schema:
+          type: string
+        description: Filter by LOST or FOUND
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size (default 20, max 100)
+      - in: query
+        name: location
+        schema:
+          type: string
+        description: Location code or UUID
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Keyword search on title, description, location
+      - in: query
+        name: sortBy
+        schema:
+          type: string
+        description: 'Sort field: createdAt, eventDate, title'
+      - in: query
+        name: sortOrder
+        schema:
+          type: string
+        description: 'Sort order: asc or desc'
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Item status
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Paginated public items
+  /api/v1/items/:
+    get:
+      operationId: api_v1_items_retrieve_2
+      description: |-
+        Public Property Recovery Board
+        Supports dynamic multi-filtering, search, safe server-side sorting, and pagination.
+        Strictly redacts sensitive fields and private vault data.
+      summary: Search Public Lost & Found Board
+      parameters:
+      - in: query
+        name: campusZone
+        schema:
+          type: string
+        description: Campus zone filter
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category code or UUID
+      - in: query
+        name: itemType
+        schema:
+          type: string
+        description: Filter by LOST or FOUND
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size (default 20, max 100)
+      - in: query
+        name: location
+        schema:
+          type: string
+        description: Location code or UUID
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Keyword search on title, description, location
+      - in: query
+        name: sortBy
+        schema:
+          type: string
+        description: 'Sort field: createdAt, eventDate, title'
+      - in: query
+        name: sortOrder
+        schema:
+          type: string
+        description: 'Sort order: asc or desc'
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Item status
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: Paginated public items
+  /api/v1/items/{id}:
+    get:
+      operationId: api_v1_items_retrieve_3
+      description: Retrieve sanitized public or owner item detail by ID or reference
+        number.
+      summary: Get Item Detail
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+    patch:
+      operationId: api_v1_items_partial_update
+      description: Retrieve sanitized public or owner item detail by ID or reference
+        number.
+      summary: Update Item Report
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateReportRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/{id}/:
+    get:
+      operationId: api_v1_items_retrieve_4
+      description: Retrieve sanitized public or owner item detail by ID or reference
+        number.
+      summary: Get Item Detail
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+    patch:
+      operationId: api_v1_items_partial_update_2
+      description: Retrieve sanitized public or owner item detail by ID or reference
+        number.
+      summary: Update Item Report
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateReportRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/{id}/challenges:
+    get:
+      operationId: api_v1_items_challenges_list
+      description: Retrieve public challenge questions for an item without answers.
+      summary: Get Item Verification Challenges
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicChallenge'
+          description: ''
+  /api/v1/items/{id}/challenges/:
+    get:
+      operationId: api_v1_items_challenges_list_2
+      description: Retrieve public challenge questions for an item without answers.
+      summary: Get Item Verification Challenges
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicChallenge'
+          description: ''
+  /api/v1/items/{id}/matches:
+    get:
+      operationId: api_v1_items_matches_list
+      description: Retrieve algorithmic match suggestions for an item.
+      summary: Get Matches for Item
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Matching
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchSuggestion'
+          description: ''
+  /api/v1/items/{id}/matches/:
+    get:
+      operationId: api_v1_items_matches_list_2
+      description: Retrieve algorithmic match suggestions for an item.
+      summary: Get Matches for Item
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Matching
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchSuggestion'
+          description: ''
+  /api/v1/items/{id}/matches/refresh:
+    post:
+      operationId: api_v1_items_matches_refresh_create
+      description: Trigger re-computation of matches for an item.
+      summary: Refresh Matches for Item
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Matching
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Match count refreshed
+  /api/v1/items/{id}/matches/refresh/:
+    post:
+      operationId: api_v1_items_matches_refresh_create_2
+      description: Trigger re-computation of matches for an item.
+      summary: Refresh Matches for Item
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Matching
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Match count refreshed
+  /api/v1/items/{id}/private-vault/view:
+    post:
+      operationId: api_v1_items_private_vault_view_create
+      description: Security-only decrypted private vault inspection.
+      summary: View Decrypted Private Vault
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivateVaultResponse'
+          description: ''
+  /api/v1/items/{id}/private-vault/view/:
+    post:
+      operationId: api_v1_items_private_vault_view_create_2
+      description: Security-only decrypted private vault inspection.
+      summary: View Decrypted Private Vault
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivateVaultResponse'
+          description: ''
+  /api/v1/items/found:
+    post:
+      operationId: api_v1_items_found_create
+      description: Submit a LOST or FOUND property report.
+      summary: Create Lost or Found Report
+      tags:
+      - Items
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/found/:
+    post:
+      operationId: api_v1_items_found_create_2
+      description: Submit a LOST or FOUND property report.
+      summary: Create Lost or Found Report
+      tags:
+      - Items
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/lost:
+    post:
+      operationId: api_v1_items_lost_create
+      description: Submit a LOST or FOUND property report.
+      summary: Create Lost or Found Report
+      tags:
+      - Items
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/lost/:
+    post:
+      operationId: api_v1_items_lost_create_2
+      description: Submit a LOST or FOUND property report.
+      summary: Create Lost or Found Report
+      tags:
+      - Items
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/my-reports:
+    get:
+      operationId: api_v1_items_my_reports_list
+      description: Retrieve items submitted by currently authenticated user.
+      summary: Get My Reports
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/my-reports/:
+    get:
+      operationId: api_v1_items_my_reports_list_2
+      description: Retrieve items submitted by currently authenticated user.
+      summary: Get My Reports
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicItem'
+          description: ''
+  /api/v1/items/upload:
+    post:
+      operationId: api_v1_items_upload_create
+      description: Upload and process photograph (EXIF stripping, resizing, WebP conversion).
+      summary: Upload Photograph
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          description: Processed image metadata
+  /api/v1/items/upload/:
+    post:
+      operationId: api_v1_items_upload_create_2
+      description: Upload and process photograph (EXIF stripping, resizing, WebP conversion).
+      summary: Upload Photograph
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          description: Processed image metadata
+  /api/v1/items/upload-image:
+    post:
+      operationId: api_v1_items_upload_image_create
+      description: Upload and process photograph (EXIF stripping, resizing, WebP conversion).
+      summary: Upload Photograph
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          description: Processed image metadata
+  /api/v1/items/upload-image/:
+    post:
+      operationId: api_v1_items_upload_image_create_2
+      description: Upload and process photograph (EXIF stripping, resizing, WebP conversion).
+      summary: Upload Photograph
+      tags:
+      - Items
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          description: Processed image metadata
+  /api/v1/locations:
+    get:
+      operationId: api_v1_locations_list
+      description: Public catalog of active campus zones and security desks.
+      summary: Get Public Campus Locations
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/locations/:
+    get:
+      operationId: api_v1_locations_list_2
+      description: Public catalog of active campus zones and security desks.
+      summary: Get Public Campus Locations
+      tags:
+      - Taxonomy
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/matches/refresh-all:
+    post:
+      operationId: api_v1_matches_refresh_all_create
+      description: Global batch trigger for computing matches across all active reports.
+      summary: Global Match Re-computation
+      tags:
+      - Matching
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Total suggestions generated
+  /api/v1/matches/refresh-all/:
+    post:
+      operationId: api_v1_matches_refresh_all_create_2
+      description: Global batch trigger for computing matches across all active reports.
+      summary: Global Match Re-computation
+      tags:
+      - Matching
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Total suggestions generated
+  /api/v1/security/audit-trail:
+    get:
+      operationId: api_v1_security_audit_trail_list
+      description: Full paginated audit trail for campus compliance and security investigations.
+      summary: Get Security Audit Trail
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: Filter by audit action
+      - in: query
+        name: actorRole
+        schema:
+          type: string
+        description: Role of the acting user
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size (default 25, max 100)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: targetEntity
+        schema:
+          type: string
+        description: Target entity name (Item, Claim, User)
+      tags:
+      - Security Operations
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+          description: ''
+  /api/v1/security/audit-trail/:
+    get:
+      operationId: api_v1_security_audit_trail_list_2
+      description: Full paginated audit trail for campus compliance and security investigations.
+      summary: Get Security Audit Trail
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: Filter by audit action
+      - in: query
+        name: actorRole
+        schema:
+          type: string
+        description: Role of the acting user
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size (default 25, max 100)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: targetEntity
+        schema:
+          type: string
+        description: Target entity name (Item, Claim, User)
+      tags:
+      - Security Operations
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+          description: ''
+  /api/v1/security/dashboard-stats:
+    get:
+      operationId: api_v1_security_dashboard_stats_retrieve
+      description: |-
+        Security operations dashboard statistics and live real-time audit stream.
+        Restricted strictly to security personnel, campus administrators, and system administrators.
+      summary: Get Security Dashboard Statistics
+      tags:
+      - Security Operations
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Aggregated security metrics
+  /api/v1/security/dashboard-stats/:
+    get:
+      operationId: api_v1_security_dashboard_stats_retrieve_2
+      description: |-
+        Security operations dashboard statistics and live real-time audit stream.
+        Restricted strictly to security personnel, campus administrators, and system administrators.
+      summary: Get Security Dashboard Statistics
+      tags:
+      - Security Operations
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Aggregated security metrics
+components:
+  schemas:
+    ActionBc9Enum:
+      enum:
+      - INITIAL_INTAKE
+      - TRANSFERRED_DESK
+      - STORED_IN_LOCKER
+      - INSPECTION
+      - HANDED_OVER
+      - DISPOSED
+      type: string
+      description: |-
+        * `INITIAL_INTAKE` - Initial Property Intake
+        * `TRANSFERRED_DESK` - Transferred to Security Desk
+        * `STORED_IN_LOCKER` - Stored in Secure Locker
+        * `INSPECTION` - Physical Property Inspection
+        * `HANDED_OVER` - Handed Over to Verified Claimant
+        * `DISPOSED` - Disposed / Transferred to Donation
+    AdminUser:
+      type: object
+      description: Admin user listing and management serializer.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        registrationNumber:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        fullName:
+          type: string
+          readOnly: true
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        department:
+          type: string
+          maxLength: 150
+        securityPost:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          maxLength: 20
+        isActive:
+          type: boolean
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - _id
+      - createdAt
+      - email
+      - fullName
+      - id
+      - isActive
+      - registrationNumber
+      - securityPost
+    AnswerChallengeInputRequest:
+      type: object
+      description: Input serializer for answering an individual verification challenge.
+      properties:
+        answer:
+          type: string
+          minLength: 1
+      required:
+      - answer
+    AuditActorBrief:
+      type: object
+      description: Sanitized actor representation for audit entries.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fullName:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        registrationNumber:
+          type: string
+          readOnly: true
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        securityPost:
+          type: string
+          readOnly: true
+      required:
+      - _id
+      - email
+      - fullName
+      - id
+      - registrationNumber
+      - securityPost
+    AuditEntry:
+      type: object
+      description: Sanitized compliance audit log serializer.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actor:
+          allOf:
+          - $ref: '#/components/schemas/AuditActorBrief'
+          readOnly: true
+        actorRole:
+          type: string
+          readOnly: true
+        action:
+          $ref: '#/components/schemas/AuditEntryActionEnum'
+        targetEntity:
+          type: string
+          readOnly: true
+        targetId:
+          type: string
+          readOnly: true
+        ipAddress:
+          type: string
+          readOnly: true
+        userAgent:
+          type: string
+          readOnly: true
+        metadata: {}
+        timestamp:
+          type: string
+          format: date-time
+      required:
+      - _id
+      - action
+      - actor
+      - actorRole
+      - id
+      - ipAddress
+      - targetEntity
+      - targetId
+      - userAgent
+    AuditEntryActionEnum:
+      enum:
+      - USER_REGISTER
+      - USER_LOGIN
+      - USER_LOGOUT
+      - ITEM_REPORT_LOST
+      - ITEM_REPORT_FOUND
+      - PRIVATE_VAULT_VIEW
+      - CLAIM_SUBMIT
+      - CLAIM_REVIEW
+      - HANDOVER_OTP_GENERATE
+      - HANDOVER_EXECUTE
+      - CUSTODY_TRANSFER
+      - CUSTODY_INTAKE
+      - ITEM_DISPOSE
+      - ROLE_UPDATE
+      - CATEGORY_MANAGE
+      - LOCATION_MANAGE
+      - CONFIG_UPDATE
+      type: string
+      description: |-
+        * `USER_REGISTER` - User Registration
+        * `USER_LOGIN` - User Login
+        * `USER_LOGOUT` - User Logout
+        * `ITEM_REPORT_LOST` - Report Lost Property
+        * `ITEM_REPORT_FOUND` - Report Found Property
+        * `PRIVATE_VAULT_VIEW` - View Private Vault
+        * `CLAIM_SUBMIT` - Submit Ownership Claim
+        * `CLAIM_REVIEW` - Review Ownership Claim
+        * `HANDOVER_OTP_GENERATE` - Generate Handover OTP
+        * `HANDOVER_EXECUTE` - Execute Property Handover
+        * `CUSTODY_TRANSFER` - Transfer Physical Custody
+        * `CUSTODY_INTAKE` - Initial Custody Intake
+        * `ITEM_DISPOSE` - Approve Item Disposal
+        * `ROLE_UPDATE` - Update User Role
+        * `CATEGORY_MANAGE` - Manage Categories
+        * `LOCATION_MANAGE` - Manage Locations
+        * `CONFIG_UPDATE` - Update Platform Configuration
+    ChallengeAnswerInputRequest:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          minLength: 1
+        providedAnswer:
+          type: string
+          minLength: 1
+      required:
+      - challengeId
+      - providedAnswer
+    Claim:
+      type: object
+      description: Unified Claim serializer for claimant view and security queue.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        itemId:
+          type: string
+          readOnly: true
+        itemTitle:
+          type: string
+          readOnly: true
+        itemReference:
+          type: string
+          readOnly: true
+        itemType:
+          type: string
+          readOnly: true
+        item:
+          allOf:
+          - $ref: '#/components/schemas/PublicItem'
+          readOnly: true
+        claimant:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        claimStatus:
+          type: string
+        statement:
+          type: string
+          maxLength: 2000
+        challengeAnswers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimChallengeAnswer'
+          readOnly: true
+        privateEvidenceProofUrls: {}
+        reviewedBy:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        reviewedAt:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewNotes:
+          type: string
+        rejectionReason:
+          type: string
+        handoverOtp:
+          type: string
+          readOnly: true
+        verificationAttemptsCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        submittedAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - _id
+      - challengeAnswers
+      - claimStatus
+      - claimant
+      - createdAt
+      - handoverOtp
+      - id
+      - item
+      - itemId
+      - itemReference
+      - itemTitle
+      - itemType
+      - privateEvidenceProofUrls
+      - rejectionReason
+      - reviewNotes
+      - reviewedAt
+      - reviewedBy
+      - statement
+      - submittedAt
+      - verificationAttemptsCount
+    ClaimChallengeAnswer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        challengeId:
+          type: string
+        questionText:
+          type: string
+          readOnly: true
+        providedAnswer:
+          type: string
+        isCorrect:
+          type: boolean
+      required:
+      - challengeId
+      - id
+      - isCorrect
+      - providedAnswer
+      - questionText
+    ConfidenceEnum:
+      enum:
+      - HIGH
+      - MEDIUM
+      - LOW
+      type: string
+      description: |-
+        * `HIGH` - High Confidence
+        * `MEDIUM` - Medium Confidence
+        * `LOW` - Low Confidence
+    CreateCategoryRequest:
+      type: object
+      description: Admin category creation input.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          default: ''
+        icon:
+          type: string
+          default: ''
+        defaultRetentionDays:
+          type: integer
+          default: 90
+        isActive:
+          type: boolean
+          default: true
+      required:
+      - code
+      - name
+    CreateLocationRequest:
+      type: object
+      description: Input serializer for administrative campus location registration.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        campusZone:
+          type: string
+          minLength: 1
+          maxLength: 100
+        buildingName:
+          type: string
+          default: ''
+          maxLength: 150
+        hasSecurityDesk:
+          type: boolean
+          default: false
+        securityContactPhone:
+          type: string
+          default: ''
+          maxLength: 30
+        isActive:
+          type: boolean
+          default: true
+      required:
+      - campusZone
+      - code
+      - name
+    CreateReportRequest:
+      type: object
+      description: Input serializer for student and staff lost/found report submission.
+      properties:
+        itemType:
+          $ref: '#/components/schemas/ItemTypeEnum'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        category:
+          type: string
+          minLength: 1
+        location:
+          type: string
+          minLength: 1
+        specificLocation:
+          type: string
+          minLength: 1
+          maxLength: 200
+        eventDate:
+          type: string
+          format: date-time
+        publicDescription:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        primaryImageUrl:
+          type: string
+          default: ''
+        additionalImages:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        privateIdentifyingDetails:
+          type: string
+          default: ''
+        verificationQuestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationQuestionInputRequest'
+      required:
+      - category
+      - eventDate
+      - itemType
+      - location
+      - publicDescription
+      - specificLocation
+      - title
+    CustodyRecord:
+      type: object
+      description: Output serializer for immutable chain of custody audit history.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        itemId:
+          type: string
+        itemReference:
+          type: string
+          readOnly: true
+        itemTitle:
+          type: string
+          readOnly: true
+        action:
+          $ref: '#/components/schemas/ActionBc9Enum'
+        fromLocation:
+          type: string
+        toLocation:
+          type: string
+        location:
+          type: string
+          readOnly: true
+        lockerReference:
+          type: string
+        lockerNumber:
+          type: string
+          readOnly: true
+        evidenceReference:
+          type: string
+        handledBy:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        officerName:
+          type: string
+          readOnly: true
+        officerPost:
+          type: string
+          readOnly: true
+        remarks:
+          type: string
+          maxLength: 500
+        timestamp:
+          type: string
+          format: date-time
+      required:
+      - _id
+      - action
+      - evidenceReference
+      - fromLocation
+      - handledBy
+      - id
+      - itemId
+      - itemReference
+      - itemTitle
+      - location
+      - lockerNumber
+      - lockerReference
+      - officerName
+      - officerPost
+      - toLocation
+    CustodyTransferInputRequest:
+      type: object
+      description: Input serializer for recording physical custody movements.
+      properties:
+        itemId:
+          type: string
+          minLength: 1
+        toLocation:
+          type: string
+          minLength: 1
+          maxLength: 150
+        lockerReference:
+          type: string
+          default: ''
+          maxLength: 100
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionBc9Enum'
+          default: TRANSFERRED_DESK
+        remarks:
+          type: string
+          default: ''
+          maxLength: 500
+        evidenceReference:
+          type: string
+          default: ''
+          maxLength: 100
+      required:
+      - itemId
+      - toLocation
+    DisposalApprovalInputRequest:
+      type: object
+      description: Input serializer for formal administrative property disposal approval.
+      properties:
+        itemId:
+          type: string
+          minLength: 1
+        method:
+          $ref: '#/components/schemas/MethodEnum'
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 1000
+        recipientOrganization:
+          type: string
+          default: ''
+          maxLength: 200
+        certificateUrl:
+          type: string
+          default: ''
+          maxLength: 500
+      required:
+      - itemId
+      - method
+      - reason
+    HandoverReceipt:
+      type: object
+      description: Official property handover receipt returned after verification.
+      properties:
+        handoverId:
+          type: string
+        claimId:
+          type: string
+        itemId:
+          type: string
+        referenceNumber:
+          type: string
+        itemTitle:
+          type: string
+        recipientName:
+          type: string
+        recipientRegNo:
+          type: string
+        recipientEmail:
+          type: string
+        officerId:
+          type: string
+        physicalDeskLocation:
+          type: string
+        idCardPresentedType:
+          type: string
+        idCardNumberMasked:
+          type: string
+        acknowledgementNotes:
+          type: string
+        proofEvidenceUrl:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+      required:
+      - acknowledgementNotes
+      - claimId
+      - completedAt
+      - handoverId
+      - idCardNumberMasked
+      - idCardPresentedType
+      - itemId
+      - itemTitle
+      - officerId
+      - physicalDeskLocation
+      - proofEvidenceUrl
+      - recipientEmail
+      - recipientName
+      - recipientRegNo
+      - referenceNumber
+    ItemCategory:
+      type: object
+      description: Catalog taxonomy category representation.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+        icon:
+          type: string
+          maxLength: 50
+        isActive:
+          type: boolean
+        defaultRetentionDays:
+          type: integer
+      required:
+      - _id
+      - code
+      - defaultRetentionDays
+      - id
+      - isActive
+      - name
+    ItemTypeEnum:
+      enum:
+      - LOST
+      - FOUND
+      type: string
+      description: |-
+        * `LOST` - Lost Property
+        * `FOUND` - Found Property
+    Location:
+      type: object
+      description: Public representation of campus locations with security desks.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 150
+        campusZone:
+          type: string
+        buildingName:
+          type: string
+        hasSecurityDesk:
+          type: boolean
+        securityContactPhone:
+          type: string
+        isActive:
+          type: boolean
+      required:
+      - _id
+      - campusZone
+      - code
+      - hasSecurityDesk
+      - id
+      - isActive
+      - name
+    LoginRequest:
+      type: object
+      description: Input serializer supporting both email and student registration
+        number.
+      properties:
+        emailOrRegNo:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - emailOrRegNo
+      - password
+    MatchSuggestion:
+      type: object
+      description: Output representation of a suggested match pair with factor explanations.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        lostItem:
+          allOf:
+          - $ref: '#/components/schemas/PublicItem'
+          readOnly: true
+        foundItem:
+          allOf:
+          - $ref: '#/components/schemas/PublicItem'
+          readOnly: true
+        matchScore:
+          type: number
+          format: double
+        confidence:
+          $ref: '#/components/schemas/ConfidenceEnum'
+        explanation: {}
+        status:
+          $ref: '#/components/schemas/MatchSuggestionStatusEnum'
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - _id
+      - confidence
+      - createdAt
+      - foundItem
+      - id
+      - lostItem
+      - matchScore
+    MatchSuggestionStatusEnum:
+      enum:
+      - PENDING
+      - ACCEPTED
+      - DISMISSED
+      type: string
+      description: |-
+        * `PENDING` - Pending Evaluation
+        * `ACCEPTED` - Accepted by Owner
+        * `DISMISSED` - Dismissed / Incompatible
+    MethodEnum:
+      enum:
+      - DONATION
+      - AUCTION
+      - DESTRUCTION
+      - RECYCLED
+      type: string
+      description: |-
+        * `DONATION` - Donation to Student Charity / Community
+        * `AUCTION` - Public Campus Auction
+        * `DESTRUCTION` - Secure Environmental Destruction
+        * `RECYCLED` - University Recycling
+    PatchedReviewClaimInputRequest:
+      type: object
+      description: Input serializer for security adjudication.
+      properties:
+        action:
+          $ref: '#/components/schemas/ReviewClaimInputActionEnum'
+        reviewNotes:
+          type: string
+          default: ''
+        rejectionReason:
+          type: string
+          default: ''
+    PatchedUpdateCategoryRequest:
+      type: object
+      description: Admin category modification input.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        icon:
+          type: string
+        defaultRetentionDays:
+          type: integer
+        isActive:
+          type: boolean
+    PatchedUpdateLocationRequest:
+      type: object
+      description: Input serializer for administrative location modifications.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        campusZone:
+          type: string
+          minLength: 1
+          maxLength: 100
+        buildingName:
+          type: string
+          maxLength: 150
+        hasSecurityDesk:
+          type: boolean
+        securityContactPhone:
+          type: string
+          maxLength: 30
+        isActive:
+          type: boolean
+    PatchedUpdateReportRequest:
+      type: object
+      description: Input serializer for owner updates on existing reports.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        category:
+          type: string
+          minLength: 1
+        location:
+          type: string
+          minLength: 1
+        specificLocation:
+          type: string
+          minLength: 1
+          maxLength: 200
+        eventDate:
+          type: string
+          format: date-time
+        publicDescription:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        primaryImageUrl:
+          type: string
+        additionalImages:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        privateIdentifyingDetails:
+          type: string
+    PatchedUpdateUserAdminRequest:
+      type: object
+      description: Admin update payload for user role, security post, and status.
+      properties:
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        securityPost:
+          type: string
+          maxLength: 150
+        department:
+          type: string
+          maxLength: 150
+        phone:
+          type: string
+          maxLength: 20
+        isActive:
+          type: boolean
+    PendingHandoverItem:
+      type: object
+      description: Pending handover item record representation.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        item:
+          allOf:
+          - $ref: '#/components/schemas/PublicItem'
+          readOnly: true
+        claim:
+          allOf:
+          - $ref: '#/components/schemas/Claim'
+          readOnly: true
+        recipient:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        supervisingOfficer:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        otpExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+        physicalDeskLocation:
+          type: string
+        is_completed:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - _id
+      - claim
+      - createdAt
+      - id
+      - item
+      - otpExpiresAt
+      - physicalDeskLocation
+      - recipient
+      - supervisingOfficer
+    PrivateVaultResponse:
+      type: object
+      description: Security-only decrypted private vault inspection output.
+      properties:
+        fieldsSummary:
+          type: array
+          items:
+            type: string
+        decryptedContent:
+          type: string
+        accessCount:
+          type: integer
+      required:
+      - accessCount
+      - decryptedContent
+      - fieldsSummary
+    PublicChallenge:
+      type: object
+      description: Public verification challenge serializer (excludes hashed answer).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        questionText:
+          type: string
+        hint:
+          type: string
+          maxLength: 150
+        maxAttempts:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+      - expiresAt
+      - id
+      - maxAttempts
+      - questionText
+    PublicItem:
+      type: object
+      description: |-
+        Sanitized public item representation.
+        Strictly excludes PrivateDetail vaults, challenge answers, and internal notes.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        referenceNumber:
+          type: string
+        itemType:
+          type: string
+        title:
+          type: string
+          maxLength: 150
+        publicDescription:
+          type: string
+        category:
+          type: string
+          readOnly: true
+        location:
+          type: string
+          readOnly: true
+        campusZone:
+          type: string
+          readOnly: true
+        specificLocation:
+          type: string
+        eventDate:
+          type: string
+          format: date-time
+        primaryImageUrl:
+          type: string
+        additionalImages: {}
+        status:
+          $ref: '#/components/schemas/PublicItemStatusEnum'
+        reportedByRole:
+          type: string
+          readOnly: true
+        currentCustodyDesk:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        isOwner:
+          type: string
+          readOnly: true
+      required:
+      - _id
+      - additionalImages
+      - campusZone
+      - category
+      - createdAt
+      - currentCustodyDesk
+      - eventDate
+      - id
+      - isOwner
+      - itemType
+      - location
+      - primaryImageUrl
+      - publicDescription
+      - referenceNumber
+      - reportedByRole
+      - specificLocation
+      - title
+    PublicItemStatusEnum:
+      enum:
+      - REPORTED
+      - IN_CUSTODY
+      - MATCH_PENDING
+      - CLAIM_IN_REVIEW
+      - READY_FOR_HANDOVER
+      - HANDED_OVER
+      - UNCLAIMED_EXPIRED
+      - DISPOSED
+      type: string
+      description: |-
+        * `REPORTED` - Reported
+        * `IN_CUSTODY` - In Security Custody
+        * `MATCH_PENDING` - Match Pending
+        * `CLAIM_IN_REVIEW` - Claim Under Review
+        * `READY_FOR_HANDOVER` - Ready for Handover
+        * `HANDED_OVER` - Handed Over to Owner
+        * `UNCLAIMED_EXPIRED` - Unclaimed Expired
+        * `DISPOSED` - Disposed / Donated
+    RegisterRequest:
+      type: object
+      description: Input serializer for new student/staff account registration.
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 150
+        registrationNumber:
+          type: string
+          minLength: 1
+          maxLength: 30
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        confirmPassword:
+          type: string
+          writeOnly: true
+          minLength: 8
+        department:
+          type: string
+          default: ''
+          maxLength: 150
+        phone:
+          type: string
+          default: ''
+          maxLength: 20
+      required:
+      - confirmPassword
+      - email
+      - fullName
+      - password
+      - registrationNumber
+    ReviewClaimInputActionEnum:
+      enum:
+      - APPROVE
+      - REJECT
+      type: string
+      description: |-
+        * `APPROVE` - APPROVE
+        * `REJECT` - REJECT
+    RoleEnum:
+      enum:
+      - STUDENT_STAFF
+      - SECURITY_PERSONNEL
+      - CAMPUS_ADMIN
+      - SYSTEM_ADMIN
+      type: string
+      description: |-
+        * `STUDENT_STAFF` - Student / Staff
+        * `SECURITY_PERSONNEL` - Security Personnel
+        * `CAMPUS_ADMIN` - Campus Administrator
+        * `SYSTEM_ADMIN` - System Administrator
+    SubmitClaimRequest:
+      type: object
+      description: Input serializer for filing an ownership claim.
+      properties:
+        itemId:
+          type: string
+          minLength: 1
+        statement:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        challengeAnswers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChallengeAnswerInputRequest'
+        privateEvidenceProofUrls:
+          type: array
+          items:
+            type: string
+            minLength: 1
+      required:
+      - itemId
+      - statement
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    User:
+      type: object
+      description: Public safe representation of a university user.
+      properties:
+        _id:
+          type: string
+          readOnly: true
+          title: ' id'
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        registrationNumber:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        fullName:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        department:
+          type: string
+          maxLength: 150
+        securityPost:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          maxLength: 20
+        isActive:
+          type: boolean
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - _id
+      - createdAt
+      - email
+      - fullName
+      - id
+      - isActive
+      - registrationNumber
+      - role
+      - securityPost
+    VerificationQuestionInputRequest:
+      type: object
+      properties:
+        questionText:
+          type: string
+          minLength: 1
+          maxLength: 300
+        expectedAnswer:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - expectedAnswer
+      - questionText
+    VerifyOtpInputRequest:
+      type: object
+      description: Input serializer for completing a supervised physical handover.
+      properties:
+        claimId:
+          type: string
+          minLength: 1
+        otp:
+          type: string
+          minLength: 1
+        physicalDeskLocation:
+          type: string
+          minLength: 1
+          maxLength: 150
+        idCardPresentedType:
+          type: string
+          minLength: 1
+          maxLength: 100
+        idCardNumber:
+          type: string
+          minLength: 1
+          maxLength: 50
+        recipientSignatureUrl:
+          type: string
+          default: ''
+        acknowledgementNotes:
+          type: string
+          default: ''
+          maxLength: 1000
+        proofEvidenceUrl:
+          type: string
+          default: ''
+      required:
+      - claimId
+      - idCardNumber
+      - idCardPresentedType
+      - otp
+      - physicalDeskLocation
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: Health
+  description: Service diagnostics and health check
+- name: Authentication
+  description: Student & Staff authentication and session profile
+- name: Items
+  description: Lost and found item registry, image ingestion, public board
+- name: Taxonomy
+  description: Campus locations and item categories
+- name: Matching
+  description: Algorithmic multi-factor lost and found matching engine
+- name: Claims
+  description: Private verification challenges and ownership adjudication
+- name: Custody
+  description: Physical chain of custody tracking and supervised OTP handover
+- name: Governance
+  description: Administrative analytics, statutory retention, and audit logs

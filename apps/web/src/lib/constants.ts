@@ -27,21 +27,21 @@ export const CAMPUS_ZONE_LABELS: Record<LPUCampusZone, { label: string; area: st
 
 export const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; bg: string; border: string }> = {
   REPORTED: { label: 'Reported', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
-  IN_CUSTODY: { label: 'In Security Custody', color: 'text-blue-800', bg: 'bg-blue-50', border: 'border-blue-200' },
+  IN_CUSTODY: { label: 'In Security Custody', color: 'text-[#356DE8]', bg: 'bg-[#EBF1FD]', border: 'border-[#CADBFA]' },
   MATCH_PENDING: { label: 'Match Found', color: 'text-purple-800', bg: 'bg-purple-50', border: 'border-purple-200' },
-  CLAIM_IN_REVIEW: { label: 'Claim in Review', color: 'text-orange-800', bg: 'bg-orange-50', border: 'border-orange-200' },
-  READY_FOR_HANDOVER: { label: 'Ready for Collection', color: 'text-emerald-800', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  CLAIM_IN_REVIEW: { label: 'Claim in Review', color: 'text-[#0E706A]', bg: 'bg-[#E6F8F7]', border: 'border-[#A8EAE5]' },
+  READY_FOR_HANDOVER: { label: 'Ready for Collection', color: 'text-[#16876A]', bg: 'bg-[#E6F5F1]', border: 'border-[#A3DACD]' },
   HANDED_OVER: { label: 'Recovered & Handed Over', color: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-300' },
-  UNCLAIMED_EXPIRED: { label: 'Retention Expired (90+ d)', color: 'text-rose-800', bg: 'bg-rose-50', border: 'border-rose-200' },
+  UNCLAIMED_EXPIRED: { label: 'Retention Expired (90+ d)', color: 'text-[#DC4545]', bg: 'bg-[#FEE2E2]', border: 'border-[#FCA5A5]' },
   DISPOSED: { label: 'Archived / Disposed', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' },
 };
 
 export const ROLE_LABELS: Record<UserRole, { label: string; badgeClass: string }> = {
-  STUDENT_STAFF: { label: 'Student / Staff', badgeClass: 'bg-slate-100 text-slate-700 border-slate-300' },
-  SECURITY_PERSONNEL: { label: 'Campus Security', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' },
-  CAMPUS_ADMIN: { label: 'Campus Administrator', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' },
-  SYSTEM_ADMIN: { label: 'System Administrator', badgeClass: 'bg-red-50 text-red-700 border-red-200' },
+  STUDENT_STAFF: { label: 'Student / Campus User', badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  SECURITY_PERSONNEL: { label: 'Security Officer', badgeClass: 'bg-[#EBF1FD] text-[#356DE8] border-[#CADBFA]' },
+  CAMPUS_ADMIN: { label: 'Campus Administrator', badgeClass: 'bg-[#E9EEF7] text-[#192B4A] border-[#C3D2EB] font-bold' },
+  SYSTEM_ADMIN: { label: 'System Administrator', badgeClass: 'bg-[#E6F8F7] text-[#192B4A] border-[#20B5AD]/40 font-bold' },
 };
 
 export const DISCLAIMER_TEXT = 
-  "Campus Property Recovery Platform for Lovely Professional University. Independent campus community service — not officially endorsed by LPU administration unless authorization is granted.";
+  "LPU Lost & Found Property Recovery Portal. Dedicated exclusively to managing, matching, and recovering lost and found property across Lovely Professional University campus.";

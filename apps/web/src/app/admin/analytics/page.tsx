@@ -88,79 +88,10 @@ export default function AdminAnalyticsPage() {
         if (res && res.overview) {
           setData(res);
         } else {
-          // Provide fallback demo data
-          setData({
-            overview: {
-              totalReports: 18,
-              totalLost: 7,
-              totalFound: 11,
-              itemsReturned: 6,
-              returnRatePercent: 54.5,
-              pendingClaims: 4,
-              totalVerificationFailures: 3,
-              totalUnclaimedInCustody: 5,
-            },
-            returnMetrics: {
-              itemsReturned: 6,
-              returnRatePercent: 54.5,
-              returnRateDefinition:
-                'Percentage of reported found items successfully verified and handed over to rightful claimants: (itemsReturned / totalFound) * 100.',
-              medianTimeToReturnHours: 36.4,
-              medianTimeToReturnDays: 1.5,
-              medianTimeToReturnDefinition:
-                'Median elapsed duration between report creation and verified physical custody handover across all returned items.',
-            },
-            verificationMetrics: {
-              pendingClaims: 4,
-              totalVerificationFailures: 3,
-              failedChallengesCount: 2,
-              failedHandoverOtpsCount: 0,
-              rejectedClaimsCount: 1,
-              failureDefinition:
-                'Sum of failed private ownership challenge attempts, failed OTP handovers, and claims rejected after security review.',
-            },
-            custodyInventory: {
-              totalInCustody: 5,
-              byLocation: [
-                { desk: 'Uni-Mall Security Post', count: 2 },
-                { desk: 'Block 34 Security Desk', count: 2 },
-                { desk: 'Main Gate Security Post', count: 1 },
-              ],
-            },
-            categoryDistribution: [
-              { categoryId: '1', categoryCode: 'ELECTRONICS', categoryName: 'Electronics & Gadgets', count: 8, percentage: 44.4 },
-              { categoryId: '2', categoryCode: 'WALLETS', categoryName: 'Wallets & IDs', count: 4, percentage: 22.2 },
-              { categoryId: '3', categoryCode: 'BOOKS_STATIONERY', categoryName: 'Books & Stationery', count: 3, percentage: 16.7 },
-              { categoryId: '4', categoryCode: 'BAGS', categoryName: 'Bags & Backpacks', count: 2, percentage: 11.1 },
-              { categoryId: '5', categoryCode: 'OTHERS', categoryName: 'Others', count: 1, percentage: 5.6 },
-            ],
-            hotspots: {
-              locations: [
-                { locationId: '1', name: 'Uni-Mall Food Court', campusZone: 'Central Zone', totalCount: 6, lostCount: 2, foundCount: 4 },
-                { locationId: '2', name: 'Block 34 (Engineering)', campusZone: 'North Academic Sector', totalCount: 5, lostCount: 3, foundCount: 2 },
-                { locationId: '3', name: 'Central Library', campusZone: 'Central Zone', totalCount: 4, lostCount: 1, foundCount: 3 },
-                { locationId: '4', name: 'Shanti Devi Sports Complex', campusZone: 'South Sports Sector', totalCount: 3, lostCount: 1, foundCount: 2 },
-              ],
-              hourly: Array.from({ length: 24 }, (_, i) => ({
-                hour: i,
-                count: i >= 9 && i <= 18 ? Math.floor(Math.random() * 4) + 1 : 0,
-              })),
-            },
-            ageing: {
-              brackets: {
-                under30Days: 2,
-                from31To60Days: 1,
-                from61To90Days: 1,
-                over90Days: 1,
-              },
-              statutoryRetentionPeriodDays: 90,
-              ageingDefinition:
-                'Distribution of unclaimed items by age from event date. Items exceeding category retention threshold require administrative committee approval before disposal.',
-            },
-          });
+          setData(null);
         }
       } catch {
-        // Fallback
+        setData(null);
       } finally {
         setLoading(false);
       }

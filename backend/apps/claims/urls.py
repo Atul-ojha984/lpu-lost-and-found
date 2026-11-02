@@ -13,6 +13,8 @@ from .views import (
     ItemClaimsAPIView,
     ClaimAnswerChallengeAPIView,
     ReviewClaimAPIView,
+    ClaimEvidenceUploadAPIView,
+    ClaimEvidenceDownloadAPIView,
 )
 
 urlpatterns = [
@@ -27,4 +29,8 @@ urlpatterns = [
     path('<str:pk>/challenges/<str:challenge_id>/answer', ClaimAnswerChallengeAPIView.as_view(), name='answer-challenge-no-slash'),
     path('<str:pk>/review/', ReviewClaimAPIView.as_view(), name='review-claim'),
     path('<str:pk>/review', ReviewClaimAPIView.as_view(), name='review-claim-no-slash'),
+    path('<str:pk>/evidence/', ClaimEvidenceUploadAPIView.as_view(), name='claim-evidence-upload'),
+    path('<str:pk>/evidence', ClaimEvidenceUploadAPIView.as_view(), name='claim-evidence-upload-no-slash'),
+    path('<str:pk>/evidence/<str:filename>/', ClaimEvidenceDownloadAPIView.as_view(), name='claim-evidence-download'),
+    path('<str:pk>/evidence/<str:filename>', ClaimEvidenceDownloadAPIView.as_view(), name='claim-evidence-download-no-slash'),
 ]

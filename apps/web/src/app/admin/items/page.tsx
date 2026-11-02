@@ -82,62 +82,16 @@ export default function AdminItemsPage() {
           setCountsByState(queueRes.value.countsByState);
         }
       } else {
-        // Fallback demo items
-        setItems([
-          {
-            _id: 'item-demo-1',
-            referenceNumber: 'LPU-2026-F0080',
-            title: 'Honda Motorcycle Smart Key',
-            status: 'IN_CUSTODY',
-            eventDate: new Date(Date.now() - 15 * 86400000).toISOString(),
-            retentionExpiresAt: new Date(Date.now() + 75 * 86400000).toISOString(),
-            currentCustodyDesk: 'Central Security Repository',
-            daysElapsed: 15,
-            daysUntilExpiry: 75,
-            isRetentionExpired: false,
-            escalationState: 'IN_RETENTION',
-            category: { _id: 'c1', name: 'Keys & Fobs', code: 'KEYS', defaultRetentionDays: 90 },
-            location: { _id: 'l1', name: 'Uni-Mall Basement Parking', campusZone: 'Central Zone' },
-          },
-          {
-            _id: 'item-demo-2',
-            referenceNumber: 'LPU-2026-F0095',
-            title: 'Yonex Badminton Racket with Cover',
-            status: 'IN_CUSTODY',
-            eventDate: new Date(Date.now() - 85 * 86400000).toISOString(),
-            retentionExpiresAt: new Date(Date.now() + 5 * 86400000).toISOString(),
-            currentCustodyDesk: 'Sports Complex Desk',
-            daysElapsed: 85,
-            daysUntilExpiry: 5,
-            isRetentionExpired: false,
-            escalationState: 'NOTICE_PERIOD',
-            category: { _id: 'c2', name: 'Sports Gear', code: 'SPORTS', defaultRetentionDays: 90 },
-            location: { _id: 'l2', name: 'Shanti Devi Sports Complex', campusZone: 'South Sports Sector' },
-          },
-          {
-            _id: 'item-demo-3',
-            referenceNumber: 'LPU-2026-F0042',
-            title: 'Campus Laboratory Coat with Chemistry Notes',
-            status: 'UNCLAIMED_EXPIRED',
-            eventDate: new Date(Date.now() - 110 * 86400000).toISOString(),
-            retentionExpiresAt: new Date(Date.now() - 20 * 86400000).toISOString(),
-            currentCustodyDesk: 'Block 34 Security Desk',
-            daysElapsed: 110,
-            daysUntilExpiry: -20,
-            isRetentionExpired: true,
-            escalationState: 'DISPOSAL_PENDING',
-            category: { _id: 'c3', name: 'Apparel & Lab Gear', code: 'APPAREL', defaultRetentionDays: 90 },
-            location: { _id: 'l3', name: 'Block 34 Chemistry Lab', campusZone: 'North Academic Sector' },
-          },
-        ]);
-        setCountsByState({ inRetention: 1, noticePeriod: 1, disposalPending: 1, disposed: 0 });
+        setItems([]);
+        setCountsByState({ inRetention: 0, noticePeriod: 0, disposalPending: 0, disposed: 0 });
       }
 
       if (catRes.status === 'fulfilled' && Array.isArray(catRes.value)) {
         setCategories(catRes.value);
       }
     } catch {
-      // Safe fallback
+      setItems([]);
+      setCountsByState({ inRetention: 0, noticePeriod: 0, disposalPending: 0, disposed: 0 });
     } finally {
       setLoading(false);
     }

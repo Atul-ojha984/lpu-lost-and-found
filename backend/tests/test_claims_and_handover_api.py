@@ -17,6 +17,7 @@ from apps.verification.models import VerificationChallenge
 from apps.claims.models import Claim, ClaimStatus, ClaimChallengeAnswer
 from apps.handovers.models import Handover
 from apps.custody.models import CustodyRecord, CustodyAction
+from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.audit.models import AuditEntry, AuditAction
 
 @pytest.fixture
@@ -300,3 +301,180 @@ def test_supervised_handover_and_duplicate_prevention(api_client, workflow_setup
     )
     assert res_dup.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_409_CONFLICT)
     assert 'DUPLICATE_HANDOVER' in str(res_dup.data)
+
+@pytest.mark.django_db
+def test_claim_evidence_upload_and_download_flow(api_client, workflow_setup):
+    c1 = workflow_setup['claimant1']
+    c2 = workflow_setup['claimant2']
+    officer = workflow_setup['security_officer']
+    item = workflow_setup['found_item']
+
+    # 1. Create a claim by claimant 1
+    api_client.force_authenticate(user=c1)
+    res_claim = api_client.post(
+        '/api/v1/claims/',
+        {
+            'itemId': str(item.id),
+            'statement': 'Watch belongs to me, has engraving.',
+        },
+        format='json'
+    )
+    assert res_claim.status_code == status.HTTP_201_CREATED
+    claim_id = res_claim.data['id']
+
+    # 2. Upload valid PDF evidence
+    pdf_content = b"%PDF-1.4 test invoice content"
+    valid_pdf = SimpleUploadedFile("purchase_invoice.pdf", pdf_content, content_type="application/pdf")
+    res_upload = api_client.post(
+        f'/api/v1/claims/{claim_id}/evidence/',
+        {'file': valid_pdf},
+        format='multipart'
+    )
+    assert res_upload.status_code == status.HTTP_201_CREATED
+    assert 'url' in res_upload.data
+    evidence_url = res_upload.data['url']
+
+    # 3. Reject invalid file type (.exe)
+    exe_file = SimpleUploadedFile("malware.exe", b"MZtest", content_type="application/x-dosexec")
+    res_bad_type = api_client.post(
+        f'/api/v1/claims/{claim_id}/evidence/',
+        {'file': exe_file},
+        format='multipart'
+    )
+    assert res_bad_type.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'INVALID_FILE_TYPE' in str(res_bad_type.data)
+
+    # 4. Reject oversized file (> 5MB)
+    huge_data = b"0" * (5 * 1024 * 1024 + 10)
+    huge_file = SimpleUploadedFile("huge.pdf", huge_data, content_type="application/pdf")
+    res_huge = api_client.post(
+        f'/api/v1/claims/{claim_id}/evidence/',
+        {'file': huge_file},
+        format='multipart'
+    )
+    assert res_huge.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'FILE_TOO_LARGE' in str(res_huge.data)
+
+    # 5. Unauthorized upload: claimant 2 attempts to upload to claimant 1's claim -> 403
+    api_client.force_authenticate(user=c2)
+    res_unauth = api_client.post(
+        f'/api/v1/claims/{claim_id}/evidence/',
+        {'file': SimpleUploadedFile("test.png", b"fake-png", content_type="image/png")},
+        format='multipart'
+    )
+    assert res_unauth.status_code == status.HTTP_403_FORBIDDEN
+
+    # 6. Unauthorized download: claimant 2 attempts to download claimant 1's evidence -> 403
+    filename = evidence_url.strip('/').split('/')[-1]
+    res_dl_unauth = api_client.get(f'/api/v1/claims/{claim_id}/evidence/{filename}/')
+    assert res_dl_unauth.status_code == status.HTTP_403_FORBIDDEN
+
+    # 7. Authorized download: claimant 1 can download their own evidence -> 200
+    api_client.force_authenticate(user=c1)
+    res_dl_c1 = api_client.get(f'/api/v1/claims/{claim_id}/evidence/{filename}/')
+    assert res_dl_c1.status_code == status.HTTP_200_OK
+
+    # 8. Authorized download: security officer can inspect evidence -> 200
+    api_client.force_authenticate(user=officer)
+    res_dl_sec = api_client.get(f'/api/v1/claims/{claim_id}/evidence/{filename}/')
+    assert res_dl_sec.status_code == status.HTTP_200_OK
+
+@pytest.mark.django_db
+def test_security_claims_register_search_and_filters(api_client, workflow_setup):
+    c1 = workflow_setup['claimant1']
+    officer = workflow_setup['security_officer']
+    item = workflow_setup['found_item']
+
+    # Create claim
+    api_client.force_authenticate(user=c1)
+    api_client.post(
+        '/api/v1/claims/',
+        {
+            'itemId': str(item.id),
+            'statement': 'Watch was lost near library table.',
+        },
+        format='json'
+    )
+
+    # Security officer inspects register
+    api_client.force_authenticate(user=officer)
+    res_reg = api_client.get('/api/v1/claims/pending/?status=ALL')
+    assert res_reg.status_code == status.HTTP_200_OK
+    assert len(res_reg.data) >= 1
+
+    # Search by claimant name
+    res_search = api_client.get(f'/api/v1/claims/pending/?search={c1.full_name}')
+    assert res_search.status_code == status.HTTP_200_OK
+    assert len(res_search.data) >= 1
+
+    # Search by non-existent term
+    res_empty = api_client.get('/api/v1/claims/pending/?search=NONEXISTENT_XYZ_TERM')
+    assert res_empty.status_code == status.HTTP_200_OK
+    assert len(res_empty.data) == 0
+
+    # Student cannot access security register -> 403
+    api_client.force_authenticate(user=c1)
+    res_forbidden = api_client.get('/api/v1/claims/pending/')
+    assert res_forbidden.status_code == status.HTTP_403_FORBIDDEN
+
+@pytest.mark.django_db
+def test_claim_creation_using_reference_number(api_client, workflow_setup):
+    """Students can submit ownership claims using human-readable reference number."""
+    item = workflow_setup['found_item']
+    claimant = workflow_setup['claimant2']
+
+    api_client.force_authenticate(user=claimant)
+    res = api_client.post(
+        '/api/v1/claims/',
+        {
+            'itemId': item.reference_number,
+            'statement': 'Found watch belongs to me. Submitting with reference number.',
+        },
+        format='json',
+    )
+    assert res.status_code == status.HTTP_201_CREATED
+    assert res.data['itemId'] == str(item.id)
+
+@pytest.mark.django_db
+def test_claim_creation_rejection_scenarios(api_client, workflow_setup):
+    """Verify rejection of empty statements, finder claiming own property, and duplicate claims."""
+    item = workflow_setup['found_item']
+    finder = workflow_setup['reporter']
+    claimant = workflow_setup['claimant1']
+
+    # 1. Finder cannot claim their own reported found item
+    api_client.force_authenticate(user=finder)
+    res_finder = api_client.post(
+        '/api/v1/claims/',
+        {'itemId': str(item.id), 'statement': 'I reported it but now I claim it.'},
+        format='json',
+    )
+    assert res_finder.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'finder' in str(res_finder.data).lower()
+
+    # 2. Claimant cannot submit empty statement
+    api_client.force_authenticate(user=claimant)
+    res_empty_stmt = api_client.post(
+        '/api/v1/claims/',
+        {'itemId': str(item.id), 'statement': '   '},
+        format='json',
+    )
+    assert res_empty_stmt.status_code == status.HTTP_400_BAD_REQUEST
+
+    # 3. First claim succeeds
+    res_valid = api_client.post(
+        '/api/v1/claims/',
+        {'itemId': str(item.id), 'statement': 'Valid statement of ownership.'},
+        format='json',
+    )
+    assert res_valid.status_code == status.HTTP_201_CREATED
+
+    # 4. Duplicate claim rejected
+    res_dup = api_client.post(
+        '/api/v1/claims/',
+        {'itemId': str(item.id), 'statement': 'Submitting second claim.'},
+        format='json',
+    )
+    assert res_dup.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'active claim' in str(res_dup.data).lower()
+

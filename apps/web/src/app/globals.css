@@ -2,8 +2,34 @@
 
 @layer base {
   :root {
-    --primary: #b91c1c;
-    --primary-hover: #991b1b;
+    /* Brand Theme Tokens derived from Lost & Found Logo */
+    --primary-navy: #192B4A;
+    --secondary-navy: #22395D;
+    --primary-teal: #20B5AD;
+    --primary-teal-hover: #16A89F;
+    --primary-teal-light: #E6F8F7;
+    --royal-blue: #356DE8;
+    --royal-blue-hover: #2756C2;
+    --royal-blue-light: #EBF1FD;
+    --page-bg: #F5F8FC;
+    --card-bg: #FFFFFF;
+    --text-main: #17243B;
+    --text-secondary: #64748B;
+    --border-color: #E2E8F0;
+    --border-focus: #20B5AD;
+    --status-success: #16876A;
+    --status-warning: #D97706;
+    --status-error: #DC4545;
+
+    /* Semantic Compatibility Tokens */
+    --primary: #20B5AD;
+    --primary-hover: #16A89F;
+    --primary-dark: #128E86;
+    --primary-light: #E6F8F7;
+    --secondary-blue: #356DE8;
+    --secondary-blue-hover: #2756C2;
+    --lpu-dark: #192B4A;
+    --lpu-gray-bg: #F5F8FC;
   }
 
   html {
@@ -11,8 +37,8 @@
   }
 
   body {
-    background-color: #ffffff;
-    color: #0f172a;
+    background-color: #F5F8FC;
+    color: #17243B;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
@@ -29,6 +55,92 @@
   }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.18s ease-out forwards;
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.03);
+  }
 }
+
+.animate-fade-in {
+  animation: fadeIn 0.22s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+/* Custom Portal Input Field Styling matching new modern design system */
+.lpu-portal-input,
+.portal-input {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #17243B !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.lpu-portal-input:focus,
+.portal-input:focus {
+  border-color: #20B5AD !important;
+  box-shadow: 0 0 0 3px rgba(32, 181, 173, 0.18) !important;
+  outline: none !important;
+  background-color: #FFFFFF !important;
+}
+
+.lpu-portal-input::placeholder,
+.portal-input::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Primary Teal Action Button */
+.lpu-btn-primary,
+.btn-teal {
+  background-color: #20B5AD;
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(32, 181, 173, 0.25);
+}
+
+.lpu-btn-primary:hover,
+.btn-teal:hover {
+  background-color: #16A89F;
+  box-shadow: 0 4px 12px rgba(32, 181, 173, 0.35);
+}
+
+.lpu-btn-primary:active,
+.btn-teal:active {
+  background-color: #128E86;
+  transform: translateY(1px);
+}
+
+/* Secondary Royal Blue Button */
+.btn-royal {
+  background-color: #356DE8;
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(53, 109, 232, 0.24);
+}
+
+.btn-royal:hover {
+  background-color: #2756C2;
+  box-shadow: 0 4px 12px rgba(53, 109, 232, 0.32);
+}
+
+/* Deep Navy Button */
+.btn-navy {
+  background-color: #192B4A;
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-navy:hover {
+  background-color: #22395D;
+}
+

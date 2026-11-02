@@ -9,25 +9,24 @@ import {
   KeyRound, 
   ArrowRight,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  PlusCircle
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { apiClient } from '@/lib/api-client';
-import { DEMO_ITEMS, DEMO_CLAIMS, DEMO_CUSTODY_RECORDS } from '@/lib/mock-data';
 import { formatDisplayDateTime } from '@/lib/formatters';
 
 export default function SecurityDeskOverview() {
   const [stats, setStats] = useState({
-    inCustodyCount: DEMO_ITEMS.filter((i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER').length,
-    pendingClaimsCount: DEMO_CLAIMS.filter((c) => c.claimStatus === 'UNDER_REVIEW' || c.claimStatus === 'SUBMITTED').length,
-    readyHandoverCount: DEMO_CLAIMS.filter((c) => c.claimStatus === 'APPROVED').length || 1,
-    completedHandoversCount: 2,
+    inCustodyCount: 0,
+    pendingClaimsCount: 0,
+    readyHandoverCount: 0,
+    completedHandoversCount: 0,
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
   const [reloadKey, setReloadKey] = useState(0);
 
   const fetchLiveStats = () => {
@@ -43,17 +42,17 @@ export default function SecurityDeskOverview() {
         const data = await apiClient.getSecurityStats();
         if (isMounted && data) {
           setStats({
-            inCustodyCount: data.custodyInventoryCount,
-            pendingClaimsCount: data.pendingClaimsCount,
-            readyHandoverCount: data.approvedAwaitingHandoverCount,
-            completedHandoversCount: data.completedHandoversCount,
+            inCustodyCount: data.custodyInventoryCount ?? 0,
+            pendingClaimsCount: data.pendingClaimsCount ?? 0,
+            readyHandoverCount: data.approvedAwaitingHandoverCount ?? 0,
+            completedHandoversCount: data.completedHandoversCount ?? 0,
           });
-          if (data.recentAuditEvents && data.recentAuditEvents.length > 0) {
+          if (Array.isArray(data.recentAuditEvents)) {
             setRecentEvents(data.recentAuditEvents);
           }
         }
       } catch {
-        // Graceful fallback to demo records if offline
+        // Leave at current real records
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -73,66 +72,75 @@ export default function SecurityDeskOverview() {
       title="Campus Security Reception & Custody Post"
       subtitle="Gate 1 Main Control Desk • Physical property intake, claim adjudication, and supervised handover."
       role="SECURITY_PERSONNEL"
+      actionButton={
+        <Link
+          href="/report?type=FOUND"
+          className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3.5 py-1.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+        >
+          <PlusCircle className="w-3.5 h-3.5" />
+          <span>Register Found Item</span>
+        </Link>
+      }
     >
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Physical Items in Custody
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Items in Custody
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EBF1FD] text-[#356DE8]">
               <Package className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{stats.inCustodyCount}</p>
+          <p className="mt-3 text-2xl font-black text-[#192B4A]">{stats.inCustodyCount}</p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <span>Stored in station locker storage</span>
+            <span>Stored in station lockers</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Pending Claims in Review
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Pending Claims
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E6F8F7] text-[#20B5AD]">
               <ClipboardCheck className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{stats.pendingClaimsCount}</p>
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-600 font-semibold">
-            <span>Requires evidence verification</span>
+          <p className="mt-3 text-2xl font-black text-[#192B4A]">{stats.pendingClaimsCount}</p>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-[#20B5AD] font-semibold">
+            <span>Requires proof verification</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Ready for Handover (OTP)
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Ready for Handover
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-[#16876A]">
               <KeyRound className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{stats.readyHandoverCount}</p>
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
+          <p className="mt-3 text-2xl font-black text-[#192B4A]">{stats.readyHandoverCount}</p>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-[#16876A] font-semibold">
             <span>Awaiting claimant OTP check-in</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Completed Handovers
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Completed Releases
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
               <CheckCircle2 className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{stats.completedHandoversCount}</p>
+          <p className="mt-3 text-2xl font-black text-[#192B4A]">{stats.completedHandoversCount}</p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <span>Safely released to owners</span>
+            <span>Safely released to verified owners</span>
           </div>
         </div>
       </div>
@@ -141,20 +149,20 @@ export default function SecurityDeskOverview() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Quick Intake Panel */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-3">
-          <div className="flex items-center gap-2.5 text-red-700">
+          <div className="flex items-center gap-2.5 text-[#20B5AD]">
             <ShieldAlert className="h-5 w-5" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">
-              Property Intake
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#192B4A]">
+              Register Found Property
             </h3>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Log found property surrendered at security posts with EXIF-sanitized photos and locker references.
+            Log found property surrendered at security posts with EXIF-sanitized photos and locker assignment.
           </p>
 
           <div className="pt-2">
             <Link
               href="/report?type=FOUND"
-              className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-red-800 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#16A89F] transition-colors"
             >
               <span>Log Found Intake</span>
               <ArrowRight className="h-3.5 w-3.5" />
@@ -164,9 +172,9 @@ export default function SecurityDeskOverview() {
 
         {/* Claims Review Panel */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-3">
-          <div className="flex items-center gap-2.5 text-amber-700">
+          <div className="flex items-center gap-2.5 text-[#356DE8]">
             <ClipboardCheck className="h-5 w-5" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#192B4A]">
               Claims Adjudication
             </h3>
           </div>
@@ -177,7 +185,7 @@ export default function SecurityDeskOverview() {
           <div className="pt-2">
             <Link
               href="/security/claims"
-              className="inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-amber-800 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#356DE8] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#2756C2] transition-colors"
             >
               <span>Review Claims Queue</span>
               <ArrowRight className="h-3.5 w-3.5" />
@@ -189,8 +197,8 @@ export default function SecurityDeskOverview() {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-3">
           <div className="flex items-center gap-2.5 text-emerald-700">
             <KeyRound className="h-5 w-5" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">
-              Handover Terminal
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#192B4A]">
+              Approved Handovers
             </h3>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
@@ -199,8 +207,8 @@ export default function SecurityDeskOverview() {
 
           <div className="pt-2">
             <Link
-              href="/security/custody?tab=handover"
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition-colors"
+              href="/security/handovers"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#192B4A] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#22395D] transition-colors"
             >
               <span>Open Handover Terminal</span>
               <ArrowRight className="h-3.5 w-3.5" />
@@ -210,10 +218,10 @@ export default function SecurityDeskOverview() {
       </div>
 
       {/* Recent Custody Log Activity & Audit Trail */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Campus Custody &amp; Security Audit Trail</h3>
+            <h3 className="text-sm font-bold text-[#192B4A]">Campus Custody &amp; Security Audit Trail</h3>
             <p className="text-xs text-slate-500">Append-only audit ledger of custody transfers, adjudications, and supervised handovers.</p>
           </div>
           <div className="flex items-center gap-3">
@@ -227,63 +235,48 @@ export default function SecurityDeskOverview() {
             </button>
             <Link
               href="/security/custody"
-              className="text-xs font-semibold text-red-700 hover:text-red-800"
+              className="text-xs font-bold text-[#20B5AD] hover:underline"
             >
-              Full Custody Inventory →
+              Full Custody Inventory &rarr;
             </Link>
           </div>
         </div>
 
         <div className="divide-y divide-slate-100 mt-2">
-          {recentEvents.length > 0
-            ? recentEvents.slice(0, 5).map((ev) => (
-                <div key={ev._id || ev.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-slate-500 font-semibold">{ev.targetEntity}</span>
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                        {(ev.action || '').replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    <p className="font-semibold text-slate-800 mt-0.5">
-                      Target Ref: {ev.metadata?.referenceNumber || ev.targetId || 'Campus Item'}
-                    </p>
-                    <p className="text-slate-500 text-[11px]">
-                      {ev.metadata?.fromLocation ? `From: ${ev.metadata.fromLocation} → To: ${ev.metadata.toLocation}` : ''}
-                      {ev.metadata?.remarks ? ` • ${ev.metadata.remarks}` : ''}
-                    </p>
-                  </div>
-
-                  <div className="text-right sm:text-right text-[11px] text-slate-500 shrink-0">
-                    <span className="font-medium text-slate-700">
-                      {ev.actor?.fullName || ev.actorRole || 'Campus Security'}
+          {recentEvents.length > 0 ? (
+            recentEvents.slice(0, 5).map((ev) => (
+              <div key={ev._id || ev.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="text-xs space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-slate-500 font-semibold">{ev.targetEntity}</span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                      {(ev.action || '').replace(/_/g, ' ')}
                     </span>
-                    <p className="text-slate-400">{formatDisplayDateTime(ev.timestamp)}</p>
                   </div>
+                  <p className="font-semibold text-slate-800">
+                    Target Ref: {ev.metadata?.referenceNumber || ev.targetId || 'Campus Item'}
+                  </p>
+                  <p className="text-slate-500 text-[11px]">
+                    {ev.metadata?.fromLocation ? `From: ${ev.metadata.fromLocation} → To: ${ev.metadata.toLocation}` : ''}
+                    {ev.metadata?.remarks ? ` • ${ev.metadata.remarks}` : ''}
+                  </p>
                 </div>
-              ))
-            : DEMO_CUSTODY_RECORDS.slice(0, 3).map((rec) => (
-                <div key={rec.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-slate-500 font-semibold">{rec.itemReference}</span>
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                        {rec.action.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <p className="font-semibold text-slate-800 mt-0.5">{rec.itemTitle}</p>
-                    <p className="text-slate-500 text-[11px]">{rec.remarks}</p>
-                  </div>
 
-                  <div className="text-right sm:text-right text-[11px] text-slate-500 shrink-0">
-                    <span className="font-medium text-slate-700">{rec.officerName}</span>
-                    <p className="text-slate-400">{formatDisplayDateTime(rec.timestamp)}</p>
-                  </div>
+                <div className="text-right sm:text-right text-[11px] text-slate-500 shrink-0">
+                  <span className="font-medium text-slate-700">
+                    {ev.actor?.fullName || ev.actorRole || 'Campus Security'}
+                  </span>
+                  <p className="text-slate-400">{formatDisplayDateTime(ev.timestamp)}</p>
                 </div>
-              ))}
+              </div>
+            ))
+          ) : (
+            <div className="py-8 text-center text-xs text-slate-500">
+              No recent custody actions recorded. New intakes, transfers, and handovers will appear here in real-time.
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
   );
 }
-

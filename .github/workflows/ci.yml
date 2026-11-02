@@ -33,10 +33,14 @@ jobs:
       - name: ESLint Check
         run: npm run lint
 
+      - name: Frontend Unit Tests
+        run: npm run test:web
+
       - name: Production Build
         run: npm run build:web
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+          NEXT_TELEMETRY_DISABLED: 1
 
   backend:
     name: Django Backend Checks & Pytest Suite

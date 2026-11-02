@@ -5,6 +5,7 @@ Claims App Services: Submission, Challenge Evaluation, Adjudication
 ==============================================================================
 """
 
+import uuid
 import random
 from datetime import datetime, timezone, timedelta
 from django.db import transaction
@@ -24,10 +25,22 @@ def generate_secure_numeric_otp(digits: int = 6) -> str:
 
 def submit_claim(user, item_id: str, statement: str, challenge_answers: list = None, private_evidence_urls: list = None, req_ip: str = '127.0.0.1', user_agent: str = '') -> Claim:
     """Submit an ownership claim against an item."""
+    item = None
+    target_id_str = str(item_id).strip()
+
+    # Try UUID lookup if format matches
     try:
-        item = Item.objects.get(pk=item_id, is_archived=False)
-    except Item.DoesNotExist:
-        raise NotFound("Campus property not found or is no longer active.")
+        val_uuid = uuid.UUID(target_id_str)
+        item = Item.objects.filter(pk=val_uuid, is_archived=False).first()
+    except (ValueError, AttributeError):
+        pass
+
+    # If not found by UUID, try reference number lookup
+    if not item:
+        item = Item.objects.filter(reference_number__iexact=target_id_str, is_archived=False).first()
+
+    if not item:
+        raise NotFound(f"Campus property '{target_id_str}' was not found or is no longer active.")
 
     if item.status in (ItemStatus.HANDED_OVER, ItemStatus.DISPOSED):
         raise ValidationError(f"This item is in status '{item.status}' and is not eligible for new claims.")

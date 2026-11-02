@@ -137,7 +137,7 @@ class PublicItemSerializer(serializers.ModelSerializer):
         }
 
     def get_campusZone(self, obj):
-        return obj.location.campus_zone
+        return obj.location.code or obj.location.campus_zone
 
     def get_reportedByRole(self, obj):
         return getattr(obj.reported_by, 'role', 'STUDENT_STAFF')

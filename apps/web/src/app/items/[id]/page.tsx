@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
   MapPin, 
   Calendar, 
@@ -13,7 +14,8 @@ import {
   Lock, 
   X, 
   ExternalLink,
-  Edit3
+  Edit3,
+  Upload
 } from 'lucide-react';
 import { Navbar } from '@/components/navigation/Navbar';
 import { Footer } from '@/components/navigation/Footer';
@@ -32,6 +34,8 @@ interface ItemDetailPageProps {
 export default function ItemDetailPage({ params }: ItemDetailPageProps) {
   const resolvedParams = use(params);
   const itemId = resolvedParams.id;
+  const searchParams = useSearchParams();
+  const shouldAutoClaim = searchParams?.get('claim') === 'true';
 
   const [item, setItem] = useState<PublicItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +48,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
   const [claimChallengeAnswer, setClaimChallengeAnswer] = useState('');
   const [challenges, setChallenges] = useState<Array<{ id: string; questionText: string; hint?: string; maxAttempts: number }>>([]);
   const [challengeAnswers, setChallengeAnswers] = useState<Record<string, string>>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoadingChallenges, setIsLoadingChallenges] = useState(false);
   const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
@@ -57,6 +62,18 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
     setIsLoading(true);
     setError(null);
     setReloadKey((prev) => prev + 1);
+  };
+
+  const loadChallengesForItem = async (id: string) => {
+    try {
+      setIsLoadingChallenges(true);
+      const loadedChallenges = await apiClient.getItemChallenges(id);
+      setChallenges(loadedChallenges);
+    } catch {
+      setChallenges([]);
+    } finally {
+      setIsLoadingChallenges(false);
+    }
   };
 
   // Fetch item and check user session
@@ -75,10 +92,23 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
           const user = await apiClient.getCurrentUser();
           if (!isCancelled && user) {
             setCurrentUser(user);
+            if (shouldAutoClaim) {
+              if (fetchedItem.itemType === 'FOUND' && fetchedItem.status !== 'HANDED_OVER') {
+                setIsClaimModalOpen(true);
+                loadChallengesForItem(itemId);
+              } else {
+                setClaimError('This item is not eligible for ownership claims.');
+              }
+            }
+          } else if (!isCancelled && shouldAutoClaim) {
+            setAuthRequiredPrompt(true);
           }
         } catch {
           if (!isCancelled) {
             setCurrentUser(null);
+            if (shouldAutoClaim) {
+              setAuthRequiredPrompt(true);
+            }
           }
         }
       } catch (err) {
@@ -103,7 +133,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
     return () => {
       isCancelled = true;
     };
-  }, [itemId, reloadKey]);
+  }, [itemId, reloadKey, shouldAutoClaim]);
 
   const handleClaimClick = async () => {
     if (!currentUser) {
@@ -111,21 +141,16 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
       return;
     }
 
+    if (item && (item.itemType !== 'FOUND' || item.status === 'HANDED_OVER')) {
+      return;
+    }
+
     setIsClaimModalOpen(true);
     setClaimError(null);
     setClaimSuccess(false);
+    setSelectedFile(null);
 
-    // Fetch challenges for this item if any
-    try {
-      setIsLoadingChallenges(true);
-      const loadedChallenges = await apiClient.getItemChallenges(itemId);
-      setChallenges(loadedChallenges);
-    } catch {
-      // Challenges are optional
-      setChallenges([]);
-    } finally {
-      setIsLoadingChallenges(false);
-    }
+    await loadChallengesForItem(itemId);
   };
 
   const handleClaimSubmit = async (e: React.FormEvent) => {
@@ -148,13 +173,23 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
         : claimStatement.trim();
 
       const response = await apiClient.submitClaim({
-        itemId,
+        itemId: item?.id || itemId,
         statement: fullStatement,
         challengeAnswers: formattedAnswers.length > 0 ? formattedAnswers : undefined,
       });
 
+      if (selectedFile && response?.id) {
+        try {
+          await apiClient.uploadClaimEvidence(response.id, selectedFile);
+        } catch (uploadErr) {
+          console.warn('Evidence upload failed:', uploadErr);
+        }
+      }
+
       setClaimResultStatus(response.claimStatus || 'SUBMITTED');
       setClaimSuccess(true);
+      // Refresh item state
+      apiClient.getItemById(itemId).then((updated) => setItem(updated)).catch(() => {});
     } catch (err) {
       if (err instanceof ApiClientError) {
         setClaimError(err.message);
@@ -167,7 +202,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50/50">
+    <div className="flex min-h-screen flex-col bg-[#F5F8FC]">
       <Navbar />
 
       <main className="flex-1 py-8 sm:py-12">
@@ -176,13 +211,13 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
           <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-xs text-slate-500">
             <Link
               href="/board"
-              className="inline-flex items-center gap-1.5 font-medium hover:text-slate-900 transition-colors"
+              className="inline-flex items-center gap-1.5 font-medium hover:text-[#192B4A] transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Back to Campus Board</span>
             </Link>
             <span>/</span>
-            <span className="font-mono text-slate-700 font-semibold truncate">
+            <span className="font-mono text-[#192B4A] font-semibold truncate">
               {item ? item.referenceNumber : 'Item Details'}
             </span>
           </nav>
@@ -205,7 +240,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
               <button
                 type="button"
                 onClick={fetchItemData}
-                className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
               >
                 Retry Loading
               </button>
@@ -217,7 +252,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
             <article className="space-y-6">
               {/* Owner Banner (if authenticated user filed this report) */}
               {item.isOwner && (
-                <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <ShieldCheck className="h-5 w-5 text-emerald-700 shrink-0" />
                     <div>
@@ -229,7 +264,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                   </div>
                   <Link
                     href={`/dashboard/my-reports?edit=${item.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 transition-colors shadow-2xs self-start sm:self-auto"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 transition-colors shadow-2xs self-start sm:self-auto"
                   >
                     <Edit3 className="h-3.5 w-3.5" />
                     <span>Edit Report</span>
@@ -244,8 +279,8 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                     <span
                       className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-bold tracking-wider uppercase ${
                         item.itemType === 'FOUND'
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : 'bg-red-50 text-red-800 border border-red-200'
+                          ? 'bg-[#E6F8F7] text-[#16A89F] border border-[#20B5AD]/30'
+                          : 'bg-[#EBF1FD] text-[#356DE8] border border-[#356DE8]/30'
                       }`}
                     >
                       {item.itemType === 'FOUND' ? (
@@ -339,8 +374,8 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                 </div>
 
                 {/* Privacy & Anti-Fraud Notice */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-600 flex items-start gap-2.5">
-                  <Lock className="h-4 w-4 text-red-700 shrink-0 mt-0.5" />
+                <div className="rounded-2xl border border-[#20B5AD]/25 bg-[#E6F8F7] p-4 text-xs text-slate-700 flex items-start gap-2.5">
+                  <Lock className="h-4 w-4 text-[#20B5AD] shrink-0 mt-0.5" />
                   <p className="text-[11px] leading-relaxed">
                     <strong>Zero-Leak Privacy Protocol:</strong> Private identifying details, serial numbers, and wallet contents have been encrypted into the campus vault and are strictly excluded from public display to prevent fraudulent claims.
                   </p>
@@ -357,7 +392,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                       <button
                         type="button"
                         onClick={handleClaimClick}
-                        className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-6 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-red-800 transition-colors"
+                        className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
                       >
                         <ShieldCheck className="h-4 w-4" />
                         <span>File Ownership Claim</span>
@@ -376,10 +411,10 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setAuthRequiredPrompt(false)} />
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200 z-10 animate-fade-in text-center space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-700">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E6F8F7] text-[#20B5AD]">
               <Lock className="h-7 w-7" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-[#192B4A]">
               University Authentication Required
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
@@ -389,13 +424,13 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
               <button
                 type="button"
                 onClick={() => setAuthRequiredPrompt(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
               <Link
-                href={`/login?redirect=/items/${itemId}`}
-                className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                href={`/login?redirect=${encodeURIComponent('/items/' + itemId + '?claim=true')}`}
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
               >
                 Log In to Claim
               </Link>
@@ -418,7 +453,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
             </button>
 
             <div className="mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-red-700">
+              <span className="text-xs font-bold uppercase tracking-wider text-lpu-primary">
                 LPU Verified Recovery Claim
               </span>
               <h3 className="text-lg font-bold text-slate-900 mt-0.5">
@@ -456,7 +491,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                 <div className="flex items-center justify-center gap-3 pt-2">
                   <Link
                     href="/dashboard/my-claims"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg lpu-btn-primary px-4 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors"
                   >
                     <span>View in My Claims</span>
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -507,7 +542,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                     value={claimStatement}
                     onChange={(e) => setClaimStatement(e.target.value)}
                     placeholder="E.g., I mislaid this item on the study bench in Block 34 during lunch hour..."
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-lpu-primary focus:outline-none focus:ring-1 focus:ring-lpu-primary"
                     required
                   />
                 </FormField>
@@ -520,7 +555,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                 ) : challenges.length > 0 ? (
                   <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
                     <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4 text-red-700" />
+                      <Lock className="h-4 w-4 text-lpu-primary" />
                       <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
                         Specific Item Verification Challenges
                       </h4>
@@ -542,7 +577,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                           value={challengeAnswers[challenge.id] || ''}
                           onChange={(e) => setChallengeAnswers({ ...challengeAnswers, [challenge.id]: e.target.value })}
                           placeholder="Enter your verification answer..."
-                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-lpu-primary focus:outline-none focus:ring-1 focus:ring-lpu-primary"
                         />
                       </div>
                     ))}
@@ -559,10 +594,50 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                       value={claimChallengeAnswer}
                       onChange={(e) => setClaimChallengeAnswer(e.target.value)}
                       placeholder="E.g., Serial number, distinctive scratch, wallpaper picture, contents inside..."
-                      className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                      className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-lpu-primary focus:outline-none focus:ring-1 focus:ring-lpu-primary"
                     />
                   </FormField>
                 )}
+
+                <div className="space-y-1.5 pt-1">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Ownership Evidence / Proof (Optional)
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Attach purchase invoice, receipt, warranty card, or photo proving ownership (PDF, JPG, PNG up to 5MB).
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="claim-detail-evidence-file"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-lpu-primary" />
+                      <span>{selectedFile ? 'Change File' : 'Choose File'}</span>
+                    </label>
+                    <input
+                      id="claim-detail-evidence-file"
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          if (f.size > 5 * 1024 * 1024) {
+                            setClaimError('Evidence file exceeds 5MB limit.');
+                            return;
+                          }
+                          setSelectedFile(f);
+                          setClaimError(null);
+                        }
+                      }}
+                    />
+                    {selectedFile && (
+                      <span className="text-xs text-slate-700 font-mono truncate max-w-xs">
+                        {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                   <button
@@ -576,7 +651,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                   <button
                     type="submit"
                     disabled={isSubmittingClaim}
-                    className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors disabled:opacity-60"
+                    className="rounded-lg lpu-btn-primary px-5 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
                   >
                     {isSubmittingClaim ? 'Submitting...' : 'Submit Claim'}
                   </button>

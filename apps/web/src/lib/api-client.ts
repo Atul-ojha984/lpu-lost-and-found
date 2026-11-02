@@ -102,12 +102,104 @@ export function normalizeApiItem(raw: Record<string, unknown>): PublicItem {
   };
 }
 
+const ACCESS_TOKEN_KEY = 'lpu_access_token';
+const REFRESH_TOKEN_KEY = 'lpu_refresh_token';
+const LEGACY_TOKEN_KEY = 'lpu_auth_token';
+
+export function getAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (token) return token;
+  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+  if (legacy) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, legacy);
+    return legacy;
+  }
+  return null;
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setAuthTokens(accessToken: string, refreshToken?: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  localStorage.setItem(LEGACY_TOKEN_KEY, accessToken);
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  }
+}
+
+export function clearAuthTokens(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem('lpu_user_profile');
+}
+
+export interface ApiFetchOptions extends RequestInit {
+  _retry?: boolean;
+  skipAuth?: boolean;
+}
+
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string | null) => void> = [];
+
+function notifyRefreshSubscribers(token: string | null) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+async function executeTokenRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearAuthTokens();
+    return null;
+  }
+
+  try {
+    const refreshUrl = `${API_BASE_URL.replace(/\/+$/, '')}/auth/token/refresh/`;
+    const res = await fetch(refreshUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    if (!res.ok) {
+      clearAuthTokens();
+      return null;
+    }
+
+    const json = await res.json();
+    const payload = json?.data || json;
+    const newAccess = payload.access || payload.accessToken || payload.token;
+    const newRefresh = payload.refresh || payload.refreshToken;
+
+    if (newAccess) {
+      setAuthTokens(newAccess, newRefresh || refreshToken);
+      return newAccess;
+    } else {
+      clearAuthTokens();
+      return null;
+    }
+  } catch {
+    clearAuthTokens();
+    return null;
+  }
+}
+
 /**
  * Core HTTP client with credentials and standard error parsing
  */
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiFetchOptions = {}
 ): Promise<T> {
   const url = endpoint.startsWith('http')
     ? endpoint
@@ -122,27 +214,110 @@ async function apiFetch<T>(
     headers['Content-Type'] = 'application/json';
   }
 
-  // Check localStorage for fallback auth token (if cookies are not shared in cross-domain)
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('lpu_auth_token');
-    if (token && !headers['Authorization']) {
+  const cleanEndpoint = endpoint.replace(/^\/+/, '');
+  const isAuthRoute =
+    cleanEndpoint.startsWith('auth/login') ||
+    cleanEndpoint.startsWith('auth/register') ||
+    cleanEndpoint.startsWith('auth/token/refresh');
+
+  if (isAuthRoute || options.skipAuth) {
+    delete headers['Authorization'];
+  } else if (!headers['Authorization']) {
+    const token = getAccessToken();
+    if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include', // Support HttpOnly cookie sessions
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include', // Support HttpOnly cookie sessions
+    });
+  } catch (netErr: unknown) {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const errorMsg = isOffline
+      ? 'Network offline. Please check your internet connection.'
+      : 'Authentication service unreachable (http://localhost:8000). Please ensure the Django backend server is running.';
+    throw new ApiClientError(errorMsg, 0, 'NETWORK_ERROR', netErr);
+  }
+
+  // Handle 401 Unauthorized with centralized token refresh
+  if (response.status === 401 && !options._retry && !isAuthRoute) {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      if (isRefreshing) {
+        return new Promise<T>((resolve, reject) => {
+          refreshSubscribers.push((newToken) => {
+            if (newToken) {
+              resolve(
+                apiFetch<T>(endpoint, {
+                  ...options,
+                  _retry: true,
+                  headers: {
+                    ...headers,
+                    Authorization: `Bearer ${newToken}`,
+                  },
+                })
+              );
+            } else {
+              reject(
+                new ApiClientError(
+                  'Your session has expired. Please log in again.',
+                  401,
+                  'TOKEN_EXPIRED'
+                )
+              );
+            }
+          });
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const newAccessToken = await executeTokenRefresh();
+        if (newAccessToken) {
+          notifyRefreshSubscribers(newAccessToken);
+          return apiFetch<T>(endpoint, {
+            ...options,
+            _retry: true,
+            headers: {
+              ...headers,
+              Authorization: `Bearer ${newAccessToken}`,
+            },
+          });
+        } else {
+          notifyRefreshSubscribers(null);
+          clearAuthTokens();
+          if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            window.location.replace('/login?session_expired=1');
+          }
+          throw new ApiClientError(
+            'Your session has expired. Please log in again.',
+            401,
+            'TOKEN_EXPIRED'
+          );
+        }
+      } finally {
+        isRefreshing = false;
+      }
+    } else {
+      clearAuthTokens();
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.replace('/login?session_expired=1');
+      }
+    }
+  }
 
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const data = isJson ? await response.json() : null;
 
   if (!response.ok) {
-    const message = data?.error?.message || data?.message || `HTTP error ${response.status}`;
-    const code = data?.error?.code || 'UNKNOWN_ERROR';
-    const details = data?.error?.details;
+    const message = data?.error?.message || data?.message || data?.detail || `HTTP error ${response.status}`;
+    const code = data?.error?.code || data?.code || 'UNKNOWN_ERROR';
+    const details = data?.error?.details || data?.details;
     throw new ApiClientError(message, response.status, code, details);
   }
 
@@ -279,9 +454,15 @@ export const apiClient = {
     privateEvidenceProofUrls?: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<any> {
-    return apiFetch('claims', {
+    return apiFetch('claims/', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        itemId: payload.itemId,
+        item_id: payload.itemId,
+        statement: payload.statement,
+        challengeAnswers: payload.challengeAnswers || [],
+        privateEvidenceProofUrls: payload.privateEvidenceProofUrls || [],
+      }),
     });
   },
 
@@ -308,11 +489,28 @@ export const apiClient = {
   },
 
   /**
-   * Security Queue: Retrieve pending claims for adjudication
+   * Upload ownership verification evidence (receipt, photo, ID card) for an initiated claim
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getPendingClaimsQueue(): Promise<any[]> {
-    return apiFetch('claims/pending');
+  async uploadClaimEvidence(claimId: string, file: File): Promise<{ message: string; url: string; claim: any }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiFetch(`claims/${claimId}/evidence/`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  /**
+   * Security Queue: Retrieve claims register with optional status and search filters
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getPendingClaimsQueue(params: { status?: string; search?: string } = {}): Promise<any[]> {
+    const query = new URLSearchParams();
+    if (params.status && params.status !== 'ALL') query.set('status', params.status);
+    if (params.search && params.search.trim()) query.set('search', params.search.trim());
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`claims/pending${qs}`);
   },
 
   /**
@@ -340,16 +538,31 @@ export const apiClient = {
    * User Authentication: Login with email/regNo and password
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async login(payload: { emailOrRegNo: string; password: string }): Promise<{ user: any; token: string }> {
+  async login(payload: { emailOrRegNo?: string; registration_number?: string; registrationNumber?: string; password: string }): Promise<{ user: any; token: string; accessToken: string; refreshToken?: string }> {
+    const identifier = (payload.emailOrRegNo || payload.registration_number || payload.registrationNumber || '').trim();
+    clearAuthTokens();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await apiFetch<{ user: any; token: string }>('auth/login', {
+    const res = await apiFetch<any>('auth/login', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        emailOrRegNo: identifier,
+        registration_number: identifier,
+        password: payload.password,
+      }),
+      skipAuth: true,
     });
-    if (typeof window !== 'undefined' && res.token) {
-      localStorage.setItem('lpu_auth_token', res.token);
+    const accessToken = res.accessToken || res.token;
+    const refreshToken = res.refreshToken || res.refresh;
+    if (accessToken) {
+      setAuthTokens(accessToken, refreshToken);
     }
-    return res;
+    return {
+      user: res.user,
+      token: accessToken,
+      accessToken,
+      refreshToken,
+    };
   },
 
   /**
@@ -366,28 +579,41 @@ export const apiClient = {
     securityPost?: string;
     phone?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<{ user: any; token: string }> {
+  }): Promise<{ user: any; token: string; accessToken: string; refreshToken?: string }> {
+    clearAuthTokens();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await apiFetch<{ user: any; token: string }>('auth/register', {
+    const res = await apiFetch<any>('auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
+      skipAuth: true,
     });
-    if (typeof window !== 'undefined' && res.token) {
-      localStorage.setItem('lpu_auth_token', res.token);
+    const accessToken = res.accessToken || res.token;
+    const refreshToken = res.refreshToken || res.refresh;
+    if (accessToken) {
+      setAuthTokens(accessToken, refreshToken);
     }
-    return res;
+    return {
+      user: res.user,
+      token: accessToken,
+      accessToken,
+      refreshToken,
+    };
   },
 
   /**
    * User Authentication: Logout current user
    */
   async logout(): Promise<void> {
+    const refreshToken = getRefreshToken();
     try {
-      await apiFetch('auth/logout', { method: 'POST' });
+      await apiFetch('auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refresh: refreshToken, refreshToken }),
+        skipAuth: true,
+      });
     } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('lpu_auth_token');
-      }
+      clearAuthTokens();
     }
   },
 
@@ -396,7 +622,9 @@ export const apiClient = {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getCurrentUser(): Promise<any> {
-    return apiFetch('auth/me');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await apiFetch<any>('auth/me');
+    return res?.user !== undefined ? res.user : res;
   },
 
   /**

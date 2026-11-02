@@ -61,7 +61,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
 
   return (
     <div className={`flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-8 shadow-xs animate-pulse ${className}`}>
-      <div className="h-8 w-8 rounded-full border-2 border-red-700 border-t-transparent animate-spin" />
+      <div className="h-8 w-8 rounded-full border-2 border-[#20B5AD] border-t-transparent animate-spin" />
       <p className="text-xs font-medium text-slate-600">{message || 'Loading data...'}</p>
     </div>
   );

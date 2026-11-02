@@ -27,6 +27,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-lpu-lost-found-dev-fallbac
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',') if h.strip()]
+if 'testserver' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('testserver')
 
 # Application definition
 INSTALLED_APPS = [
@@ -95,13 +97,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Database Setup (PostgreSQL with SQLite fallback)
-DATABASE_URL = os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+DEFAULT_SQLITE_PATH = (BASE_DIR / 'db.sqlite3').resolve()
+DATABASE_URL = os.getenv('DATABASE_URL', f'sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}')
+_db_config = dj_database_url.config(
+    default=DATABASE_URL,
+    conn_max_age=600,
+    conn_health_checks=True,
+)
+if _db_config.get('ENGINE') == 'django.db.backends.sqlite3':
+    _db_name = _db_config.get('NAME')
+    if not _db_name or not os.path.isabs(str(_db_name)):
+        _db_config['NAME'] = str(DEFAULT_SQLITE_PATH if not _db_name or _db_name == 'db.sqlite3' else (BASE_DIR / _db_name).resolve())
+
 DATABASES = {
-    'default': dj_database_url.config(
-        default=DATABASE_URL,
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    'default': _db_config
 }
 
 # Custom User Model

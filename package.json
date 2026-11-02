@@ -12,6 +12,8 @@
     "build:web": "npm --workspace=apps/web run build",
     "build:api": "npm --workspace=apps/api run build",
     "test:django": "node scripts/run-django-tests.mjs",
+    "test:web": "node scripts/frontend-unit-test.mjs",
+    "test": "node scripts/frontend-unit-test.mjs && node scripts/run-django-tests.mjs",
     "test:api": "npm --workspace=apps/api run test",
     "check:django": "node scripts/run-django-manage.mjs check",
     "typecheck:web": "npm --workspace=apps/web run typecheck",
@@ -20,6 +22,7 @@
     "build": "npm --workspace=apps/web run build",
     "lint": "npm --workspace=apps/web run lint",
     "smoke:api": "node scripts/deployment-smoke-test.mjs",
+    "smoke:auth": "node scripts/auth-integration-smoke-test.mjs",
     "smoke:e2e": "node scripts/e2e-workflow-smoke-test.mjs",
     "setup:db": "node scripts/setup-db-indexes.mjs"
   }

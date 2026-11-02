@@ -10,14 +10,16 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
-  AlertCircle
+  ShieldCheck,
+  Search
 } from 'lucide-react';
 import { LPULogo } from '@/components/branding/LPULogo';
 import { apiClient } from '@/lib/api-client';
 
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string; role: string; email: string } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -44,14 +46,27 @@ export const Navbar: React.FC = () => {
     router.push('/login');
   };
 
+  const userRole = currentUser?.role;
+  const isSecurity = userRole === 'SECURITY_PERSONNEL';
+  const isAdmin = userRole === 'CAMPUS_ADMIN' || userRole === 'SYSTEM_ADMIN';
+
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/board', label: 'Public Board' },
     { href: '/report', label: 'Report Item' },
-    { href: '/dashboard', label: 'My Portal' },
-    { href: '/security', label: 'Security Desk' },
-    { href: '/admin', label: 'Admin' },
   ];
+
+  if (currentUser) {
+    if (isAdmin) {
+      navLinks.push({ href: '/admin', label: 'Admin Dashboard' });
+      navLinks.push({ href: '/security', label: 'Security Desk' });
+      navLinks.push({ href: '/dashboard', label: 'Student View' });
+    } else if (isSecurity) {
+      navLinks.push({ href: '/security', label: 'Security Desk' });
+    } else {
+      navLinks.push({ href: '/dashboard', label: 'My Portal' });
+    }
+  }
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -59,34 +74,34 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 bg-white/95 backdrop-blur-md">
-      {/* Top Disclaimer Strip */}
-      <div className="bg-slate-900 px-4 py-1 text-center text-[11px] text-slate-300">
+    <header className="sticky top-0 z-40 w-full border-b border-[#E2E8F0] bg-white/95 backdrop-blur-md shadow-2xs">
+      {/* Top Banner Strip */}
+      <div className="bg-[#192B4A] border-b border-[#22395D] px-4 py-1.5 text-center text-[11px] text-white/90">
         <div className="mx-auto flex max-w-7xl items-center justify-center gap-2">
-          <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+          <ShieldCheck className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
           <span>
-            <strong>Campus Property Recovery Platform:</strong> For Lovely Professional University. Independent campus initiative.
+            <strong className="text-white">Campus Property Recovery Network:</strong> Official Lost &amp; Found management portal for Lovely Professional University.
           </span>
         </div>
       </div>
 
       {/* Main Navbar */}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 rounded-lg">
-          <LPULogo size="sm" showSubtitle={true} />
+        {/* Brand Logo with Custom Wordmark */}
+        <Link href="/" className="flex items-center gap-2 focus:outline-none">
+          <LPULogo size="sm" showSubtitle={true} wordmarkVariant="stacked-system" />
         </Link>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+        <nav className="hidden md:flex items-center gap-1 lg:gap-1.5">
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold tracking-tight transition-colors ${
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight transition-colors ${
                 isActive(link.href)
-                  ? 'bg-red-50 text-red-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'bg-[#E6F8F7] text-[#0E706A] font-bold border border-[#20B5AD]/25'
+                  : 'text-slate-600 hover:bg-[#F5F8FC] hover:text-[#192B4A]'
               }`}
             >
               {link.label}
@@ -97,36 +112,52 @@ export const Navbar: React.FC = () => {
         {/* Right Action Buttons */}
         <div className="hidden sm:flex items-center gap-2.5">
           <Link
+            href="/board"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F8FC] px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#20B5AD]/40 hover:text-[#192B4A] transition-colors"
+          >
+            <Search className="h-3.5 w-3.5 text-slate-500" />
+            <span>Search Board</span>
+          </Link>
+
+          <Link
             href="/report"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-red-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-red-800 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+            className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3.5 py-2 text-xs font-bold text-white transition-colors"
           >
             <PlusCircle className="h-3.5 w-3.5" />
             <span>Report Item</span>
           </Link>
 
           {currentUser ? (
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-800">
-                <UserIcon className="h-3.5 w-3.5 text-slate-500" />
+            <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
+              <Link
+                href={
+                  currentUser.role === 'SECURITY_PERSONNEL'
+                    ? '/security'
+                    : currentUser.role === 'CAMPUS_ADMIN' || currentUser.role === 'SYSTEM_ADMIN'
+                    ? '/admin'
+                    : '/dashboard'
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#E6F8F7] border border-[#20B5AD]/30 px-2.5 py-1.5 text-xs font-bold text-[#0E706A]"
+              >
+                <UserIcon className="h-3.5 w-3.5 text-[#20B5AD]" />
                 <span className="max-w-[120px] truncate">{currentUser.fullName || currentUser.email}</span>
-              </span>
+              </Link>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-red-700 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-colors"
                 title="Sign Out"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                <span>Sign Out</span>
               </button>
             </div>
           ) : (
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#192B4A]/20 bg-white px-3.5 py-2 text-xs font-bold text-[#192B4A] hover:bg-[#F5F8FC] hover:border-[#20B5AD] hover:text-[#20B5AD] transition-colors"
             >
-              <LogIn className="h-3.5 w-3.5 text-slate-500" />
-              <span>Sign In</span>
+              <LogIn className="h-3.5 w-3.5 text-[#20B5AD]" />
+              <span>Login</span>
             </Link>
           )}
         </div>
@@ -135,7 +166,7 @@ export const Navbar: React.FC = () => {
         <div className="flex md:hidden items-center gap-2">
           <Link
             href="/report"
-            className="rounded-lg bg-red-700 p-2 text-white hover:bg-red-800"
+            className="rounded-xl lpu-btn-primary p-2 text-white"
             aria-label="Report Item"
           >
             <PlusCircle className="h-4 w-4" />
@@ -145,40 +176,39 @@ export const Navbar: React.FC = () => {
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle navigation menu"
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+            className="rounded-xl p-2 text-slate-600 hover:bg-[#F5F8FC] focus:outline-none"
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="border-b border-slate-200 bg-white px-4 pt-2 pb-5 md:hidden space-y-1 shadow-lg animate-fade-in">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium ${
-                isActive(link.href)
-                  ? 'bg-red-50 text-red-700 font-semibold'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>{link.label}</span>
-            </Link>
-          ))}
+        <div className="md:hidden border-t border-[#E2E8F0] bg-white p-4 space-y-2 animate-fade-in">
+          <nav className="flex flex-col space-y-1">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
+                  isActive(link.href)
+                    ? 'bg-[#E6F8F7] text-[#0E706A]'
+                    : 'text-slate-600 hover:bg-[#F5F8FC]'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
 
           <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
             {currentUser ? (
               <button
                 type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleLogout();
-                }}
-                className="flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100"
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-50 py-2.5 text-xs font-bold text-rose-700"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Sign Out ({currentUser.fullName || currentUser.email})</span>
@@ -187,10 +217,10 @@ export const Navbar: React.FC = () => {
               <Link
                 href="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl lpu-btn-primary py-2.5 text-xs font-bold text-white text-center"
               >
                 <LogIn className="h-4 w-4" />
-                <span>Sign In to Account</span>
+                <span>Login to Portal</span>
               </Link>
             )}
           </div>

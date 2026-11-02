@@ -65,11 +65,21 @@ class Command(BaseCommand):
                 )
             self.stdout.write(self.style.SUCCESS(f'Seeded {len(DEFAULT_LOCATIONS)} campus locations.'))
 
-            # 3. Demo Users (matching quick-fill presets)
+            # 3. Demo Users (matching quick-fill presets and official UI specifications)
+            import os
+            student_pwd = os.getenv('DEV_STUDENT_PASSWORD', 'DemoStudent2026!')
+            security_pwd = os.getenv('DEV_SECURITY_PASSWORD', 'DemoSecurity2026!')
+            admin_pwd = os.getenv('DEV_ADMIN_PASSWORD', 'DemoAdmin2026!')
+
+            # Clean up obsolete typo records if present to avoid unique constraint collisions
+            User.objects.filter(email='aarav.sharma.12108@lpu.in', registration_number='12108001').delete()
+            User.objects.filter(email='rajesh.verma.sec@lpu.in', registration_number='SEC8001').delete()
+            User.objects.filter(email='sunita.admin@lpu.in', registration_number='ADM9001').delete()
+
             student_user, _ = User.objects.update_or_create(
                 email='aarav.sharma.12108@lpu.in',
                 defaults={
-                    'registration_number': '12108001',
+                    'registration_number': '12108801',
                     'full_name': 'Aarav Sharma',
                     'role': UserRole.STUDENT_STAFF,
                     'department': 'School of Computer Science & Engineering',
@@ -77,13 +87,13 @@ class Command(BaseCommand):
                     'is_active': True,
                 }
             )
-            student_user.set_password('DemoStudent2026!')
+            student_user.set_password(student_pwd)
             student_user.save()
 
             security_user, _ = User.objects.update_or_create(
                 email='rajesh.verma.sec@lpu.in',
                 defaults={
-                    'registration_number': 'SEC8001',
+                    'registration_number': 'LPU-SEC-001',
                     'full_name': 'Rajesh Verma (Officer)',
                     'role': UserRole.SECURITY_PERSONNEL,
                     'department': 'Campus Security Department',
@@ -92,21 +102,22 @@ class Command(BaseCommand):
                     'is_active': True,
                 }
             )
-            security_user.set_password('DemoSecurity2026!')
+            security_user.set_password(security_pwd)
             security_user.save()
 
             admin_user, _ = User.objects.update_or_create(
                 email='sunita.admin@lpu.in',
                 defaults={
-                    'registration_number': 'ADM9001',
+                    'registration_number': 'LPU-ADM-001',
                     'full_name': 'Sunita Rao (Dean of Student Welfare)',
                     'role': UserRole.CAMPUS_ADMIN,
                     'department': 'Division of Student Welfare',
                     'phone': '+91 98765 43212',
                     'is_active': True,
+                    'is_staff': True,
                 }
             )
-            admin_user.set_password('DemoAdmin2026!')
+            admin_user.set_password(admin_pwd)
             admin_user.save()
 
             # E2E Smoke Test Users

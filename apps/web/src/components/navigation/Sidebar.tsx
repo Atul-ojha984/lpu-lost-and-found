@@ -1,261 +1,256 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
-  FileText, 
+  Search,
+  FilePlus2, 
   HelpCircle, 
-  Sparkles, 
   ShieldAlert, 
   ClipboardCheck, 
-  Package, 
+  PackageCheck, 
   Users, 
   BarChart3, 
-  LogOut,
-  ChevronRight,
-  ExternalLink
+  LogOut, 
+  Clock, 
+  User as UserIcon, 
+  Shield, 
+  MapPin, 
+  Sliders, 
+  FileText,
+  Package
 } from 'lucide-react';
 import { LPULogo } from '@/components/branding/LPULogo';
+import { apiClient } from '@/lib/api-client';
 
 interface SidebarProps {
-  currentRole?: 'STUDENT_STAFF' | 'SECURITY_PERSONNEL' | 'CAMPUS_ADMIN';
-  onRoleChange?: (role: 'STUDENT_STAFF' | 'SECURITY_PERSONNEL' | 'CAMPUS_ADMIN') => void;
+  currentRole?: 'STUDENT_STAFF' | 'SECURITY_PERSONNEL' | 'CAMPUS_ADMIN' | 'SYSTEM_ADMIN';
   onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  currentRole = 'STUDENT_STAFF',
-  onRoleChange,
+  currentRole: propRole,
   onCloseMobile,
 }) => {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userRole, setUserRole] = useState<'STUDENT_STAFF' | 'SECURITY_PERSONNEL' | 'CAMPUS_ADMIN' | 'SYSTEM_ADMIN'>(
+    propRole || 'STUDENT_STAFF'
+  );
+  const [userName, setUserName] = useState<string>('');
+  const [userIdentifier, setUserIdentifier] = useState<string>('');
 
-  const studentLinks = [
-    { href: '/dashboard', label: 'Dashboard Overview', icon: LayoutDashboard },
-    { href: '/dashboard/my-reports', label: 'My Reported Items', icon: FileText },
-    { href: '/dashboard/my-claims', label: 'My Submitted Claims', icon: HelpCircle },
-    { href: '/dashboard/matches', label: 'Match Suggestions', icon: Sparkles, badge: 'New' },
+  useEffect(() => {
+    // Determine active role from current user session
+    apiClient.getCurrentUser()
+      .then((data) => {
+        const u = data?.user || data;
+        if (u) {
+          if (u.role) {
+            setUserRole(u.role);
+          }
+          if (u.fullName) {
+            setUserName(u.fullName);
+          }
+          if (u.registrationNumber) {
+            setUserIdentifier(u.registrationNumber);
+          } else if (u.email) {
+            setUserIdentifier(u.email);
+          }
+        }
+      })
+      .catch(() => {
+        if (propRole) {
+          setUserRole(propRole);
+        } else {
+          setUserRole('STUDENT_STAFF');
+        }
+      });
+  }, [pathname, propRole]);
+
+  const handleLogout = async () => {
+    try {
+      await apiClient.logout();
+    } catch {
+      // ignore
+    }
+    router.push('/login');
+  };
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+}
+
+  // 1. Student / Campus-user navigation items
+  const studentNavItems: NavItem[] = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/board', label: 'Public Board', icon: Search },
+    { href: '/report?type=LOST', label: 'Report Lost Item', icon: FilePlus2 },
+    { href: '/report?type=FOUND', label: 'Report Found Item', icon: Package },
+    { href: '/dashboard/my-reports', label: 'My Reports', icon: FileText },
+    { href: '/dashboard/my-claims', label: 'My Claims', icon: HelpCircle },
+    { href: '/dashboard/history', label: 'Recovery History', icon: Clock },
+    { href: '/dashboard/profile', label: 'My Profile', icon: UserIcon },
   ];
 
-  const securityLinks = [
-    { href: '/security', label: 'Intake & Reception', icon: ShieldAlert },
-    { href: '/security/claims', label: 'Claims Verification', icon: ClipboardCheck, badge: '3 Pending' },
-    { href: '/security/custody', label: 'Custody & Handover OTP', icon: Package },
+  // 2. Security officer navigation items
+  const securityNavItems: NavItem[] = [
+    { href: '/security', label: 'Security Dashboard', icon: LayoutDashboard },
+    { href: '/report?type=FOUND', label: 'Register Found Item', icon: Package },
+    { href: '/security/custody', label: 'Items in Custody', icon: ShieldAlert },
+    { href: '/security/claims', label: 'Claims to Verify', icon: ClipboardCheck, badge: 'Review' },
+    { href: '/security/handovers', label: 'Approved Handovers', icon: PackageCheck },
+    { href: '/security/history', label: 'Custody History', icon: Clock },
+    { href: '/security/profile', label: 'Profile', icon: UserIcon },
   ];
 
-  const adminLinks = [
-    { href: '/admin', label: 'Governance Overview', icon: LayoutDashboard },
-    { href: '/admin/items', label: 'Campus Inventory & Ageing', icon: Package },
-    { href: '/admin/users', label: 'Role Permissions', icon: Users },
-    { href: '/admin/analytics', label: 'Operational Metrics', icon: BarChart3 },
-    { href: '/admin/audit', label: 'Audit Trail Explorer', icon: ClipboardCheck },
+  // 3. Administrator navigation items
+  const adminNavItems: NavItem[] = [
+    { href: '/admin', label: 'Admin Dashboard', icon: LayoutDashboard },
+    { href: '/admin/users', label: 'User Management', icon: Users },
+    { href: '/admin/items', label: 'Lost & Found Reports', icon: FileText },
+    { href: '/admin/claims', label: 'Claim Management', icon: ClipboardCheck },
+    { href: '/admin/officers', label: 'Security Officer Management', icon: Shield },
+    { href: '/admin/locations', label: 'Custody Locations', icon: MapPin },
+    { href: '/admin/audit', label: 'Audit Logs', icon: Clock },
+    { href: '/admin/analytics', label: 'Reports and Analytics', icon: BarChart3 },
+    { href: '/admin/settings', label: 'Settings', icon: Sliders },
   ];
+
+  // Pick ONLY the active role's navigation list
+  const activeNavItems = 
+    userRole === 'SECURITY_PERSONNEL'
+      ? securityNavItems
+      : userRole === 'CAMPUS_ADMIN' || userRole === 'SYSTEM_ADMIN'
+      ? adminNavItems
+      : studentNavItems;
+
+  const roleTitle = 
+    userRole === 'SECURITY_PERSONNEL'
+      ? 'Security Officer'
+      : userRole === 'CAMPUS_ADMIN' || userRole === 'SYSTEM_ADMIN'
+      ? 'Administrator'
+      : 'Campus User';
+
+  const roleCodeBadge = 
+    userRole === 'SECURITY_PERSONNEL'
+      ? 'SEC'
+      : userRole === 'CAMPUS_ADMIN' || userRole === 'SYSTEM_ADMIN'
+      ? 'ADM'
+      : 'STU';
+
+  const isActive = (href: string) => {
+    if (href.includes('?')) {
+      const [path, query] = href.split('?');
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const [qKey, qVal] = query.split('=');
+        return pathname === path && params.get(qKey) === qVal;
+      }
+      return pathname === path;
+    }
+    return pathname === href;
+  };
 
   return (
-    <aside className="flex h-full w-64 flex-col justify-between border-r border-slate-200 bg-white">
+    <aside className="flex h-full w-64 flex-col justify-between border-r border-[#22395D] bg-[#192B4A] text-white shadow-md">
       {/* Top Branding Section */}
-      <div className="p-5">
+      <div className="p-4 sm:p-5">
         <Link 
           href="/" 
           onClick={onCloseMobile}
-          className="flex items-center gap-2 mb-6 focus-visible:outline-none"
+          className="flex items-center gap-2 mb-5 focus:outline-none"
         >
-          <LPULogo size="sm" showSubtitle={false} />
+          <LPULogo size="sm" showSubtitle={true} wordmarkVariant="stacked-system" inverted={true} />
         </Link>
 
-        {/* Persona / Role Context Pill */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 mb-6">
+        {/* Authenticated Role Identification Pill */}
+        <div className="rounded-xl border border-[#22395D] bg-[#22395D]/60 p-3 mb-5">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Active Portal
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#20B5AD]">
+              Authenticated Scope
             </span>
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#20B5AD] bg-[#20B5AD]/15 px-1.5 py-0.5 rounded">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#20B5AD] animate-pulse" />
+              Verified
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-700 text-xs font-bold text-white">
-              {currentRole === 'STUDENT_STAFF' ? 'ST' : currentRole === 'SECURITY_PERSONNEL' ? 'SC' : 'AD'}
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#20B5AD] text-xs font-black text-[#192B4A] shadow-xs">
+              {roleCodeBadge}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-slate-900 truncate">
-                {currentRole === 'STUDENT_STAFF' 
-                  ? 'Student Portal' 
-                  : currentRole === 'SECURITY_PERSONNEL' 
-                  ? 'Security Station' 
-                  : 'Campus Admin'}
+              <p className="text-xs font-bold text-white truncate">
+                {userName || roleTitle}
               </p>
-              <p className="text-[10px] text-slate-500 font-mono truncate">
-                {currentRole === 'STUDENT_STAFF' ? 'ID: 12108492' : currentRole === 'SECURITY_PERSONNEL' ? 'POST: Gate 1' : 'DSW Office'}
+              <p className="text-[10px] text-slate-300 font-mono truncate">
+                {userIdentifier || 'Authorized Account'}
               </p>
             </div>
           </div>
-
-          {/* Quick Portal Switcher */}
-          {onRoleChange && (
-            <div className="mt-3 grid grid-cols-3 gap-1 pt-2 border-t border-slate-200/80">
-              <button
-                type="button"
-                onClick={() => onRoleChange('STUDENT_STAFF')}
-                className={`rounded py-1 text-[10px] font-medium transition-colors ${
-                  currentRole === 'STUDENT_STAFF'
-                    ? 'bg-red-700 text-white font-bold'
-                    : 'bg-white text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Student
-              </button>
-              <button
-                type="button"
-                onClick={() => onRoleChange('SECURITY_PERSONNEL')}
-                className={`rounded py-1 text-[10px] font-medium transition-colors ${
-                  currentRole === 'SECURITY_PERSONNEL'
-                    ? 'bg-blue-700 text-white font-bold'
-                    : 'bg-white text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Security
-              </button>
-              <button
-                type="button"
-                onClick={() => onRoleChange('CAMPUS_ADMIN')}
-                className={`rounded py-1 text-[10px] font-medium transition-colors ${
-                  currentRole === 'CAMPUS_ADMIN'
-                    ? 'bg-slate-900 text-white font-bold'
-                    : 'bg-white text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Admin
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* Nav Links Based on Role */}
-        <div className="space-y-6">
-          {/* Section 1: Student Portal */}
-          <div>
-            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              Student / Staff
-            </div>
-            <nav className="space-y-1">
-              {studentLinks.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onCloseMobile}
-                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                      active
-                        ? 'bg-red-50 text-red-700 font-semibold'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className={`h-4 w-4 ${active ? 'text-red-700' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-800">
-                        {item.badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Section 2: Security Desk */}
-          <div>
-            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              Security Operations
-            </div>
-            <nav className="space-y-1">
-              {securityLinks.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onCloseMobile}
-                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                      active
-                        ? 'bg-blue-50 text-blue-700 font-semibold'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className={`h-4 w-4 ${active ? 'text-blue-700' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">
-                        {item.badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Section 3: Campus Governance */}
-          <div>
-            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              Campus Governance
-            </div>
-            <nav className="space-y-1">
-              {adminLinks.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onCloseMobile}
-                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                      active
-                        ? 'bg-slate-100 text-slate-900 font-semibold'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className={`h-4 w-4 ${active ? 'text-slate-900' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
+        {/* Navigation Heading */}
+        <div className="px-2 pb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+          {roleTitle} Navigation
         </div>
+
+        {/* Dynamic Navigation Links based exclusively on authenticated role */}
+        <nav className="space-y-1">
+          {activeNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onCloseMobile}
+                className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  active
+                    ? 'bg-[#20B5AD]/20 text-white font-bold shadow-xs border-l-3 border-[#20B5AD]'
+                    : 'text-slate-300 hover:bg-[#22395D] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#20B5AD]' : 'text-slate-400'}`} />
+                  <span className="truncate">{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span className="rounded-full bg-[#20B5AD] px-1.5 py-0.2 text-[9px] font-bold text-[#192B4A]">
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Bottom User Session / Quick Return */}
-      <div className="border-t border-slate-200 p-4 space-y-2">
+      {/* Bottom Session & Sign Out Actions */}
+      <div className="border-t border-[#22395D] p-4 space-y-1.5 bg-[#162540]">
         <Link
           href="/board"
-          className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+          onClick={onCloseMobile}
+          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 hover:bg-[#22395D] hover:text-white transition-colors"
         >
-          <span className="flex items-center gap-2">
-            <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-            Public Search Board
-          </span>
-          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+          <Search className="h-3.5 w-3.5 text-[#20B5AD]" />
+          <span>Public Board Search</span>
         </Link>
 
-        <Link
-          href="/login"
-          className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors"
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/10 hover:text-rose-200 transition-colors text-left"
         >
           <LogOut className="h-3.5 w-3.5" />
-          <span>Switch Account / Sign Out</span>
-        </Link>
+          <span>Sign Out</span>
+        </button>
       </div>
     </aside>
   );

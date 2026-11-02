@@ -1,11 +1,11 @@
 # LPU Lost & Found — Campus Property Recovery Platform
 
 <p align="center">
-  <img src="apps/web/public/images/lpu-logo.png" alt="Lovely Professional University Logo" width="280"/>
+  <img src="apps/web/public/images/lost-and-found-logo.png" alt="Lost & Found Management System Logo" width="260"/>
 </p>
 
 <p align="center">
-  <strong>Enterprise Property Recovery, Chain-of-Custody & Claims Management Platform for Lovely Professional University</strong>
+  <strong>Enterprise Property Recovery, Chain-of-Custody &amp; Claims Management Platform</strong>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
   <a href="https://www.django-rest-framework.org/"><img src="https://img.shields.io/badge/Django_REST_Framework-3.15-red" alt="DRF 3.15"/></a>
   <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql" alt="PostgreSQL 16"/></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript" alt="TypeScript 5.6"/></a>
-  <a href="https://pytest.org/"><img src="https://img.shields.io/badge/Pytest-54%2F54_Passing-brightgreen?logo=pytest" alt="Pytest Passing"/></a>
+  <a href="https://pytest.org/"><img src="https://img.shields.io/badge/Pytest-62%2F62_Passing-brightgreen?logo=pytest" alt="Pytest Passing"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/></a>
 </p>
 
@@ -220,9 +220,10 @@ The codebase passes 100% of automated checks:
 
 - **Frontend TypeScript (`npm run typecheck:web`):** Code 0, 0 type errors.
 - **Frontend ESLint (`npm run lint`):** Code 0, 0 errors, 0 warnings.
-- **Frontend Production Build (`npm run build:web`):** Code 0, all 19 App Router routes compiled via Turbopack.
+- **Frontend Production Build (`npm run build:web`):** Code 0, all 28 App Router routes compiled via Turbopack.
 - **Django System Check (`npm run check:django`):** Code 0, no issues identified.
-- **Backend Pytest Suite (`npm run test:django`):** Code 0, **54 passed in ~41s**.
+- **Backend Pytest Suite (`npm run test:django`):** Code 0, **62 passed in ~57s**.
+- **Authentication Smoke Tests (`npm run smoke:auth`):** Code 0, **13/13 passed** (Student, Security, Admin credentials).
 - **API Smoke Tests (`npm run smoke:api`):** Code 0, **7/7 passed**.
 - **End-to-End Workflow (`npm run smoke:e2e`):** Code 0, **8/8 stages passed**.
 

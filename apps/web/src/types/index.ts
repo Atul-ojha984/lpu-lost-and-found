@@ -85,7 +85,9 @@ export interface Claim {
   handoverOtpExpiresAt?: string;
   reviewedBy?: string;
   reviewedAt?: string;
+  reviewNotes?: string;
   rejectionReason?: string;
+  privateEvidenceProofUrls?: string[];
 }
 
 export interface MatchSuggestion {

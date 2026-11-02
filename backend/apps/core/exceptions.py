@@ -40,12 +40,17 @@ def custom_exception_handler(exc, context):
             error_code = 'VALIDATION_ERROR'
             message = 'Request validation failed'
             if isinstance(response.data, dict):
+                first_field_msg = None
                 for field, errs in response.data.items():
                     err_msg = errs[0] if isinstance(errs, list) and len(errs) > 0 else str(errs)
                     details.append({'field': field, 'message': err_msg})
+                    if not first_field_msg and field not in ('non_field_errors', 'detail'):
+                        first_field_msg = err_msg
                     # If non_field_errors or detail exists, use as primary message
                     if field in ('non_field_errors', 'detail'):
                         message = err_msg
+                if message == 'Request validation failed' and first_field_msg:
+                    message = first_field_msg
             elif isinstance(response.data, list):
                 details = response.data
                 message = str(response.data[0]) if response.data else message

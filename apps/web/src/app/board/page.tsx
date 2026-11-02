@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/navigation/Navbar';
@@ -49,13 +49,17 @@ function BoardContent() {
   // Current User Session
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string } | null>(null);
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const [pendingClaimItem, setPendingClaimItem] = useState<PublicItem | null>(null);
 
   // Claim Modal State
   const [claimingItem, setClaimingItem] = useState<PublicItem | null>(null);
   const [claimStatement, setClaimStatement] = useState('');
   const [claimChallengeAnswer, setClaimChallengeAnswer] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [claimSuccess, setClaimSuccess] = useState(false);
   const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check auth session
   useEffect(() => {
@@ -63,6 +67,22 @@ function BoardContent() {
       .then((user) => setCurrentUser(user))
       .catch(() => setCurrentUser(null));
   }, []);
+
+  // Handle URL claim parameter auto-trigger
+  const claimParam = searchParams.get('claim');
+  useEffect(() => {
+    if (claimParam) {
+      apiClient.getItemById(claimParam)
+        .then((item) => {
+          if (item && item.itemType === 'FOUND' && item.status !== 'HANDED_OVER') {
+            setClaimingItem(item);
+          }
+        })
+        .catch(() => {
+          // ignore if item not found
+        });
+    }
+  }, [claimParam]);
 
   // Fetch items from Django REST API
   const fetchBoardItems = useCallback(async () => {
@@ -147,31 +167,63 @@ function BoardContent() {
 
   const handleClaimTrigger = (item: PublicItem) => {
     if (!currentUser) {
+      setPendingClaimItem(item);
       setAuthPromptOpen(true);
     } else {
       setClaimingItem(item);
+      setClaimError(null);
+      setSelectedFile(null);
     }
   };
 
-  const handleClaimSubmit = (e: React.FormEvent) => {
+  const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claimStatement.trim()) return;
+    if (!claimStatement.trim() || !claimingItem) return;
 
     setIsSubmittingClaim(true);
-    setTimeout(() => {
-      setIsSubmittingClaim(false);
+    setClaimError(null);
+
+    try {
+      const fullStatement = claimChallengeAnswer.trim()
+        ? `${claimStatement.trim()}\n\n[Private Verification Details]: ${claimChallengeAnswer.trim()}`
+        : claimStatement.trim();
+
+      const claimRes = await apiClient.submitClaim({
+        itemId: claimingItem.id,
+        statement: fullStatement,
+      });
+
+      if (selectedFile && claimRes?.id) {
+        try {
+          await apiClient.uploadClaimEvidence(claimRes.id, selectedFile);
+        } catch (uploadErr) {
+          // Log upload warning but claim is submitted
+          console.warn('Evidence upload error:', uploadErr);
+        }
+      }
+
       setClaimSuccess(true);
+      fetchBoardItems();
       setTimeout(() => {
         setClaimSuccess(false);
         setClaimingItem(null);
         setClaimStatement('');
         setClaimChallengeAnswer('');
-      }, 2000);
-    }, 700);
+        setSelectedFile(null);
+      }, 2500);
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        setClaimError(err.message);
+      } else {
+        setClaimError('Failed to submit ownership claim. Please verify your details.');
+      }
+    } finally {
+      setIsSubmittingClaim(false);
+    }
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50/50">
+    <div className="flex min-h-screen flex-col bg-[#F5F8FC]">
       <Navbar />
 
       <main className="flex-1 py-8 sm:py-12">
@@ -179,11 +231,11 @@ function BoardContent() {
           {/* Header Banner */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200/80 pb-6">
             <div>
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-700">
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#20B5AD]">
                 <ShieldCheck className="h-4 w-4" />
                 <span>Sanitized Public Search Board</span>
               </div>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#192B4A] sm:text-3xl">
                 Campus Property Listings
               </h1>
               <p className="mt-1 text-xs text-slate-500">
@@ -194,13 +246,13 @@ function BoardContent() {
             <div className="flex items-center gap-2">
               <Link
                 href="/report?type=LOST"
-                className="rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-red-800 transition-colors"
+                className="rounded-xl border border-[#356DE8] bg-white px-4 py-2 text-xs font-semibold text-[#356DE8] hover:bg-[#EBF1FD] transition-colors"
               >
                 Report Lost Item
               </Link>
               <Link
                 href="/report?type=FOUND"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                className="rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#16A89F] transition-colors"
               >
                 Report Found Item
               </Link>
@@ -256,7 +308,7 @@ function BoardContent() {
               <button
                 type="button"
                 onClick={fetchBoardItems}
-                className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
               >
                 Retry Search
               </button>
@@ -291,7 +343,7 @@ function BoardContent() {
                           type="button"
                           onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                           disabled={currentPage === 1}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronLeft className="h-4 w-4" />
                           <span>Previous</span>
@@ -303,10 +355,10 @@ function BoardContent() {
                               key={pageNum}
                               type="button"
                               onClick={() => setCurrentPage(pageNum)}
-                              className={`h-8 w-8 rounded-lg text-xs font-semibold transition-colors ${
+                              className={`h-8 w-8 rounded-xl text-xs font-bold transition-colors ${
                                 pageNum === currentPage
-                                  ? 'bg-red-700 text-white'
-                                  : 'text-slate-600 hover:bg-slate-100'
+                                  ? 'bg-[#20B5AD] text-white shadow-2xs'
+                                  : 'text-slate-600 hover:bg-[#F5F8FC]'
                               }`}
                             >
                               {pageNum}
@@ -318,7 +370,7 @@ function BoardContent() {
                           type="button"
                           onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                           disabled={currentPage === totalPages}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <span>Next</span>
                           <ChevronRight className="h-4 w-4" />
@@ -345,10 +397,10 @@ function BoardContent() {
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setAuthPromptOpen(false)} />
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200 z-10 animate-fade-in text-center space-y-4">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-700">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E6F8F7] text-[#20B5AD]">
               <Lock className="h-6 w-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-[#192B4A]">
               Authentication Required
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
@@ -358,13 +410,13 @@ function BoardContent() {
               <button
                 type="button"
                 onClick={() => setAuthPromptOpen(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
               <Link
-                href="/login?redirect=/board"
-                className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                href={`/login?redirect=${encodeURIComponent('/board?claim=' + (pendingClaimItem?.id || ''))}`}
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
               >
                 Log In Now
               </Link>
@@ -389,16 +441,16 @@ function BoardContent() {
             <button
               type="button"
               onClick={() => setClaimingItem(null)}
-              className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="absolute right-4 top-4 rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             >
               <X className="h-5 w-5" />
             </button>
 
             <div className="mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-red-700">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#20B5AD]">
                 Verified Recovery Claim
               </span>
-              <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              <h3 className="text-base font-bold text-[#192B4A] mt-0.5">
                 Claim: {claimingItem.title}
               </h3>
               <p className="text-xs text-slate-500 font-mono">
@@ -407,7 +459,7 @@ function BoardContent() {
             </div>
 
             {claimSuccess ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center space-y-2">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center space-y-2">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
                 <h4 className="text-sm font-bold text-emerald-900">Ownership Claim Submitted</h4>
                 <p className="text-xs text-emerald-800 leading-relaxed">
@@ -416,15 +468,22 @@ function BoardContent() {
               </div>
             ) : (
               <form onSubmit={handleClaimSubmit} className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 space-y-1">
-                  <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <ShieldCheck className="h-4 w-4 text-red-600" />
+                <div className="rounded-xl border border-slate-200 bg-[#F5F8FC] p-3 text-xs text-slate-600 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-[#192B4A]">
+                    <ShieldCheck className="h-4 w-4 text-[#20B5AD]" />
                     <span>Anti-Fraud Notice:</span>
                   </div>
                   <p className="text-[11px] leading-relaxed">
-                    You must provide identifying details that only the true owner would know. False claims will be escalated to University Vigilance.
+                    You must provide identifying details that only the true owner would know. False claims will be escalated to Campus Security.
                   </p>
                 </div>
+
+                {claimError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                    <span>{claimError}</span>
+                  </div>
+                )}
 
                 <FormField
                   id="claim-statement"
@@ -438,7 +497,7 @@ function BoardContent() {
                     value={claimStatement}
                     onChange={(e) => setClaimStatement(e.target.value)}
                     placeholder="E.g., I accidentally left this on the study table on the 2nd floor of Central Library after my evening revision session..."
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                    className="w-full rounded-xl border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#20B5AD] focus:ring-1 focus:ring-[#20B5AD] focus:outline-none"
                     required
                   />
                 </FormField>
@@ -455,20 +514,57 @@ function BoardContent() {
                     value={claimChallengeAnswer}
                     onChange={(e) => setClaimChallengeAnswer(e.target.value)}
                     placeholder="E.g., The phone wallpaper is a landscape photo, or the laptop has an octocat sticker on bottom-left..."
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                    className="w-full rounded-xl border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#20B5AD] focus:ring-1 focus:ring-[#20B5AD] focus:outline-none"
                     required
                   />
                 </FormField>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
                     Supporting Proof (Invoice / Purchase Receipt / Photo)
                   </label>
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-4 text-center cursor-pointer hover:bg-slate-100/60 transition-colors">
-                    <Upload className="h-6 w-6 text-slate-400 mb-1" />
-                    <span className="text-xs font-medium text-slate-700">Upload receipt or ID card photo</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, PDF up to 5MB</span>
-                  </div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        if (f.size > 5 * 1024 * 1024) {
+                          setClaimError('File exceeds maximum size of 5MB.');
+                          return;
+                        }
+                        setSelectedFile(f);
+                        setClaimError(null);
+                      }
+                    }}
+                    accept=".png,.jpg,.jpeg,.webp,.pdf"
+                    className="hidden"
+                  />
+                  {selectedFile ? (
+                    <div className="flex items-center justify-between rounded-xl border border-[#20B5AD]/40 bg-[#E6F8F7] p-3 text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <CheckCircle2 className="h-4 w-4 text-[#16A89F] shrink-0" />
+                        <span className="font-semibold text-[#192B4A] truncate">{selectedFile.name}</span>
+                        <span className="text-[10px] text-slate-500 shrink-0">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFile(null)}
+                        className="text-xs text-rose-600 hover:underline font-semibold ml-2 shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-[#F5F6F8] p-4 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <Upload className="h-6 w-6 text-slate-400 mb-1" />
+                      <span className="text-xs font-semibold text-slate-700">Upload receipt or ID card photo</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, PDF up to 5MB</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -476,14 +572,14 @@ function BoardContent() {
                     type="button"
                     onClick={() => setClaimingItem(null)}
                     disabled={isSubmittingClaim}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmittingClaim}
-                    className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors disabled:opacity-60"
+                    className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
                   >
                     {isSubmittingClaim ? 'Submitting Claim...' : 'Submit Ownership Claim'}
                   </button>

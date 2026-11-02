@@ -1,192 +1,292 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   FileText, 
   HelpCircle, 
-  Sparkles, 
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Package,
+  ShieldAlert,
+  PlusCircle,
+  FilePlus2,
+  MapPin
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { DEMO_ITEMS, DEMO_CLAIMS, DEMO_MATCHES } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
+import { PublicItem } from '@/types';
 
 export default function StudentDashboardOverview() {
-  // Mock student stats
-  const activeReports = DEMO_ITEMS.filter((i) => i.reportedByRole === 'STUDENT_STAFF');
-  const activeClaims = DEMO_CLAIMS;
-  const matchAlerts = DEMO_MATCHES;
+  const [loading, setLoading] = useState(true);
+  const [myReports, setMyReports] = useState<PublicItem[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [myClaims, setMyClaims] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState({
+    activeLostReports: 0,
+    foundItemsReported: 0,
+    pendingClaims: 0,
+    itemsInCustody: 0,
+    itemsSuccessfullyReturned: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboardData() {
+      try {
+        const [reportsRes, claimsRes] = await Promise.allSettled([
+          apiClient.getMyReports(),
+          apiClient.getMyClaims(),
+        ]);
+
+        if (!isMounted) return;
+
+        let reportsData: PublicItem[] = [];
+        if (reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value)) {
+          reportsData = reportsRes.value;
+        }
+        setMyReports(reportsData);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let claimsData: any[] = [];
+        if (claimsRes.status === 'fulfilled' && Array.isArray(claimsRes.value)) {
+          claimsData = claimsRes.value;
+        }
+        setMyClaims(claimsData);
+
+        // Calculate accurate real metrics
+        const lostCount = reportsData.filter((i) => i.itemType === 'LOST').length;
+        const foundCount = reportsData.filter((i) => i.itemType === 'FOUND').length;
+        const pendingClaimsCount = claimsData.filter((c) => c.claimStatus === 'UNDER_REVIEW' || c.claimStatus === 'SUBMITTED').length;
+        const inCustodyCount = reportsData.filter((i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER').length;
+        const returnedCount = claimsData.filter((c) => c.claimStatus === 'APPROVED' || c.claimStatus === 'COMPLETED').length;
+
+        setMetrics({
+          activeLostReports: lostCount,
+          foundItemsReported: foundCount,
+          pendingClaims: pendingClaimsCount,
+          itemsInCustody: inCustodyCount,
+          itemsSuccessfullyReturned: returnedCount,
+        });
+      } catch {
+        setMyReports([]);
+        setMyClaims([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <DashboardLayout
-      title="Student / Staff Property Portal"
-      subtitle="Track your reported items, verify active claims, and review match suggestions."
+      title="Property Recovery Dashboard"
+      subtitle="Campus lost &amp; found property ledger, claim status, and single-use collection passes."
       role="STUDENT_STAFF"
-    >
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              My Active Reports
-            </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-700">
-              <FileText className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{activeReports.length}</p>
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="text-emerald-600 font-semibold">1 item</span>
-            <span>matched in custody</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Claims Filed
-            </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
-              <HelpCircle className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{activeClaims.length}</p>
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="text-amber-600 font-semibold">1 approved</span>
-            <span>ready for OTP collection</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Match Engine Alerts
-            </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-700">
-              <Sparkles className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-extrabold text-slate-900">{matchAlerts.length}</p>
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="text-purple-600 font-semibold">92% score</span>
-            <span>highest confidence match</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Handover OTP Notice Banner (if any claim approved) */}
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                Action Required • Collection Ready
-              </span>
-              <h3 className="text-sm font-bold text-emerald-950 mt-0.5">
-                Claim Approved: Scientific Calculator Casio fx-991EX
-              </h3>
-              <p className="text-xs text-emerald-800/90 mt-0.5">
-                Present your single-use OTP <strong>849102</strong> and Student ID Card at <strong>Block 38 Security Desk</strong> to collect your item.
-              </p>
-            </div>
-          </div>
-
+      actionButton={
+        <div className="flex items-center gap-2">
           <Link
-            href="/dashboard/my-claims"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition-colors shrink-0"
+            href="/report?type=LOST"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[#356DE8] bg-white px-3 py-1.5 text-xs font-bold text-[#356DE8] hover:bg-[#EBF1FD] transition-colors"
           >
-            <span>View Handover Pass</span>
-            <ArrowRight className="h-3.5 w-3.5" />
+            <FilePlus2 className="w-3.5 h-3.5" />
+            <span>Report Lost</span>
+          </Link>
+          <Link
+            href="/report?type=FOUND"
+            className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3 py-1.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Report Found</span>
           </Link>
         </div>
+      }
+    >
+      {/* 5-Metric Lost & Found Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Metric 1: Active Lost Reports */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Lost Reports
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-[#EBF1FD] text-[#356DE8] flex items-center justify-center">
+              <FileText className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+            {loading ? '...' : metrics.activeLostReports}
+          </p>
+          <span className="text-[10px] text-slate-500 font-medium">Logged by you</span>
+        </div>
+
+        {/* Metric 2: Found Items Reported */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Found Items
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+              <Package className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+            {loading ? '...' : metrics.foundItemsReported}
+          </p>
+          <span className="text-[10px] text-slate-500 font-medium">Surrendered</span>
+        </div>
+
+        {/* Metric 3: Pending Claims */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Pending Claims
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+              <HelpCircle className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+            {loading ? '...' : metrics.pendingClaims}
+          </p>
+          <span className="text-[10px] text-amber-700 font-medium">In verification</span>
+        </div>
+
+        {/* Metric 4: Items in Custody */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Security Custody
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-[#EBF1FD] text-[#356DE8] flex items-center justify-center">
+              <ShieldAlert className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+            {loading ? '...' : metrics.itemsInCustody}
+          </p>
+          <span className="text-[10px] text-[#356DE8] font-medium">Station lockers</span>
+        </div>
+
+        {/* Metric 5: Successfully Returned */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Recovered
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+            {loading ? '...' : metrics.itemsSuccessfullyReturned}
+          </p>
+          <span className="text-[10px] text-emerald-700 font-medium">Verified release</span>
+        </div>
       </div>
 
-      {/* Section: Recent Reports & Potential Matches */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left Column: My Reports */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+      {/* Action Banner: Approved Claim Ready for Collection OTP */}
+      {myClaims.some((c) => c.claimStatus === 'APPROVED' && c.handoverOtp) && (
+        <div className="rounded-2xl border border-[#20B5AD]/30 bg-gradient-to-r from-[#E6F8F7] to-[#F0FBFA] p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-[#20B5AD] text-white flex items-center justify-center shrink-0 shadow-sm">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#16A89F] bg-white/80 px-2 py-0.5 rounded-md border border-[#20B5AD]/30">
+                  Action Required • Collection Ready
+                </span>
+                <h3 className="text-sm font-bold text-[#192B4A] mt-1">
+                  Claim Approved &amp; Awaiting Handover
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Present your single-use OTP and physical Student ID Card at the assigned Security Desk to collect your property.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/dashboard/my-claims"
+              className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors shrink-0"
+            >
+              <span>View Handover Pass</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Main Section: My Reports */}
+      <div className="w-full">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">My Recent Property Reports</h3>
-              <p className="text-xs text-slate-500">Items you logged across campus.</p>
+              <h3 className="text-sm sm:text-base font-bold text-[#192B4A]">My Recent Property Reports</h3>
+              <p className="text-xs text-slate-500">Items you logged across university premises.</p>
             </div>
             <Link
               href="/dashboard/my-reports"
-              className="text-xs font-semibold text-red-700 hover:text-red-800"
+              className="text-xs font-bold text-[#20B5AD] hover:underline"
             >
-              View All
+              View All ({myReports.length})
             </Link>
           </div>
 
           <div className="divide-y divide-slate-100 mt-2">
-            {activeReports.slice(0, 3).map((item) => (
-              <div key={item.id} className="py-3 flex items-center justify-between gap-3">
-                <div className="overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-slate-400">{item.referenceNumber}</span>
-                    <StatusBadge status={item.status} />
+            {myReports.length > 0 ? (
+              myReports.slice(0, 5).map((item) => (
+                <div key={item.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] font-bold text-[#356DE8] bg-[#EBF1FD] px-2 py-0.5 rounded">
+                        {item.referenceNumber}
+                      </span>
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-bold text-[#192B4A] mt-1.5 truncate">
+                      {item.title}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{item.specificLocation}</span>
+                    </p>
                   </div>
-                  <h4 className="text-xs font-semibold text-slate-800 mt-1 truncate">
-                    {item.title}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 truncate">{item.specificLocation}</p>
+
+                  <Link
+                    href={`/items/${item.id}`}
+                    className="self-start sm:self-auto rounded-xl border border-slate-200 bg-[#F5F8FC] px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#356DE8] hover:text-[#356DE8] hover:bg-white transition-colors shrink-0"
+                  >
+                    Inspect Details
+                  </Link>
                 </div>
-
-                <Link
-                  href="/board"
-                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 shrink-0"
-                >
-                  Details
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Column: Algorithmic Match Suggestions */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Automated Match Suggestions</h3>
-              <p className="text-xs text-slate-500">Explainable cross-zone algorithm.</p>
-            </div>
-            <Link
-              href="/dashboard/matches"
-              className="text-xs font-semibold text-red-700 hover:text-red-800"
-            >
-              Explore Matches
-            </Link>
-          </div>
-
-          <div className="divide-y divide-slate-100 mt-2">
-            {matchAlerts.map((match) => (
-              <div key={match.id} className="py-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 border border-purple-200">
-                    <Sparkles className="h-3 w-3" />
-                    {match.matchScore}% Match Score ({match.confidence})
-                  </span>
-                  <span className="text-[10px] text-slate-400">10m ago</span>
-                </div>
-
-                <div className="text-xs">
-                  <span className="text-slate-500">Your Lost Item: </span>
-                  <strong className="text-slate-900">{match.lostItemTitle}</strong>
-                  <br />
-                  <span className="text-slate-500">Found Candidate: </span>
-                  <span className="text-red-700 font-medium">{match.foundItemTitle}</span>
-                </div>
-
-                <div className="rounded-lg bg-slate-50 p-2 text-[10px] text-slate-600 font-mono">
-                  {match.explanation.locationProximity} • {match.explanation.timeDelta}
+              ))
+            ) : (
+              <div className="py-12 text-center text-xs text-slate-500">
+                <p>You have not reported any lost or found items yet.</p>
+                <div className="mt-3 flex items-center justify-center gap-3">
+                  <Link
+                    href="/report?type=LOST"
+                    className="font-bold text-[#356DE8] hover:underline"
+                  >
+                    Report Lost Item &rarr;
+                  </Link>
+                  <Link
+                    href="/report?type=FOUND"
+                    className="font-bold text-[#20B5AD] hover:underline"
+                  >
+                    Report Found Item &rarr;
+                  </Link>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

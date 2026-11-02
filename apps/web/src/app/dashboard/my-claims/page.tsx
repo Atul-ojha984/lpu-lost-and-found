@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   KeyRound, 
@@ -9,14 +9,17 @@ import {
   MapPin, 
   AlertCircle, 
   CheckCircle2, 
-  Lock
+  Lock,
+  Upload,
+  FileText,
+  Loader2,
+  Paperclip
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
 import { apiClient, ApiClientError } from '@/lib/api-client';
-import { DEMO_CLAIMS } from '@/lib/mock-data';
 import { Claim } from '@/types';
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/formatters';
 
@@ -26,6 +29,10 @@ function MyClaimsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Evidence upload state
+  const [uploadingClaimId, setUploadingClaimId] = useState<string | null>(null);
+  const [uploadFeedback, setUploadFeedback] = useState<{ claimId: string; isSuccess: boolean; message: string } | null>(null);
+
   // Verification Challenge Box State
   const [activeChallengeClaimId, setActiveChallengeClaimId] = useState<string | null>(null);
   const [challengeItemQuestions, setChallengeItemQuestions] = useState<Array<{ id: string; questionText: string; hint?: string; maxAttempts: number }>>([]);
@@ -33,106 +40,115 @@ function MyClaimsContent() {
   const [isAnswering, setIsAnswering] = useState(false);
   const [answerFeedback, setAnswerFeedback] = useState<{ isSuccess: boolean; message: string } | null>(null);
 
-  const fetchUserClaims = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawClaims: any[] = await apiClient.getMyClaims();
-
-      if (Array.isArray(rawClaims) && rawClaims.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mappedClaims: Claim[] = rawClaims.map((c: any) => ({
-          id: c.id,
-          itemId: c.itemId,
-          itemTitle: c.itemTitle,
-          itemReference: c.itemReference,
-          itemType: c.itemType,
-          claimantName: 'Me',
-          claimantRegNo: '',
-          claimantEmail: '',
-          claimStatus: c.claimStatus,
-          statement: c.statement,
-          evidenceCount: c.challengeAnswersCount || 0,
-          submittedAt: c.submittedAt,
-          handoverOtp: c.handoverOtp,
-          handoverOtpExpiresAt: c.handoverOtpExpiresAt,
-          reviewedBy: c.reviewedBy,
-          reviewedAt: c.reviewedAt,
-          rejectionReason: c.rejectionReason,
-        }));
-        setClaims(mappedClaims);
-      } else {
-        // Fall back to demo claims if no database claims exist yet
-        setClaims(DEMO_CLAIMS);
-      }
-    } catch (err) {
-      if (err instanceof ApiClientError) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage('Failed to connect to claims registry. Showing demonstration claims.');
-      }
-      setClaims(DEMO_CLAIMS);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    let isMounted = true;
-
+    let isSubscribed = true;
     async function loadClaims() {
       try {
-        const liveClaims = await apiClient.getMyClaims();
-        if (isMounted) {
-          if (liveClaims && liveClaims.length > 0) {
-            const mappedClaims: Claim[] = liveClaims.map((c) => ({
-              id: c._id || c.id,
-              itemId: c.itemId,
-              itemTitle: c.itemTitle,
-              itemReference: c.itemReference,
-              itemType: c.itemType,
-              claimantName: 'Me',
-              claimantRegNo: '',
-              claimantEmail: '',
-              claimStatus: c.claimStatus,
-              statement: c.statement,
-              evidenceCount: c.challengeAnswersCount || 0,
-              submittedAt: c.submittedAt,
-              handoverOtp: c.handoverOtp,
-              handoverOtpExpiresAt: c.handoverOtpExpiresAt,
-              reviewedBy: c.reviewedBy,
-              reviewedAt: c.reviewedAt,
-              rejectionReason: c.rejectionReason,
-            }));
-            setClaims(mappedClaims);
-          } else {
-            setClaims(DEMO_CLAIMS);
-          }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawClaims: any[] = await apiClient.getMyClaims();
+        if (!isSubscribed) return;
+
+        if (Array.isArray(rawClaims)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mappedClaims: Claim[] = rawClaims.map((c: any) => ({
+            id: c._id || c.id,
+            itemId: c.itemId,
+            itemTitle: c.itemTitle || (c.item && c.item.title) || 'Unknown Item',
+            itemReference: c.itemReference || (c.item && c.item.referenceNumber) || 'REF-LPU',
+            itemType: c.itemType || (c.item && c.item.itemType) || 'FOUND',
+            claimantName: 'Me',
+            claimantRegNo: '',
+            claimantEmail: '',
+            claimStatus: c.claimStatus,
+            statement: c.statement,
+            evidenceCount: (c.privateEvidenceProofUrls && c.privateEvidenceProofUrls.length) || c.challengeAnswersCount || 0,
+            privateEvidenceProofUrls: c.privateEvidenceProofUrls || [],
+            submittedAt: c.submittedAt || c.createdAt,
+            handoverOtp: c.handoverOtp,
+            handoverOtpExpiresAt: c.handoverOtpExpiresAt,
+            reviewedBy: typeof c.reviewedBy === 'object' ? c.reviewedBy?.name : c.reviewedBy,
+            reviewedAt: c.reviewedAt,
+            reviewNotes: c.reviewNotes,
+            rejectionReason: c.rejectionReason,
+          }));
+          setClaims(mappedClaims);
+        } else {
+          setClaims([]);
         }
       } catch (err) {
-        if (isMounted) {
-          if (err instanceof ApiClientError) {
-            setErrorMessage(err.message);
-          } else {
-            setErrorMessage('Failed to connect to claims registry. Showing demonstration claims.');
-          }
-          setClaims(DEMO_CLAIMS);
+        if (!isSubscribed) return;
+        if (err instanceof ApiClientError) {
+          setErrorMessage(err.message);
+        } else {
+          setErrorMessage('Failed to connect to claims registry. Please try again.');
         }
+        setClaims([]);
       } finally {
-        if (isMounted) {
+        if (isSubscribed) {
           setIsLoading(false);
         }
       }
     }
 
     loadClaims();
-
     return () => {
-      isMounted = false;
+      isSubscribed = false;
     };
-  }, []);
+  }, [refreshKey]);
+
+  const handleFileUpload = async (claimId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset input value so same file can be selected again if needed
+    event.target.value = '';
+
+    // Validate extension
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    if (!allowedExts.includes(ext)) {
+      setUploadFeedback({
+        claimId,
+        isSuccess: false,
+        message: 'Invalid file type. Allowed formats: PDF, JPG, PNG, WEBP (Max 5MB).',
+      });
+      return;
+    }
+
+    // Validate size (< 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadFeedback({
+        claimId,
+        isSuccess: false,
+        message: 'File size exceeds maximum permitted limit (5MB). Please upload a smaller file.',
+      });
+      return;
+    }
+
+    setUploadingClaimId(claimId);
+    setUploadFeedback(null);
+
+    try {
+      const response = await apiClient.uploadClaimEvidence(claimId, file);
+      setUploadFeedback({
+        claimId,
+        isSuccess: true,
+        message: response.message || 'Evidence document uploaded securely.',
+      });
+      // Refresh claims list to show updated evidence count/list
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        setUploadFeedback({ claimId, isSuccess: false, message: err.message });
+      } else {
+        setUploadFeedback({ claimId, isSuccess: false, message: 'Upload failed. Allowed formats: PDF, JPG, PNG, WEBP (Max 5MB).' });
+      }
+    } finally {
+      setUploadingClaimId(null);
+    }
+  };
 
   const handleOpenChallengeBox = async (claim: Claim) => {
     setActiveChallengeClaimId(claim.id);
@@ -162,7 +178,7 @@ function MyClaimsContent() {
           isSuccess: true,
           message: 'Challenge answer verified successfully! Claim promoted to UNDER_REVIEW.',
         });
-        await fetchUserClaims();
+        setRefreshKey((k) => k + 1);
       } else {
         setAnswerFeedback({
           isSuccess: false,
@@ -401,6 +417,104 @@ function MyClaimsContent() {
                       <p className="mt-0.5 text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-3 border border-slate-100">
                         &quot;{claim.statement}&quot;
                       </p>
+                    </div>
+
+                    {/* Ownership Evidence & Proof Documents */}
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                            <Paperclip className="h-3.5 w-3.5 text-lpu-primary" />
+                            Ownership Proof & Verification Documents
+                          </span>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Upload bills, warranty cards, purchase receipts, or photos proving rightful ownership.
+                          </p>
+                        </div>
+
+                        {!isRejected && (
+                          <div>
+                            <label
+                              htmlFor={`evidence-upload-${claim.id}`}
+                              className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 cursor-pointer ${
+                                uploadingClaimId === claim.id ? 'opacity-60 pointer-events-none' : ''
+                              }`}
+                            >
+                              {uploadingClaimId === claim.id ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-lpu-primary" />
+                                  <span>Uploading Proof...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-3.5 w-3.5 text-lpu-primary" />
+                                  <span>Upload Evidence</span>
+                                </>
+                              )}
+                            </label>
+                            <input
+                              id={`evidence-upload-${claim.id}`}
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.webp"
+                              className="hidden"
+                              disabled={uploadingClaimId === claim.id}
+                              onChange={(e) => handleFileUpload(claim.id, e)}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Upload Feedback */}
+                      {uploadFeedback && uploadFeedback.claimId === claim.id && (
+                        <div
+                          className={`rounded-lg p-2.5 text-xs flex items-center gap-2 ${
+                            uploadFeedback.isSuccess
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-800 border border-rose-200'
+                          }`}
+                        >
+                          {uploadFeedback.isSuccess ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                          )}
+                          <span>{uploadFeedback.message}</span>
+                        </div>
+                      )}
+
+                      {/* List of Uploaded Documents */}
+                      {claim.privateEvidenceProofUrls && claim.privateEvidenceProofUrls.length > 0 ? (
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Attached Files ({claim.privateEvidenceProofUrls.length}):
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {claim.privateEvidenceProofUrls.map((url, idx) => {
+                              const filename = url.split('/').filter(Boolean).pop() || `Evidence Document ${idx + 1}`;
+                              return (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2 text-xs"
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <FileText className="h-4 w-4 shrink-0 text-lpu-primary" />
+                                    <span className="truncate font-mono text-[11px] text-slate-700" title={filename}>
+                                      {filename}
+                                    </span>
+                                  </div>
+                                  <span className="shrink-0 text-[10px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                                    Stored Securely
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 italic">
+                          No supplemental proof documents attached yet. Click &ldquo;Upload Evidence&rdquo; to attach proof.
+                        </p>
+                      )}
                     </div>
 
                     {claim.reviewedBy && (

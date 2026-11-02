@@ -187,7 +187,7 @@ function MyReportsContent() {
 
         <Link
           href="/report"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-red-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-red-800 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg lpu-btn-primary px-3.5 py-1.5 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors"
         >
           <PlusCircle className="h-3.5 w-3.5" />
           <span>Submit New Report</span>
@@ -212,7 +212,7 @@ function MyReportsContent() {
           <div className="flex items-center justify-center gap-3 pt-2">
             <Link
               href="/login?redirect=/dashboard/my-reports"
-              className="rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+              className="rounded-lg lpu-btn-primary px-4 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors"
             >
               Log In
             </Link>
@@ -401,7 +401,7 @@ function MyReportsContent() {
                   <button
                     type="submit"
                     disabled={isSavingEdit}
-                    className="rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white hover:bg-red-800 transition-colors disabled:opacity-60"
+                    className="rounded-lg lpu-btn-primary px-5 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
                   >
                     {isSavingEdit ? 'Saving Changes...' : 'Save Changes'}
                   </button>

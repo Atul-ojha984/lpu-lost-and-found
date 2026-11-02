@@ -54,54 +54,10 @@ export default function AdminUsersPage() {
       if (Array.isArray(res)) {
         setUsers(res);
       } else {
-        // Fallback demo users
-        setUsers([
-          {
-            _id: 'u1',
-            fullName: 'Rajesh Verma',
-            registrationNumber: 'SEC-8812',
-            email: 'rajesh.sec@lpu.in',
-            role: 'SECURITY_PERSONNEL',
-            securityPost: 'Uni-Mall Security Post',
-            department: 'Campus Security',
-            isActive: true,
-            createdAt: '2026-08-10T10:00:00.000Z',
-          },
-          {
-            _id: 'u2',
-            fullName: 'Harpreet Kaur',
-            registrationNumber: 'SEC-8814',
-            email: 'harpreet.sec@lpu.in',
-            role: 'SECURITY_PERSONNEL',
-            securityPost: 'Block 34 Security Desk',
-            department: 'Campus Security',
-            isActive: true,
-            createdAt: '2026-08-12T10:00:00.000Z',
-          },
-          {
-            _id: 'u3',
-            fullName: 'Dr. Sorabh Lakhanpal',
-            registrationNumber: 'ADM-1001',
-            email: 'dean.dsw@lpu.in',
-            role: 'CAMPUS_ADMIN',
-            department: 'Division of Student Welfare (DSW)',
-            isActive: true,
-            createdAt: '2026-07-01T10:00:00.000Z',
-          },
-          {
-            _id: 'u4',
-            fullName: 'Aarav Sharma',
-            registrationNumber: '12108492',
-            email: 'aarav.12108492@lpu.in',
-            role: 'STUDENT_STAFF',
-            department: 'B.Tech CSE',
-            isActive: true,
-            createdAt: '2026-09-01T10:00:00.000Z',
-          },
-        ]);
+        setUsers([]);
       }
     } catch {
-      // Safe fallback
+      setUsers([]);
     } finally {
       setLoading(false);
     }

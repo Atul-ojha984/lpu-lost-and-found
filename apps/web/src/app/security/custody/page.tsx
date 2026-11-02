@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
   KeyRound, 
@@ -22,7 +22,6 @@ import { FormField } from '@/components/ui/FormField';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { apiClient, ApiClientError } from '@/lib/api-client';
-import { DEMO_ITEMS, DEMO_CUSTODY_RECORDS, DEMO_CLAIMS } from '@/lib/mock-data';
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/formatters';
 
 interface CustodyItem {
@@ -127,239 +126,76 @@ function SecurityCustodyContent() {
   const [handoverError, setHandoverError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<HandoverReceipt | null>(null);
 
+  const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
+  const [handoversRefreshKey, setHandoversRefreshKey] = useState(0);
+
   // Fetch Inventory Items
-  const fetchInventory = useCallback(async () => {
-    setIsLoadingInventory(true);
-    try {
-      const res = await apiClient.getCustodyInventory({
-        search: searchQuery.trim() || undefined,
-      });
-
-      if (res.items && res.items.length > 0) {
-        setInventoryItems(
-          res.items.map((i) => ({
-            id: i._id || i.id,
-            referenceNumber: i.referenceNumber,
-            title: i.title,
-            category: i.category,
-            specificLocation: i.specificLocation,
-            currentCustodyDesk: i.currentCustodyDesk,
-            lockerStorageReference: i.lockerStorageReference,
-            status: i.status,
-            eventDate: i.eventDate,
-          }))
-        );
-      } else {
-        // Fallback to demo items in custody
-        const fallback = DEMO_ITEMS.filter(
-          (i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER'
-        ).map((i) => ({
-          id: i.id,
-          referenceNumber: i.referenceNumber,
-          title: i.title,
-          category: i.category,
-          specificLocation: i.specificLocation,
-          currentCustodyDesk: i.currentCustodyDesk || 'Central Library Security Desk',
-          lockerStorageReference: i.lockerStorageReference || 'LOCKER-C12',
-          status: i.status,
-          eventDate: i.eventDate,
-        }));
-        setInventoryItems(fallback);
-      }
-    } catch {
-      // Fallback to demo items
-      const fallback = DEMO_ITEMS.filter(
-        (i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER'
-      ).map((i) => ({
-        id: i.id,
-        referenceNumber: i.referenceNumber,
-        title: i.title,
-        category: i.category,
-        specificLocation: i.specificLocation,
-        currentCustodyDesk: i.currentCustodyDesk || 'Central Library Security Desk',
-        lockerStorageReference: i.lockerStorageReference || 'LOCKER-C12',
-        status: i.status,
-        eventDate: i.eventDate,
-      }));
-      setInventoryItems(fallback);
-    } finally {
-      setIsLoadingInventory(false);
-    }
-  }, [searchQuery]);
-
-  // Fetch Pending Handovers
-  const fetchPendingHandovers = useCallback(async () => {
-    setIsLoadingHandovers(true);
-    try {
-      const list = await apiClient.getPendingHandovers();
-      if (Array.isArray(list) && list.length > 0) {
-        setPendingHandovers(list);
-        if (!selectedClaimId && list[0]) {
-          setSelectedClaimId(list[0].claim._id);
-        }
-      } else {
-        // Fallback demo approved claim awaiting handover
-        const approvedDemo = DEMO_CLAIMS.find((c) => c.claimStatus === 'APPROVED');
-        if (approvedDemo) {
-          setPendingHandovers([
-            {
-              claim: {
-                _id: approvedDemo.id,
-                statement: approvedDemo.statement,
-                claimStatus: approvedDemo.claimStatus,
-                claimant: {
-                  fullName: approvedDemo.claimantName,
-                  registrationNumber: approvedDemo.claimantRegNo,
-                  email: approvedDemo.claimantEmail,
-                },
-              },
-              item: {
-                _id: approvedDemo.itemId,
-                referenceNumber: approvedDemo.itemReference,
-                title: approvedDemo.itemTitle,
-                currentCustodyDesk: 'Uni-Mall Security Post - Ground Floor',
-                lockerStorageReference: 'LOCKER-E09',
-              },
-            },
-          ]);
-          setSelectedClaimId(approvedDemo.id);
-        }
-      }
-    } catch {
-      // Fallback
-    } finally {
-      setIsLoadingHandovers(false);
-    }
-  }, [selectedClaimId]);
-
   useEffect(() => {
-    let isMounted = true;
-
+    let isSubscribed = true;
     async function loadInventory() {
       try {
         const res = await apiClient.getCustodyInventory({
           search: searchQuery.trim() || undefined,
         });
+        if (!isSubscribed) return;
 
-        if (isMounted) {
-          if (res.items && res.items.length > 0) {
-            setInventoryItems(
-              res.items.map((i) => ({
-                id: i._id || i.id,
-                referenceNumber: i.referenceNumber,
-                title: i.title,
-                category: i.category,
-                specificLocation: i.specificLocation,
-                currentCustodyDesk: i.currentCustodyDesk,
-                lockerStorageReference: i.lockerStorageReference,
-                status: i.status,
-                eventDate: i.eventDate,
-              }))
-            );
-          } else {
-            const fallback = DEMO_ITEMS.filter(
-              (i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER'
-            ).map((i) => ({
-              id: i.id,
+        if (res?.items && Array.isArray(res.items)) {
+          setInventoryItems(
+            res.items.map((i) => ({
+              id: i._id || i.id,
               referenceNumber: i.referenceNumber,
               title: i.title,
               category: i.category,
               specificLocation: i.specificLocation,
-              currentCustodyDesk: i.currentCustodyDesk || 'Central Library Security Desk',
-              lockerStorageReference: i.lockerStorageReference || 'LOCKER-C12',
+              currentCustodyDesk: i.currentCustodyDesk,
+              lockerStorageReference: i.lockerStorageReference,
               status: i.status,
               eventDate: i.eventDate,
-            }));
-            setInventoryItems(fallback);
-          }
+            }))
+          );
+        } else {
+          setInventoryItems([]);
         }
       } catch {
-        if (isMounted) {
-          const fallback = DEMO_ITEMS.filter(
-            (i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER'
-          ).map((i) => ({
-            id: i.id,
-            referenceNumber: i.referenceNumber,
-            title: i.title,
-            category: i.category,
-            specificLocation: i.specificLocation,
-            currentCustodyDesk: i.currentCustodyDesk || 'Central Library Security Desk',
-            lockerStorageReference: i.lockerStorageReference || 'LOCKER-C12',
-            status: i.status,
-            eventDate: i.eventDate,
-          }));
-          setInventoryItems(fallback);
-        }
+        if (isSubscribed) setInventoryItems([]);
       } finally {
-        if (isMounted) {
-          setIsLoadingInventory(false);
-        }
+        if (isSubscribed) setIsLoadingInventory(false);
       }
     }
-
     loadInventory();
-
     return () => {
-      isMounted = false;
+      isSubscribed = false;
     };
-  }, [searchQuery]);
+  }, [searchQuery, inventoryRefreshKey]);
 
+  // Fetch Pending Handovers
   useEffect(() => {
-    let isMounted = true;
-
+    if (activeTab !== 'handover') return;
+    let isSubscribed = true;
     async function loadHandovers() {
-      if (activeTab !== 'handover') return;
       try {
         const list = await apiClient.getPendingHandovers();
-        if (isMounted) {
-          if (Array.isArray(list) && list.length > 0) {
-            setPendingHandovers(list);
-            if (!selectedClaimId && list[0]) {
-              setSelectedClaimId(list[0].claim._id);
-            }
-          } else {
-            const approvedDemo = DEMO_CLAIMS.find((c) => c.claimStatus === 'APPROVED');
-            if (approvedDemo) {
-              setPendingHandovers([
-                {
-                  claim: {
-                    _id: approvedDemo.id,
-                    statement: approvedDemo.statement,
-                    claimStatus: approvedDemo.claimStatus,
-                    claimant: {
-                      fullName: approvedDemo.claimantName,
-                      registrationNumber: approvedDemo.claimantRegNo,
-                      email: approvedDemo.claimantEmail,
-                    },
-                  },
-                  item: {
-                    _id: approvedDemo.itemId,
-                    referenceNumber: approvedDemo.itemReference,
-                    title: approvedDemo.itemTitle,
-                    currentCustodyDesk: 'Uni-Mall Security Post - Ground Floor',
-                    lockerStorageReference: 'LOCKER-E09',
-                  },
-                },
-              ]);
-              setSelectedClaimId(approvedDemo.id);
-            }
+        if (!isSubscribed) return;
+
+        if (Array.isArray(list)) {
+          setPendingHandovers(list);
+          if (!selectedClaimId && list[0]?.claim) {
+            setSelectedClaimId(list[0].claim._id || list[0].claim.id);
           }
+        } else {
+          setPendingHandovers([]);
         }
       } catch {
-        // Fallback
+        if (isSubscribed) setPendingHandovers([]);
       } finally {
-        if (isMounted) {
-          setIsLoadingHandovers(false);
-        }
+        if (isSubscribed) setIsLoadingHandovers(false);
       }
     }
-
     loadHandovers();
-
     return () => {
-      isMounted = false;
+      isSubscribed = false;
     };
-  }, [activeTab, selectedClaimId]);
+  }, [activeTab, selectedClaimId, handoversRefreshKey]);
 
   // Handle Custody Transfer
   const handleTransferSubmit = async (e: React.FormEvent) => {
@@ -416,38 +252,15 @@ function SecurityCustodyContent() {
 
     try {
       const records = await apiClient.getItemCustodyHistory(item.id);
-      if (Array.isArray(records) && records.length > 0) {
-        setTimelineModal((prev) => ({
-          ...prev,
-          history: records,
-          isLoading: false,
-        }));
-      } else {
-        // Fallback demo timeline
-        setTimelineModal((prev) => ({
-          ...prev,
-          history: DEMO_CUSTODY_RECORDS.filter((r) => r.itemId === item.id || r.itemReference === item.referenceNumber).map((r) => ({
-            id: r.id,
-            action: r.action,
-            toLocation: r.location,
-            handledBy: { fullName: r.officerName },
-            remarks: r.remarks,
-            timestamp: r.timestamp,
-          })),
-          isLoading: false,
-        }));
-      }
+      setTimelineModal((prev) => ({
+        ...prev,
+        history: Array.isArray(records) ? records : [],
+        isLoading: false,
+      }));
     } catch {
       setTimelineModal((prev) => ({
         ...prev,
-        history: DEMO_CUSTODY_RECORDS.map((r) => ({
-          id: r.id,
-          action: r.action,
-          toLocation: r.location,
-          handledBy: { fullName: r.officerName },
-          remarks: r.remarks,
-          timestamp: r.timestamp,
-        })),
+        history: [],
         isLoading: false,
       }));
     }
@@ -485,8 +298,8 @@ function SecurityCustodyContent() {
       setIdVerifiedCheck(false);
 
       // Refresh queues
-      fetchPendingHandovers();
-      fetchInventory();
+      setHandoversRefreshKey((k) => k + 1);
+      setInventoryRefreshKey((k) => k + 1);
     } catch (err) {
       if (err instanceof ApiClientError) {
         setHandoverError(err.message);
@@ -552,7 +365,7 @@ function SecurityCustodyContent() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={fetchInventory}
+                onClick={() => setInventoryRefreshKey((k) => k + 1)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isLoadingInventory ? 'animate-spin' : ''}`} />

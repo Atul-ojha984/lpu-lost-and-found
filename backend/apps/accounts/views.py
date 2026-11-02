@@ -29,6 +29,7 @@ def set_auth_cookie(response, token_str: str):
 
 class RegisterAPIView(APIView):
     """Public registration endpoint for university students and staff."""
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     @extend_schema(
@@ -43,13 +44,23 @@ class RegisterAPIView(APIView):
         user = serializer.save()
 
         refresh = RefreshToken.for_user(user)
+        refresh['userId'] = str(user.id)
+        refresh['user_id'] = str(user.id)
+        refresh['role'] = user.role
+        refresh['email'] = user.email
+        refresh['registration_number'] = user.registration_number
+
         access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
 
         user_data = UserSerializer(user).data
         res = Response(
             {
                 'user': user_data,
                 'token': access_token,
+                'accessToken': access_token,
+                'refreshToken': refresh_token,
+                'refresh': refresh_token,
             },
             status=status.HTTP_201_CREATED
         )
@@ -58,6 +69,7 @@ class RegisterAPIView(APIView):
 
 class LoginAPIView(APIView):
     """Authentication endpoint accepting email or student registration number."""
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     @extend_schema(
@@ -72,13 +84,23 @@ class LoginAPIView(APIView):
         user = serializer.validated_data['user']
 
         refresh = RefreshToken.for_user(user)
+        refresh['userId'] = str(user.id)
+        refresh['user_id'] = str(user.id)
+        refresh['role'] = user.role
+        refresh['email'] = user.email
+        refresh['registration_number'] = user.registration_number
+
         access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
 
         user_data = UserSerializer(user).data
         res = Response(
             {
                 'user': user_data,
                 'token': access_token,
+                'accessToken': access_token,
+                'refreshToken': refresh_token,
+                'refresh': refresh_token,
             },
             status=status.HTTP_200_OK
         )
@@ -87,6 +109,7 @@ class LoginAPIView(APIView):
 
 class LogoutAPIView(APIView):
     """Session invalidation endpoint clearing HttpOnly cookie."""
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     @extend_schema(

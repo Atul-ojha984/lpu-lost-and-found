@@ -4,38 +4,54 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
+  User, 
+  Lock, 
   Eye, 
   EyeOff, 
-  Lock, 
-  Mail, 
   AlertCircle, 
   ArrowRight, 
-  CheckCircle2
+  Smartphone, 
+  CreditCard, 
+  Key, 
+  Briefcase, 
+  ShieldCheck, 
+  Search,
+  HelpCircle,
+  X
 } from 'lucide-react';
 import { LPULogo } from '@/components/branding/LPULogo';
-import { FormField } from '@/components/ui/FormField';
-
 import { apiClient, ApiClientError } from '@/lib/api-client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [regNo, setRegNo] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [demoNotice, setDemoNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('session_expired') === '1') {
+        return 'Your session has expired. Please sign in again with your credentials.';
+      }
+    }
+    return null;
+  });
+  const [showForgotModal, setShowForgotModal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setError(null);
 
-    if (!email.trim()) {
-      setError('Please provide your registered LPU email or student ID.');
+    const query = regNo.trim();
+    if (!query) {
+      setError('Please provide your Registration Number or university ID.');
       return;
     }
     if (!password) {
-      setError('Please provide your account password.');
+      setError('Please enter your account password.');
       return;
     }
 
@@ -43,219 +59,436 @@ export default function LoginPage() {
 
     try {
       const res = await apiClient.login({
-        emailOrRegNo: email.trim(),
+        emailOrRegNo: query,
+        registration_number: query,
         password,
       });
 
-      // Check for redirect param
+      const role = res.user?.role;
+      const isSecurity = role === 'SECURITY_PERSONNEL';
+      const isAdmin = role === 'CAMPUS_ADMIN' || role === 'SYSTEM_ADMIN';
+
+      // Check safe redirect URL parameter if present
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
       const redirectTarget = urlParams?.get('redirect');
 
-      if (redirectTarget && redirectTarget.startsWith('/')) {
-        router.push(redirectTarget);
-        return;
+      if (
+        redirectTarget &&
+        redirectTarget.startsWith('/') &&
+        !redirectTarget.startsWith('//') &&
+        !redirectTarget.includes('\\')
+      ) {
+        if (redirectTarget.startsWith('/admin') && !isAdmin) {
+          // Student/Security cannot access admin redirect
+        } else if (redirectTarget.startsWith('/security') && !isSecurity && !isAdmin) {
+          // Student cannot access security redirect
+        } else {
+          router.push(redirectTarget);
+          return;
+        }
       }
 
-      // Route based on authenticated role
-      const role = res.user?.role;
-      if (role === 'SECURITY_PERSONNEL') {
+      // Route strictly based on backend-authenticated role
+      if (isSecurity) {
         router.push('/security');
-      } else if (role === 'CAMPUS_ADMIN' || role === 'SYSTEM_ADMIN') {
+      } else if (isAdmin) {
         router.push('/admin');
       } else {
         router.push('/dashboard');
       }
     } catch (err) {
       if (err instanceof ApiClientError) {
+        if (err.errorCode === 'NETWORK_ERROR' || err.statusCode === 0) {
+          setError(
+            'Cannot reach the authentication service at http://localhost:8000. Please ensure the Django backend server is running.'
+          );
+        } else if (err.statusCode >= 500) {
+          setError(
+            `Authentication service error (${err.statusCode}). Please try again later or contact campus administration.`
+          );
+        } else if (err.statusCode === 400 || err.statusCode === 401) {
+          setError(
+            err.message && !err.message.toLowerCase().includes('token not valid')
+              ? err.message
+              : 'Invalid credentials provided. Please check your registration number and password.'
+          );
+        } else {
+          setError(
+            err.message && !err.message.toLowerCase().includes('token not valid')
+              ? err.message
+              : 'Authentication failed. Please verify your details and retry.'
+          );
+        }
+      } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Unable to authenticate. Please check your credentials or network connection.');
+        setError('An unexpected error occurred during authentication. Please retry.');
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleQuickDemoFill = (role: 'student' | 'security' | 'admin') => {
-    if (role === 'student') {
-      setEmail('aarav.sharma.12108@lpu.in');
-      setPassword('DemoStudent2026!');
-      setDemoNotice('Populated demo Student credentials (Aarav Sharma - CSE).');
-    } else if (role === 'security') {
-      setEmail('rajesh.verma.sec@lpu.in');
-      setPassword('DemoSecurity2026!');
-      setDemoNotice('Populated demo Campus Security credentials (Gate 1 Post).');
-    } else {
-      setEmail('sunita.admin@lpu.in');
-      setPassword('DemoAdmin2026!');
-      setDemoNotice('Populated demo Campus Administrator credentials (DSW Office).');
-    }
-    setError(null);
-  };
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-slate-50 py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        {/* Brand Logo */}
-        <Link href="/" className="inline-flex items-center justify-center focus-visible:outline-none mb-6">
-          <LPULogo size="md" showSubtitle={true} />
-        </Link>
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F8FC] selection:bg-[#20B5AD]/20 selection:text-[#192B4A]">
+      {/* =========================================================================
+          LEFT BRANDING PANEL
+          - Deep Navy to Royal Blue visual treatment
+          - Exact uploaded logo with object-contain
+          - Lost & Found heading & property recovery service overview
+          - Clean glassmorphism feature cards in teal & royal blue accents
+          ========================================================================= */}
+      <div className="relative hidden lg:flex lg:col-span-5 xl:col-span-6 flex-col justify-between p-10 xl:p-14 bg-gradient-to-br from-[#192B4A] via-[#1E355B] to-[#22395D] text-white border-r border-[#192B4A]/50 overflow-hidden">
+        {/* Subtle decorative teal and royal blue ambient glow shapes */}
+        <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[#20B5AD]/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -right-32 w-[32rem] h-[32rem] rounded-full bg-[#356DE8]/15 blur-3xl" />
+        <svg
+          className="pointer-events-none absolute inset-0 w-full h-full opacity-[0.05]"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 800 800"
+          fill="none"
+        >
+          <circle cx="700" cy="150" r="280" stroke="#20B5AD" strokeWidth="2.5" strokeDasharray="8 8" />
+          <circle cx="700" cy="150" r="380" stroke="#356DE8" strokeWidth="1.5" />
+          <path
+            d="M-100 650 Q 200 500 500 700 T 900 600"
+            stroke="#20B5AD"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <path
+            d="M-50 720 Q 250 580 550 770 T 950 670"
+            stroke="#356DE8"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
 
-        <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-          Sign in to your Campus Portal
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Enter your university credentials to manage reports and track claims.
-        </p>
+        {/* Top: Uploaded Logo & Headline */}
+        <div className="relative z-10">
+          <Link href="/" className="inline-block focus:outline-none mb-8">
+            <LPULogo size="lg" inverted={true} showSubtitle={false} />
+          </Link>
+
+          <div className="mt-4 space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#20B5AD]/15 border border-[#20B5AD]/30 text-[#20B5AD] text-xs font-semibold tracking-wide uppercase">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Campus Property Recovery System</span>
+            </div>
+            <h1 className="text-3xl xl:text-4xl font-extrabold text-white tracking-tight leading-tight">
+              Lost &amp; Found Portal
+            </h1>
+            <p className="text-sm xl:text-base text-slate-300 max-w-lg leading-relaxed pt-1">
+              Report lost belongings, browse found items, and coordinate verified physical handovers across the campus.
+            </p>
+          </div>
+        </div>
+
+        {/* Center: Secure Property Recovery Highlights */}
+        <div className="relative z-10 my-8 py-2">
+          <div className="grid grid-cols-2 gap-4 max-w-md">
+            {/* Feature Card 1 */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#20B5AD]/40">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-[#20B5AD]/20 text-[#20B5AD] flex items-center justify-center">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#20B5AD] bg-[#20B5AD]/15 px-2 py-0.5 rounded-full border border-[#20B5AD]/30">
+                  Secured
+                </span>
+              </div>
+              <h3 className="text-xs font-bold text-white">Student Cards &amp; IDs</h3>
+              <p className="text-[11px] text-slate-300 mt-0.5">Registration number indexing with encrypted verification.</p>
+            </div>
+
+            {/* Feature Card 2 */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#356DE8]/40">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-[#356DE8]/20 text-[#6894FF] flex items-center justify-center">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#6894FF] bg-[#356DE8]/15 px-2 py-0.5 rounded-full border border-[#356DE8]/30">
+                  Protected
+                </span>
+              </div>
+              <h3 className="text-xs font-bold text-white">Electronics &amp; Devices</h3>
+              <p className="text-[11px] text-slate-300 mt-0.5">Private serial number vaults &amp; single-use OTP handovers.</p>
+            </div>
+
+            {/* Feature Card 3 */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#20B5AD]/40">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-semibold text-slate-300 bg-white/10 px-2 py-0.5 rounded-full">
+                  Custody Desks
+                </span>
+              </div>
+              <h3 className="text-xs font-bold text-white">Bags &amp; Essentials</h3>
+              <p className="text-[11px] text-slate-300 mt-0.5">Centralized custody checkpoints with live tracking.</p>
+            </div>
+
+            {/* Feature Card 4 */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#356DE8]/40">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-[#20B5AD]/20 text-[#20B5AD] flex items-center justify-center">
+                  <Key className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-semibold text-[#20B5AD] bg-[#20B5AD]/15 px-2 py-0.5 rounded-full">
+                  Drop Points
+                </span>
+              </div>
+              <h3 className="text-xs font-bold text-white">Keys &amp; Accessories</h3>
+              <p className="text-[11px] text-slate-300 mt-0.5">Categorized by zone, block drop-point, and timestamp.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom: Campus Recovery Network */}
+        <div className="relative z-10 pt-4 border-t border-white/10 text-xs text-slate-300 flex items-center justify-between">
+          <span>Campus Property Recovery System</span>
+          <span className="font-semibold text-white">LPU Central Security</span>
+        </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs">
-          {/* Demo Persona Quick-Fill Selector */}
-          <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs">
-            <span className="font-semibold text-slate-700 block mb-2">
-              Explore Demo Personas:
+      {/* =========================================================================
+          RIGHT AUTHENTICATION PANEL
+          - Light background (#F5F8FC)
+          - Centered white login card with rounded corners and soft shadow
+          - Input fields with teal focus ring
+          - Primary teal login button (#20B5AD)
+          ========================================================================= */}
+      <div className="col-span-1 lg:col-span-7 xl:col-span-6 bg-[#F5F8FC] flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative min-h-screen">
+        {/* Mobile Header Branding for small screens */}
+        <div className="lg:hidden w-full max-w-md text-center mb-6">
+          <Link href="/" className="inline-block focus:outline-none mb-3">
+            <LPULogo size="md" showSubtitle={false} />
+          </Link>
+          <div className="flex flex-col items-center">
+            <span className="text-sm font-extrabold tracking-wider text-[#192B4A] uppercase">
+              LOST &amp; FOUND
             </span>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoFill('student')}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors"
-              >
-                Student
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoFill('security')}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors"
-              >
-                Security
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoFill('admin')}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-              >
-                Admin
-              </button>
-            </div>
-            {demoNotice && (
-              <p className="mt-2 text-[10px] text-slate-500 flex items-center gap-1 font-mono">
-                <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
-                {demoNotice}
-              </p>
-            )}
+            <span className="text-xs font-bold tracking-widest text-[#20B5AD] uppercase">
+              MANAGEMENT SYSTEM
+            </span>
+          </div>
+        </div>
+
+        {/* Desktop Right Panel Branding */}
+        <div className="hidden lg:flex items-center gap-3.5 mb-7">
+          <div className="relative flex items-center">
+            <LPULogo size="md" showSubtitle={false} />
+          </div>
+          <div className="h-10 w-[2px] bg-[#E2E8F0]" />
+          <div className="flex flex-col text-left">
+            <span className="text-sm font-black tracking-wider text-[#192B4A] uppercase leading-tight font-sans">
+              LOST &amp; FOUND
+            </span>
+            <span className="text-xs font-extrabold tracking-widest text-[#20B5AD] uppercase leading-tight">
+              MANAGEMENT SYSTEM
+            </span>
+          </div>
+        </div>
+
+        {/* Main White Login Card */}
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_10px_30px_rgba(25,43,74,0.06)] border border-[#E2E8F0] p-7 sm:p-9 relative z-10">
+          <div className="text-left mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-[#192B4A] tracking-tight">
+              Welcome Back
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Sign in to access the Lost &amp; Found portal.
+            </p>
           </div>
 
-          {/* Error Banner */}
+          {/* Error Message Alert */}
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-              <span>{error}</span>
+            <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50/90 p-3.5 text-xs text-red-900 animate-fade-in" role="alert">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium leading-relaxed">{error}</div>
             </div>
           )}
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <FormField
-              id="login-email"
-              label="University Email / Registration No."
-              required
-              helperText="E.g., 12108492 or name@lpu.in"
-            >
+            {/* Field 1: Registration Number / University ID */}
+            <div>
+              <label 
+                htmlFor="login-regno" 
+                className="block text-xs font-bold text-[#192B4A] uppercase tracking-wider mb-1.5"
+              >
+                Registration Number
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#356DE8]">
+                  <User className="w-4 h-4" />
+                </div>
                 <input
-                  id="login-email"
+                  id="login-regno"
                   type="text"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student.12108@lpu.in"
-                  className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                  value={regNo}
+                  onChange={(e) => setRegNo(e.target.value)}
+                  placeholder="e.g. 12108801 or name@lpu.in"
                   disabled={isLoading}
+                  autoComplete="username"
+                  required
+                  className="w-full rounded-xl border border-[#E2E8F0] pl-10 pr-4 py-2.5 text-sm font-medium lpu-portal-input focus:outline-none"
                 />
               </div>
-            </FormField>
+            </div>
 
-            <FormField id="login-password" label="Account Password" required>
+            {/* Field 2: Password */}
+            <div>
+              <label 
+                htmlFor="login-password" 
+                className="block text-xs font-bold text-[#192B4A] uppercase tracking-wider mb-1.5"
+              >
+                Password
+              </label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#356DE8]">
+                  <Lock className="w-4 h-4" />
+                </div>
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full rounded-lg border border-slate-300 pl-10 pr-10 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
                   disabled={isLoading}
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-xl border border-[#E2E8F0] pl-10 pr-10 py-2.5 text-sm font-medium lpu-portal-input focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-[#20B5AD] transition-colors focus:outline-none"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </FormField>
-
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600">
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300 text-red-700 focus:ring-red-600"
-                />
-                <span>Remember this terminal</span>
-              </label>
-
-              <a
-                href="#forgot-password"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert('Password recovery: Please contact university IT support or your department coordinator.');
-                }}
-                className="font-medium text-red-700 hover:text-red-800"
-              >
-                Forgot password?
-              </a>
             </div>
 
+            {/* Remember Terminal & Forgot Password */}
+            <div className="flex items-center justify-between text-xs pt-1 pb-1">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#20B5AD] focus:ring-[#20B5AD]"
+                />
+                <span className="font-medium text-[11px]">Remember terminal</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="font-semibold text-[11px] text-[#356DE8] hover:text-[#2756C2] hover:underline focus:outline-none"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            {/* Primary Teal Login Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-red-800 transition-colors disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-sm font-bold text-white lpu-btn-primary disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#20B5AD]"
             >
               {isLoading ? (
-                <span>Signing in...</span>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Signing in...</span>
+                </>
               ) : (
                 <>
                   <span>Sign In</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Registration Link */}
-          <div className="mt-6 border-t border-slate-100 pt-4 text-center text-xs text-slate-500">
-            <span>First time using the recovery platform? </span>
-            <Link
-              href="/register"
-              className="font-semibold text-red-700 hover:text-red-800 transition-colors"
-            >
-              Register student account
-            </Link>
+
+          {/* Public Board & Registration Links */}
+          <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-2 text-center text-xs text-slate-500">
+            <div>
+              <span>First time using the recovery platform? </span>
+              <Link
+                href="/register"
+                className="font-bold text-[#20B5AD] hover:text-[#16A89F] hover:underline transition-colors"
+              >
+                Register student account
+              </Link>
+            </div>
+            <div>
+              <Link
+                href="/board"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-[#356DE8] hover:underline"
+              >
+                <Search className="w-3 h-3" />
+                <span>Browse public lost &amp; found board without logging in</span>
+              </Link>
+            </div>
           </div>
         </div>
 
-        {/* Prototype Architecture Notice */}
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white/70 p-3 text-center text-[11px] text-slate-500">
+        {/* Security & Confidentiality Notice below card */}
+        <div className="mt-6 text-center text-[11px] text-slate-500 max-w-sm">
           <p>
-            <strong>Prototype Note:</strong> Simulates client-side authentication and role-based routing. Backend HttpOnly JWT cookie sessions will connect in Phase 2.
+            Official University Property Recovery System. All claim adjudications and physical handovers are logged with immutable audit timestamps.
           </p>
         </div>
       </div>
+
+      {/* Forgot Password Recovery Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative">
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 rounded-lg p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+                <HelpCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#192B4A]">Account Password Recovery</h3>
+                <p className="text-xs text-slate-500">Lost &amp; Found Portal Access</p>
+              </div>
+            </div>
+            <div className="text-xs text-slate-600 space-y-3 leading-relaxed">
+              <p>
+                To maintain physical property security and prevent fraudulent claim submissions, account credential resets require physical verification.
+              </p>
+              <div className="rounded-xl bg-[#F5F8FC] p-3 border border-slate-200 space-y-1.5">
+                <div className="font-semibold text-[#192B4A]">Verification Options:</div>
+                <ul className="list-disc list-inside space-y-1 text-slate-600">
+                  <li>Visit the <strong>Gate 1 Main Security Desk</strong> with your physical Student/Staff ID.</li>
+                  <li>Contact the Campus Recovery Desk: <code>lostandfound@lpu.co.in</code>.</li>
+                  <li>Or submit an IT support ticket through University Central IT.</li>
+                </ul>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(false)}
+              className="mt-5 w-full py-2.5 rounded-xl lpu-btn-primary text-xs font-semibold"
+            >
+              Close Information
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -76,6 +76,8 @@ apps/api/uploads/
 /media/
 backend/media/*
 !backend/media/.gitkeep
+backend/private_evidence/*
+!backend/private_evidence/.gitkeep
 *.tmp
 *.temp
 

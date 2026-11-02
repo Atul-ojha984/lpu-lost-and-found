@@ -30,7 +30,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
             status === 'READY_FOR_HANDOVER'
               ? 'bg-emerald-500 animate-pulse'
               : status === 'CLAIM_IN_REVIEW'
-              ? 'bg-orange-500'
+              ? 'bg-amber-500'
               : status === 'IN_CUSTODY'
               ? 'bg-blue-500'
               : status === 'MATCH_PENDING'

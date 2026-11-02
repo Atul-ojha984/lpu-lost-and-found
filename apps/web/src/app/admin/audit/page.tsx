@@ -39,179 +39,53 @@ export default function AdminAuditPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Inspector modal for metadata
   const [inspectedLog, setInspectedLog] = useState<AuditLogEntry | null>(null);
 
-  async function loadLogs() {
-    setLoading(true);
-    try {
-      const res = await apiClient.getAdminAuditLogs({
-        action: actionFilter || undefined,
-        targetEntity: entityFilter || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        page,
-        limit: 15,
-      });
-
-      if (Array.isArray(res)) {
-        setLogs(res);
-        setTotalCount(res.length);
-        setTotalPages(1);
-      } else if (res && Array.isArray(res.items)) {
-        setLogs(res.items);
-        setTotalCount(res.total || res.items.length);
-        setTotalPages(res.totalPages || 1);
-      } else {
-        // Fallback demo entries
-        setLogs([
-          {
-            _id: 'audit-demo-1',
-            action: 'ITEM_DISPOSE',
-            actorRole: 'CAMPUS_ADMIN',
-            targetEntity: 'Item',
-            targetId: 'item-882194',
-            ipAddress: '10.20.44.12',
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            metadata: {
-              referenceNumber: 'LPU-2026-F0042',
-              method: 'DONATION',
-              reason: 'Statutory 90-day retention expired without claimant. Donated to Goonj Campus NGO.',
-              recipientOrganization: 'Goonj Relief Cell',
-            },
-            timestamp: new Date().toISOString(),
-          },
-          {
-            _id: 'audit-demo-2',
-            action: 'ROLE_UPDATE',
-            actorRole: 'SYSTEM_ADMIN',
-            targetEntity: 'User',
-            targetId: 'user-7718',
-            ipAddress: '10.20.12.8',
-            metadata: {
-              targetRegistrationNumber: 'SEC-8814',
-              previousRole: 'STUDENT_STAFF',
-              newRole: 'SECURITY_PERSONNEL',
-              newSecurityPost: 'Block 34 Security Desk',
-            },
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-          },
-          {
-            _id: 'audit-demo-3',
-            action: 'HANDOVER_EXECUTE',
-            actorRole: 'SECURITY_PERSONNEL',
-            targetEntity: 'Handover',
-            targetId: 'hnd-9901',
-            ipAddress: '10.20.50.99',
-            metadata: {
-              claimId: 'claim-1002',
-              itemReference: 'LPU-2026-F0080',
-              otp: '[REDACTED]',
-              deskLocation: 'Central Security Repository',
-            },
-            timestamp: new Date(Date.now() - 7200000).toISOString(),
-          },
-        ]);
-        setTotalCount(3);
-        setTotalPages(1);
-      }
-    } catch {
-      // Safe fallback
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    let isMounted = true;
-
-    async function fetchAuditLogs() {
+    let isSubscribed = true;
+    async function fetchLogs() {
       try {
         const res = await apiClient.getAdminAuditLogs({
-          page,
-          limit: 15,
           action: actionFilter !== 'ALL' ? actionFilter : undefined,
           targetEntity: entityFilter !== 'ALL' ? entityFilter : undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          page,
+          limit: 15,
         });
+        if (!isSubscribed) return;
 
-        if (isMounted) {
-          if (Array.isArray(res)) {
-            setLogs(res);
-            setTotalCount(res.length);
-            setTotalPages(1);
-          } else if (res && Array.isArray(res.items)) {
-            setLogs(res.items);
-            setTotalCount(res.total || res.items.length);
-            setTotalPages(res.totalPages || 1);
-          } else {
-            setLogs([
-              {
-                _id: 'audit-demo-1',
-                action: 'ITEM_DISPOSE',
-                actorRole: 'CAMPUS_ADMIN',
-                targetEntity: 'Item',
-                targetId: 'item-882194',
-                ipAddress: '10.20.44.12',
-                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                metadata: {
-                  referenceNumber: 'LPU-2026-F0042',
-                  method: 'DONATION',
-                  reason: 'Statutory 90-day retention expired without claimant. Donated to Goonj Campus NGO.',
-                  recipientOrganization: 'Goonj Relief Cell',
-                },
-                timestamp: new Date().toISOString(),
-              },
-              {
-                _id: 'audit-demo-2',
-                action: 'ROLE_UPDATE',
-                actorRole: 'SYSTEM_ADMIN',
-                targetEntity: 'User',
-                targetId: 'user-7718',
-                ipAddress: '10.20.12.8',
-                metadata: {
-                  targetRegistrationNumber: 'SEC-8814',
-                  previousRole: 'STUDENT_STAFF',
-                  newRole: 'SECURITY_PERSONNEL',
-                  newSecurityPost: 'Block 34 Security Desk',
-                },
-                timestamp: new Date(Date.now() - 3600000).toISOString(),
-              },
-              {
-                _id: 'audit-demo-3',
-                action: 'HANDOVER_EXECUTE',
-                actorRole: 'SECURITY_PERSONNEL',
-                targetEntity: 'Handover',
-                targetId: 'hnd-9901',
-                ipAddress: '10.20.50.99',
-                metadata: {
-                  claimId: 'claim-1002',
-                  itemReference: 'LPU-2026-F0080',
-                  otp: '[REDACTED]',
-                  deskLocation: 'Central Security Repository',
-                },
-                timestamp: new Date(Date.now() - 7200000).toISOString(),
-              },
-            ]);
-            setTotalCount(3);
-            setTotalPages(1);
-          }
+        if (Array.isArray(res)) {
+          setLogs(res);
+          setTotalCount(res.length);
+          setTotalPages(Math.max(1, Math.ceil(res.length / 15)));
+        } else if (res && Array.isArray(res.items)) {
+          setLogs(res.items);
+          setTotalCount(res.total || res.items.length);
+          setTotalPages(res.totalPages || Math.max(1, Math.ceil((res.total || res.items.length) / 15)));
+        } else {
+          setLogs([]);
+          setTotalCount(0);
+          setTotalPages(1);
         }
       } catch {
-        // Safe fallback
-      } finally {
-        if (isMounted) {
-          setLoading(false);
+        if (isSubscribed) {
+          setLogs([]);
+          setTotalCount(0);
+          setTotalPages(1);
         }
+      } finally {
+        if (isSubscribed) setLoading(false);
       }
     }
-
-    fetchAuditLogs();
-
+    fetchLogs();
     return () => {
-      isMounted = false;
+      isSubscribed = false;
     };
-  }, [page, actionFilter, entityFilter]);
+  }, [actionFilter, entityFilter, startDate, endDate, page, refreshTrigger]);
 
   return (
     <DashboardLayout
@@ -311,7 +185,7 @@ export default function AdminAuditPage() {
               type="button"
               onClick={() => {
                 setPage(1);
-                loadLogs();
+                setRefreshTrigger((prev) => prev + 1);
               }}
               className="rounded-lg bg-red-700 px-3 py-2 font-semibold text-white text-xs hover:bg-red-800 shrink-0"
             >

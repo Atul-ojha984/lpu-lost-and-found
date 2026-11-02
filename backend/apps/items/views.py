@@ -155,7 +155,10 @@ class ItemPublicBoardAPIView(APIView):
 
         campus_zone = request.query_params.get('campusZone')
         if campus_zone and campus_zone.upper() != 'ALL':
-            queryset = queryset.filter(location__campus_zone__iexact=campus_zone)
+            queryset = queryset.filter(
+                Q(location__campus_zone__iexact=campus_zone) |
+                Q(location__code__iexact=campus_zone)
+            )
 
         location = request.query_params.get('location')
         if location and location.upper() != 'ALL':

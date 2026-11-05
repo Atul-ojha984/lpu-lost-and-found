@@ -94,7 +94,7 @@ export default function AdminOfficersPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search security officers by name, badge ID, or assigned checkpoint..."
-            className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
           />
         </div>
       </div>
@@ -114,11 +114,11 @@ export default function AdminOfficersPage() {
             <div key={officer.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-[#E6F8F7] text-[#16A89F] flex items-center justify-center font-bold text-sm">
+                  <div className="w-11 h-11 rounded-xl bg-[#FFF1E6] text-[#E66F00] flex items-center justify-center font-bold text-sm">
                     <Shield className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-[#192B4A]">{officer.name}</h4>
+                    <h4 className="text-sm font-bold text-[#283442]">{officer.name}</h4>
                     <span className="font-mono text-xs text-[#356DE8] font-bold">
                       Badge: {officer.badgeId}
                     </span>
@@ -134,7 +134,7 @@ export default function AdminOfficersPage() {
                 </span>
               </div>
 
-              <div className="rounded-xl bg-[#F5F8FC] p-3 text-xs space-y-2 border border-slate-100">
+              <div className="rounded-xl bg-[#F5F5F5] p-3 text-xs space-y-2 border border-slate-100">
                 <div className="flex items-center gap-2 text-slate-700">
                   <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span>Station: <strong>{officer.assignedDesk}</strong></span>
@@ -151,7 +151,7 @@ export default function AdminOfficersPage() {
 
               <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
                 <span className="text-slate-500">
-                  Custody Items Held: <strong className="text-[#192B4A]">{officer.custodyCount}</strong>
+                  Custody Items Held: <strong className="text-[#283442]">{officer.custodyCount}</strong>
                 </span>
 
                 <Link

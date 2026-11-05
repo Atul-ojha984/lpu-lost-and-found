@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { 
   KeyRound, 
@@ -14,14 +15,15 @@ import {
   RefreshCw,
   PackageCheck,
   Printer,
-  X
+  X,
+  FileText,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { FormField } from '@/components/ui/FormField';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { apiClient, ApiClientError } from '@/lib/api-client';
+import { apiClient, ApiClientError, type SecurityReviewReport } from '@/lib/api-client';
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/formatters';
 
 interface CustodyItem {
@@ -73,14 +75,30 @@ interface HandoverReceipt {
 
 function SecurityCustodyContent() {
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'handover' ? 'handover' : 'inventory';
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab === 'handover'
+    ? 'handover'
+    : requestedTab === 'reports'
+      ? 'reports'
+      : 'inventory';
 
-  const [activeTab, setActiveTab] = useState<'inventory' | 'handover'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'inventory' | 'handover' | 'reports'>(initialTab);
 
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<CustodyItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingInventory, setIsLoadingInventory] = useState(true);
+
+  // Submitted report review queue
+  const [reviewReports, setReviewReports] = useState<SecurityReviewReport[]>([]);
+  const [reviewSearchQuery, setReviewSearchQuery] = useState('');
+  const [appliedReviewSearch, setAppliedReviewSearch] = useState('');
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewTotalPages, setReviewTotalPages] = useState(1);
+  const [reviewTotalItems, setReviewTotalItems] = useState(0);
+  const [isLoadingReviewReports, setIsLoadingReviewReports] = useState(true);
+  const [reviewReportsError, setReviewReportsError] = useState<string | null>(null);
+  const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
 
   // Custody Transfer Modal State
   const [transferModal, setTransferModal] = useState<{
@@ -168,6 +186,43 @@ function SecurityCustodyContent() {
     };
   }, [searchQuery, inventoryRefreshKey]);
 
+  // Fetch submitted reports only while the review queue tab is open.
+  useEffect(() => {
+    if (activeTab !== 'reports') return;
+
+    let isSubscribed = true;
+    async function loadReviewReports() {
+      try {
+        const result = await apiClient.getSecuritySubmittedReports({
+          search: appliedReviewSearch || undefined,
+          page: reviewPage,
+          limit: 20,
+        });
+        if (!isSubscribed) return;
+        setReviewReports(Array.isArray(result?.items) ? result.items : []);
+        setReviewTotalPages(result?.pagination?.totalPages || 1);
+        setReviewTotalItems(result?.pagination?.totalItems || 0);
+      } catch (err) {
+        if (!isSubscribed) return;
+        setReviewReports([]);
+        setReviewTotalPages(1);
+        setReviewTotalItems(0);
+        setReviewReportsError(
+          err instanceof ApiClientError
+            ? err.message
+            : 'Failed to retrieve reports awaiting security review.'
+        );
+      } finally {
+        if (isSubscribed) setIsLoadingReviewReports(false);
+      }
+    }
+
+    loadReviewReports();
+    return () => {
+      isSubscribed = false;
+    };
+  }, [activeTab, appliedReviewSearch, reviewPage, reviewRefreshKey]);
+
   // Fetch Pending Handovers
   useEffect(() => {
     if (activeTab !== 'handover') return;
@@ -179,14 +234,21 @@ function SecurityCustodyContent() {
 
         if (Array.isArray(list)) {
           setPendingHandovers(list);
-          if (!selectedClaimId && list[0]?.claim) {
-            setSelectedClaimId(list[0].claim._id || list[0].claim.id);
-          }
+          const availableClaimIds = list
+            .map((handover) => handover?.claim?._id || handover?.claim?.id)
+            .filter(Boolean);
+          setSelectedClaimId((current) =>
+            availableClaimIds.includes(current) ? current : (availableClaimIds[0] || '')
+          );
         } else {
           setPendingHandovers([]);
+          setSelectedClaimId('');
         }
       } catch {
-        if (isSubscribed) setPendingHandovers([]);
+        if (isSubscribed) {
+          setPendingHandovers([]);
+          setSelectedClaimId('');
+        }
       } finally {
         if (isSubscribed) setIsLoadingHandovers(false);
       }
@@ -195,7 +257,7 @@ function SecurityCustodyContent() {
     return () => {
       isSubscribed = false;
     };
-  }, [activeTab, selectedClaimId, handoversRefreshKey]);
+  }, [activeTab, handoversRefreshKey]);
 
   // Handle Custody Transfer
   const handleTransferSubmit = async (e: React.FormEvent) => {
@@ -311,6 +373,21 @@ function SecurityCustodyContent() {
     }
   };
 
+  const handleReviewSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoadingReviewReports(true);
+    setReviewReportsError(null);
+    setReviewPage(1);
+    setAppliedReviewSearch(reviewSearchQuery.trim());
+    setReviewRefreshKey((current) => current + 1);
+  };
+
+  const refreshReviewReports = () => {
+    setIsLoadingReviewReports(true);
+    setReviewReportsError(null);
+    setReviewRefreshKey((current) => current + 1);
+  };
+
   return (
     <DashboardLayout
       title="Custody Ledger & Supervised Handover Terminal"
@@ -330,6 +407,27 @@ function SecurityCustodyContent() {
         >
           <Lock className="h-4 w-4" />
           <span>Custody Inventory &amp; Lockers</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (activeTab === 'reports') {
+              refreshReviewReports();
+              return;
+            }
+            setIsLoadingReviewReports(true);
+            setReviewReportsError(null);
+            setActiveTab('reports');
+          }}
+          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-xs font-bold transition-colors ${
+            activeTab === 'reports'
+              ? 'border-red-700 text-red-700'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          <span>Submitted Reports</span>
         </button>
 
         <button
@@ -464,7 +562,154 @@ function SecurityCustodyContent() {
         </div>
       )}
 
-      {/* TAB 2: HANDOVER TERMINAL */}
+      {/* TAB 2: SUBMITTED REPORT REVIEW */}
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-[#283442]">New Reports Awaiting Security Review</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Student and staff reports remain in their submitted status until reviewed through existing security workflows.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={refreshReviewReports}
+                className="inline-flex items-center gap-1.5 self-start rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:self-auto"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoadingReviewReports ? 'animate-spin' : ''}`} />
+                <span>Refresh Reports</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleReviewSearch} className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="search"
+                  value={reviewSearchQuery}
+                  onChange={(e) => setReviewSearchQuery(e.target.value)}
+                  placeholder="Search reference, title, or description..."
+                  className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+              >
+                Search Reports
+              </button>
+            </form>
+          </div>
+
+          {reviewReportsError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{reviewReportsError}</span>
+            </div>
+          )}
+
+          {isLoadingReviewReports ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-12 text-center shadow-xs">
+              <LoadingState message="Loading reports awaiting security review..." />
+            </div>
+          ) : reviewReports.length > 0 ? (
+            <div className="space-y-3">
+              <p className="px-1 text-xs text-slate-500">
+                {reviewTotalItems} report{reviewTotalItems === 1 ? '' : 's'} awaiting review
+              </p>
+              {reviewReports.map((report) => (
+                <article key={report.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    {report.primaryImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={report.primaryImageUrl}
+                        alt={`${report.title} report`}
+                        className="h-20 w-20 shrink-0 rounded-lg border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-400">
+                        <PackageCheck className="h-6 w-6" />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold text-slate-500">
+                          {report.referenceNumber}
+                        </span>
+                        <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                          report.itemType === 'LOST'
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'bg-orange-50 text-orange-700'
+                        }`}>
+                          {report.itemType}
+                        </span>
+                        <StatusBadge status={report.status} />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-900">{report.title}</h3>
+                      <p className="text-xs leading-relaxed text-slate-600">{report.publicDescription}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {report.category.name} · {report.location.name} · {report.specificLocation}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Reported by {report.reporter.fullName} ({report.reporter.registrationNumber}) · {report.reporter.userType}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Reported {formatDisplayDateTime(report.createdAt)} · Incident {formatDisplayDate(report.eventDate)}
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/items/${report.id}`}
+                      className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Open Report
+                    </Link>
+                  </div>
+                </article>
+              ))}
+
+              {reviewTotalPages > 1 && (
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <button
+                    type="button"
+                    disabled={reviewPage <= 1 || isLoadingReviewReports}
+                    onClick={() => {
+                      setIsLoadingReviewReports(true);
+                      setReviewPage((current) => Math.max(1, current - 1));
+                    }}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-slate-500">Page {reviewPage} of {reviewTotalPages}</span>
+                  <button
+                    type="button"
+                    disabled={reviewPage >= reviewTotalPages || isLoadingReviewReports}
+                    onClick={() => {
+                      setIsLoadingReviewReports(true);
+                      setReviewPage((current) => Math.min(reviewTotalPages, current + 1));
+                    }}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <EmptyState
+              title="No reports awaiting review"
+              description="New student and staff lost or found reports will appear here while they are in an active submitted state."
+            />
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: HANDOVER TERMINAL */}
       {activeTab === 'handover' && (
         <div className="space-y-6">
           {/* Handover Receipt Card (Shown on Successful Handover) */}

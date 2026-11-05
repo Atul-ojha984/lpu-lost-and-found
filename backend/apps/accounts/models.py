@@ -19,6 +19,15 @@ class UserRole(models.TextChoices):
     CAMPUS_ADMIN = 'CAMPUS_ADMIN', 'Campus Administrator'
     SYSTEM_ADMIN = 'SYSTEM_ADMIN', 'System Administrator'
 
+class UserType(models.TextChoices):
+    """Institutional account category, separate from the application's access role."""
+    STUDENT = 'STUDENT', 'Student'
+    STAFF = 'STAFF', 'Staff'
+    SECURITY_OFFICER = 'SECURITY_OFFICER', 'Security Officer'
+    CAMPUS_ADMIN = 'CAMPUS_ADMIN', 'Campus Administrator'
+    SYSTEM_ADMIN = 'SYSTEM_ADMIN', 'System Administrator'
+    UNSPECIFIED = 'UNSPECIFIED', 'Unspecified Student / Staff'
+
 class UserManager(BaseUserManager):
     """Custom user manager supporting email/registration number as identifiers."""
 
@@ -49,6 +58,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('role', UserRole.SYSTEM_ADMIN)
+        extra_fields.setdefault('user_type', UserType.SYSTEM_ADMIN)
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError("Superuser must have is_staff=True.")
@@ -71,6 +81,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         max_length=30,
         choices=UserRole.choices,
         default=UserRole.STUDENT_STAFF,
+        db_index=True,
+    )
+    # Existing STUDENT_STAFF access role intentionally remains unchanged. This
+    # field distinguishes student from staff accounts for policies that apply
+    # to students only. Legacy rows stay UNSPECIFIED until an administrator
+    # classifies them; they are not guessed to be students or staff.
+    user_type = models.CharField(
+        max_length=24,
+        choices=UserType.choices,
+        default=UserType.UNSPECIFIED,
         db_index=True,
     )
     department = models.CharField(max_length=150, blank=True, default='')

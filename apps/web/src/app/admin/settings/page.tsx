@@ -43,11 +43,11 @@ export default function AdminSettingsPage() {
           {/* Section 1: Property Retention & Lifecycle */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
             <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <div className="w-9 h-9 rounded-xl bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-[#FFF1E6] text-[#F58220] flex items-center justify-center">
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#192B4A]">Statutory Property Retention Policies</h3>
+                <h3 className="text-sm font-bold text-[#283442]">Statutory Property Retention Policies</h3>
                 <p className="text-xs text-slate-500">Legal holding duration for unclaimed campus property in security custody.</p>
               </div>
             </div>
@@ -63,7 +63,7 @@ export default function AdminSettingsPage() {
                   max="365"
                   value={retentionDays}
                   onChange={(e) => setRetentionDays(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] px-4 py-2.5 text-xs font-bold text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] px-4 py-2.5 text-xs font-bold text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
                   Items unclaimed after {retentionDays} days transition to statutory audit queue.
@@ -80,7 +80,7 @@ export default function AdminSettingsPage() {
                   max="60"
                   value={otpExpiryMinutes}
                   onChange={(e) => setOtpExpiryMinutes(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] px-4 py-2.5 text-xs font-bold text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] px-4 py-2.5 text-xs font-bold text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
                   Claimant collection token expires after {otpExpiryMinutes} minutes for physical security.
@@ -96,7 +96,7 @@ export default function AdminSettingsPage() {
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#192B4A]">Heuristic Matching Engine Thresholds</h3>
+                <h3 className="text-sm font-bold text-[#283442]">Heuristic Matching Engine Thresholds</h3>
                 <p className="text-xs text-slate-500">Cross-zone correlation parameters between lost reports and found items.</p>
               </div>
             </div>
@@ -105,7 +105,7 @@ export default function AdminSettingsPage() {
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-slate-700">Minimum Match Confidence Score:</span>
-                  <span className="font-mono font-bold text-[#20B5AD]">{matchScoreThreshold}%</span>
+                  <span className="font-mono font-bold text-[#F58220]">{matchScoreThreshold}%</span>
                 </div>
                 <input
                   type="range"
@@ -113,7 +113,7 @@ export default function AdminSettingsPage() {
                   max="95"
                   value={matchScoreThreshold}
                   onChange={(e) => setMatchScoreThreshold(e.target.value)}
-                  className="w-full accent-[#20B5AD]"
+                  className="w-full accent-[#F58220]"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
                   Alerts are issued to claimants only when category, location proximity, and timestamps score at or above {matchScoreThreshold}%.
@@ -129,47 +129,47 @@ export default function AdminSettingsPage() {
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#192B4A]">Zero-Leak Privacy &amp; Cryptography</h3>
+                <h3 className="text-sm font-bold text-[#283442]">Zero-Leak Privacy &amp; Cryptography</h3>
                 <p className="text-xs text-slate-500">Protection against serial number leaks, lock-screen data exposure, and camera GPS tracking.</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-[#F5F8FC] cursor-pointer transition-colors">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-[#F5F5F5] cursor-pointer transition-colors">
                 <input
                   type="checkbox"
                   checked={vaultEncryption}
                   onChange={(e) => setVaultEncryption(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded text-[#20B5AD] focus:ring-[#20B5AD]"
+                  className="mt-0.5 w-4 h-4 rounded text-[#F58220] focus:ring-[#F58220]"
                 />
                 <div className="text-xs">
-                  <span className="font-bold text-[#192B4A] block">Fernet AES-128 Symmetric Vault Encryption</span>
+                  <span className="font-bold text-[#283442] block">Fernet AES-128 Symmetric Vault Encryption</span>
                   <span className="text-slate-500">Private item identifiers (serial numbers, IMEIs, internal engravings) encrypted at rest in the Django database.</span>
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-[#F5F8FC] cursor-pointer transition-colors">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-[#F5F5F5] cursor-pointer transition-colors">
                 <input
                   type="checkbox"
                   checked={autoExifScrubbing}
                   onChange={(e) => setAutoExifScrubbing(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded text-[#20B5AD] focus:ring-[#20B5AD]"
+                  className="mt-0.5 w-4 h-4 rounded text-[#F58220] focus:ring-[#F58220]"
                 />
                 <div className="text-xs">
-                  <span className="font-bold text-[#192B4A] block">Pillow In-Memory EXIF &amp; GPS Scrubber</span>
+                  <span className="font-bold text-[#283442] block">Pillow In-Memory EXIF &amp; GPS Scrubber</span>
                   <span className="text-slate-500">Automatically strip embedded GPS coordinates and camera hardware serials from uploaded property photos before saving.</span>
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-[#F5F8FC] cursor-pointer transition-colors">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-[#F5F5F5] cursor-pointer transition-colors">
                 <input
                   type="checkbox"
                   checked={smsOtpAlerts}
                   onChange={(e) => setSmsOtpAlerts(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded text-[#20B5AD] focus:ring-[#20B5AD]"
+                  className="mt-0.5 w-4 h-4 rounded text-[#F58220] focus:ring-[#F58220]"
                 />
                 <div className="text-xs">
-                  <span className="font-bold text-[#192B4A] block">Cryptographic Handover Receipts</span>
+                  <span className="font-bold text-[#283442] block">Cryptographic Handover Receipts</span>
                   <span className="text-slate-500">Log immutable SHA-256 hashes of physical handover receipts into forensic audit logs.</span>
                 </div>
               </label>
@@ -179,7 +179,7 @@ export default function AdminSettingsPage() {
           <div className="flex justify-end pt-2">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
             >
               <Save className="w-4 h-4" />
               <span>Save Platform Settings</span>

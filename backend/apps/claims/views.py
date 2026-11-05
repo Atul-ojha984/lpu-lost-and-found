@@ -8,6 +8,7 @@ Claims App Views
 import os
 import uuid
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from rest_framework.views import APIView
@@ -19,6 +20,8 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParamet
 
 from apps.accounts.permissions import IsSecurityOrAdmin
 from apps.audit.models import AuditEntry, AuditAction
+from apps.items.models import Item
+from apps.handovers.models import Handover
 from .models import Claim, ClaimStatus
 from .serializers import (
     SubmitClaimSerializer,
@@ -103,7 +106,9 @@ class MyClaimsAPIView(APIView):
     def get(self, request):
         claims = Claim.objects.filter(claimant=request.user).select_related(
             'item__category', 'item__location', 'reviewed_by'
-        ).prefetch_related('challenge_answers__challenge').order_by('-created_at')
+        ).exclude(
+            Q(claim_status=ClaimStatus.COMPLETED) | Q(handovers__is_completed=True)
+        ).prefetch_related('challenge_answers__challenge', 'handovers').distinct().order_by('-created_at')
         serializer = ClaimSerializer(claims, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -213,75 +218,101 @@ class ClaimEvidenceUploadAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, pk):
+        target_path = None
         try:
-            claim = Claim.objects.get(pk=pk)
-        except (Claim.DoesNotExist, ValueError):
-            return Response(
-                {'success': False, 'statusCode': 404, 'error': {'code': 'NOT_FOUND', 'message': 'Claim not found.'}},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            with transaction.atomic():
+                # Match the item -> claim lock order used by supervised handover
+                # so uploads cannot race a successful recovery transaction.
+                try:
+                    claim_seed = Claim.objects.only('item_id').get(pk=pk)
+                    Item.objects.select_for_update().get(pk=claim_seed.item_id)
+                    claim = Claim.objects.select_for_update().get(pk=pk)
+                except (Claim.DoesNotExist, Item.DoesNotExist, ValueError):
+                    return Response(
+                        {'success': False, 'statusCode': 404, 'error': {'code': 'NOT_FOUND', 'message': 'Claim not found.'}},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
 
-        is_claimant = claim.claimant_id == request.user.id
-        is_authorized_staff = request.user.role in ('SECURITY_PERSONNEL', 'CAMPUS_ADMIN', 'SYSTEM_ADMIN')
+                is_claimant = claim.claimant_id == request.user.id
+                is_authorized_staff = request.user.role in ('SECURITY_PERSONNEL', 'CAMPUS_ADMIN', 'SYSTEM_ADMIN')
 
-        if not (is_claimant or is_authorized_staff):
-            return Response(
-                {'success': False, 'statusCode': 403, 'error': {'code': 'FORBIDDEN', 'message': 'You are not authorized to upload evidence for this claim.'}},
-                status=status.HTTP_403_FORBIDDEN
-            )
+                if not (is_claimant or is_authorized_staff):
+                    return Response(
+                        {'success': False, 'statusCode': 403, 'error': {'code': 'FORBIDDEN', 'message': 'You are not authorized to upload evidence for this claim.'}},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
-        uploaded_file = request.FILES.get('file') or request.FILES.get('evidence')
-        if not uploaded_file:
-            return Response(
-                {'success': False, 'statusCode': 400, 'error': {'code': 'BAD_REQUEST', 'message': 'No evidence file provided.'}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                if claim.claim_status == ClaimStatus.COMPLETED or Handover.objects.filter(
+                    claim=claim, is_completed=True
+                ).exists():
+                    return Response(
+                        {
+                            'success': False,
+                            'statusCode': status.HTTP_409_CONFLICT,
+                            'error': {
+                                'code': 'RECOVERY_COMPLETED',
+                                'message': 'Evidence submission is closed because this item has already been successfully recovered.',
+                            },
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
 
-        if uploaded_file.size > MAX_EVIDENCE_SIZE:
-            return Response(
-                {'success': False, 'statusCode': 400, 'error': {'code': 'FILE_TOO_LARGE', 'message': 'File size exceeds maximum allowed size of 5MB.'}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                uploaded_file = request.FILES.get('file') or request.FILES.get('evidence')
+                if not uploaded_file:
+                    return Response(
+                        {'success': False, 'statusCode': 400, 'error': {'code': 'BAD_REQUEST', 'message': 'No evidence file provided.'}},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-        ext = os.path.splitext(uploaded_file.name)[1].lower()
-        if ext not in ALLOWED_EVIDENCE_EXTENSIONS or uploaded_file.content_type.lower() not in ALLOWED_EVIDENCE_MIMES:
-            return Response(
-                {'success': False, 'statusCode': 400, 'error': {'code': 'INVALID_FILE_TYPE', 'message': 'Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP, PDF.'}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                if uploaded_file.size > MAX_EVIDENCE_SIZE:
+                    return Response(
+                        {'success': False, 'statusCode': 400, 'error': {'code': 'FILE_TOO_LARGE', 'message': 'File size exceeds maximum allowed size of 5MB.'}},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-        private_dir = settings.BASE_DIR / 'private_evidence' / str(claim.id)
-        os.makedirs(private_dir, exist_ok=True)
+                ext = os.path.splitext(uploaded_file.name)[1].lower()
+                if ext not in ALLOWED_EVIDENCE_EXTENSIONS or uploaded_file.content_type.lower() not in ALLOWED_EVIDENCE_MIMES:
+                    return Response(
+                        {'success': False, 'statusCode': 400, 'error': {'code': 'INVALID_FILE_TYPE', 'message': 'Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP, PDF.'}},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-        safe_filename = f"{uuid.uuid4().hex}{ext}"
-        target_path = private_dir / safe_filename
+                private_dir = settings.BASE_DIR / 'private_evidence' / str(claim.id)
+                os.makedirs(private_dir, exist_ok=True)
 
-        with open(target_path, 'wb+') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
+                safe_filename = f"{uuid.uuid4().hex}{ext}"
+                target_path = private_dir / safe_filename
 
-        evidence_url = f"/api/v1/claims/{claim.id}/evidence/{safe_filename}/"
+                with open(target_path, 'wb+') as destination:
+                    for chunk in uploaded_file.chunks():
+                        destination.write(chunk)
 
-        current_urls = claim.private_evidence_proof_urls or []
-        if isinstance(current_urls, list):
-            current_urls.append(evidence_url)
-            claim.private_evidence_proof_urls = current_urls
-            claim.save(update_fields=['private_evidence_proof_urls', 'updated_at'])
+                evidence_url = f"/api/v1/claims/{claim.id}/evidence/{safe_filename}/"
 
-        AuditEntry.objects.create(
-            actor=request.user,
-            actor_role=request.user.role,
-            action=AuditAction.CLAIM_SUBMIT,
-            target_entity='CLAIM',
-            target_id=str(claim.id),
-            metadata={
-                'event': 'EVIDENCE_UPLOADED',
-                'original_filename': uploaded_file.name,
-                'size': uploaded_file.size,
-            },
-            ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
-            user_agent=request.META.get('HTTP_USER_AGENT', ''),
-        )
+                current_urls = claim.private_evidence_proof_urls or []
+                if isinstance(current_urls, list):
+                    current_urls.append(evidence_url)
+                    claim.private_evidence_proof_urls = current_urls
+                    claim.save(update_fields=['private_evidence_proof_urls', 'updated_at'])
+
+                AuditEntry.objects.create(
+                    actor=request.user,
+                    actor_role=request.user.role,
+                    action=AuditAction.CLAIM_SUBMIT,
+                    target_entity='CLAIM',
+                    target_id=str(claim.id),
+                    metadata={
+                        'event': 'EVIDENCE_UPLOADED',
+                        'original_filename': uploaded_file.name,
+                        'size': uploaded_file.size,
+                    },
+                    ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                )
+        except Exception:
+            if target_path and target_path.exists():
+                target_path.unlink()
+            raise
 
         return Response(
             {

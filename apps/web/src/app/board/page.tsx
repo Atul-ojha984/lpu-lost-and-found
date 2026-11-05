@@ -223,7 +223,7 @@ function BoardContent() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F8FC]">
+    <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
       <Navbar />
 
       <main className="flex-1 py-8 sm:py-12">
@@ -231,11 +231,11 @@ function BoardContent() {
           {/* Header Banner */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200/80 pb-6">
             <div>
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#20B5AD]">
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F58220]">
                 <ShieldCheck className="h-4 w-4" />
                 <span>Sanitized Public Search Board</span>
               </div>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#192B4A] sm:text-3xl">
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#283442] sm:text-3xl">
                 Campus Property Listings
               </h1>
               <p className="mt-1 text-xs text-slate-500">
@@ -252,7 +252,7 @@ function BoardContent() {
               </Link>
               <Link
                 href="/report?type=FOUND"
-                className="rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#16A89F] transition-colors"
+                className="rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#E66F00] transition-colors"
               >
                 Report Found Item
               </Link>
@@ -308,7 +308,7 @@ function BoardContent() {
               <button
                 type="button"
                 onClick={fetchBoardItems}
-                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
               >
                 Retry Search
               </button>
@@ -357,8 +357,8 @@ function BoardContent() {
                               onClick={() => setCurrentPage(pageNum)}
                               className={`h-8 w-8 rounded-xl text-xs font-bold transition-colors ${
                                 pageNum === currentPage
-                                  ? 'bg-[#20B5AD] text-white shadow-2xs'
-                                  : 'text-slate-600 hover:bg-[#F5F8FC]'
+                                  ? 'bg-[#F58220] text-white shadow-2xs'
+                                  : 'text-slate-600 hover:bg-[#F5F5F5]'
                               }`}
                             >
                               {pageNum}
@@ -397,10 +397,10 @@ function BoardContent() {
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setAuthPromptOpen(false)} />
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200 z-10 animate-fade-in text-center space-y-4">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E6F8F7] text-[#20B5AD]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1E6] text-[#F58220]">
               <Lock className="h-6 w-6" />
             </div>
-            <h3 className="text-base font-bold text-[#192B4A]">
+            <h3 className="text-base font-bold text-[#283442]">
               Authentication Required
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
@@ -416,7 +416,7 @@ function BoardContent() {
               </button>
               <Link
                 href={`/login?redirect=${encodeURIComponent('/board?claim=' + (pendingClaimItem?.id || ''))}`}
-                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
               >
                 Log In Now
               </Link>
@@ -447,10 +447,10 @@ function BoardContent() {
             </button>
 
             <div className="mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#20B5AD]">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#F58220]">
                 Verified Recovery Claim
               </span>
-              <h3 className="text-base font-bold text-[#192B4A] mt-0.5">
+              <h3 className="text-base font-bold text-[#283442] mt-0.5">
                 Claim: {claimingItem.title}
               </h3>
               <p className="text-xs text-slate-500 font-mono">
@@ -468,9 +468,9 @@ function BoardContent() {
               </div>
             ) : (
               <form onSubmit={handleClaimSubmit} className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-[#F5F8FC] p-3 text-xs text-slate-600 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-[#192B4A]">
-                    <ShieldCheck className="h-4 w-4 text-[#20B5AD]" />
+                <div className="rounded-xl border border-slate-200 bg-[#F5F5F5] p-3 text-xs text-slate-600 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-[#283442]">
+                    <ShieldCheck className="h-4 w-4 text-[#F58220]" />
                     <span>Anti-Fraud Notice:</span>
                   </div>
                   <p className="text-[11px] leading-relaxed">
@@ -497,7 +497,7 @@ function BoardContent() {
                     value={claimStatement}
                     onChange={(e) => setClaimStatement(e.target.value)}
                     placeholder="E.g., I accidentally left this on the study table on the 2nd floor of Central Library after my evening revision session..."
-                    className="w-full rounded-xl border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#20B5AD] focus:ring-1 focus:ring-[#20B5AD] focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#F58220] focus:ring-1 focus:ring-[#F58220] focus:outline-none"
                     required
                   />
                 </FormField>
@@ -514,7 +514,7 @@ function BoardContent() {
                     value={claimChallengeAnswer}
                     onChange={(e) => setClaimChallengeAnswer(e.target.value)}
                     placeholder="E.g., The phone wallpaper is a landscape photo, or the laptop has an octocat sticker on bottom-left..."
-                    className="w-full rounded-xl border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#20B5AD] focus:ring-1 focus:ring-[#20B5AD] focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#F58220] focus:ring-1 focus:ring-[#F58220] focus:outline-none"
                     required
                   />
                 </FormField>
@@ -541,10 +541,10 @@ function BoardContent() {
                     className="hidden"
                   />
                   {selectedFile ? (
-                    <div className="flex items-center justify-between rounded-xl border border-[#20B5AD]/40 bg-[#E6F8F7] p-3 text-xs">
+                    <div className="flex items-center justify-between rounded-xl border border-[#F58220]/40 bg-[#FFF1E6] p-3 text-xs">
                       <div className="flex items-center gap-2 truncate">
-                        <CheckCircle2 className="h-4 w-4 text-[#16A89F] shrink-0" />
-                        <span className="font-semibold text-[#192B4A] truncate">{selectedFile.name}</span>
+                        <CheckCircle2 className="h-4 w-4 text-[#E66F00] shrink-0" />
+                        <span className="font-semibold text-[#283442] truncate">{selectedFile.name}</span>
                         <span className="text-[10px] text-slate-500 shrink-0">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
                       </div>
                       <button
@@ -579,7 +579,7 @@ function BoardContent() {
                   <button
                     type="submit"
                     disabled={isSubmittingClaim}
-                    className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
+                    className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60"
                   >
                     {isSubmittingClaim ? 'Submitting Claim...' : 'Submit Ownership Claim'}
                   </button>

@@ -29,7 +29,7 @@ class ItemMatchesAPIView(APIView):
     )
     def get(self, request, pk):
         try:
-            item = Item.objects.get(pk=pk)
+            item = Item.objects.get(pk=pk, is_archived=False)
         except Item.DoesNotExist:
             return Response(
                 {
@@ -54,7 +54,9 @@ class ItemMatchesAPIView(APIView):
             )
 
         matches = MatchSuggestion.objects.filter(
-            Q(lost_item=item) | Q(found_item=item)
+            (Q(lost_item=item) | Q(found_item=item)),
+            lost_item__is_archived=False,
+            found_item__is_archived=False,
         ).select_related(
             'lost_item__category', 'lost_item__location', 'lost_item__reported_by',
             'found_item__category', 'found_item__location', 'found_item__reported_by'
@@ -74,7 +76,7 @@ class ItemMatchesRefreshAPIView(APIView):
     )
     def post(self, request, pk):
         try:
-            item = Item.objects.get(pk=pk)
+            item = Item.objects.get(pk=pk, is_archived=False)
         except Item.DoesNotExist:
             return Response(
                 {

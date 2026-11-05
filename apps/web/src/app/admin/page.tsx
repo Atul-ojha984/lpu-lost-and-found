@@ -85,7 +85,7 @@ export default function AdminOverviewPage() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
             Total Logged Property
           </span>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : analytics?.totalReports ?? 0}
           </p>
           <span className="text-[11px] text-slate-500 font-medium">
@@ -120,10 +120,10 @@ export default function AdminOverviewPage() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
             Pending Claims in Review
           </span>
-          <p className="mt-2 text-2xl font-black text-[#20B5AD]">
+          <p className="mt-2 text-2xl font-black text-[#F58220]">
             {loading ? '...' : `${analytics?.pendingClaims ?? 0}`}
           </p>
-          <span className="text-[11px] text-[#16A89F] font-medium">
+          <span className="text-[11px] text-[#E66F00] font-medium">
             {analytics?.totalVerificationFailures ?? 0} verification attempts flagged
           </span>
         </div>
@@ -134,20 +134,20 @@ export default function AdminOverviewPage() {
         {/* Card 1: Lost & Found Reports */}
         <Link
           href="/admin/items"
-          className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:border-[#20B5AD] hover:shadow-md transition-all flex flex-col justify-between"
+          className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:border-[#F58220] hover:shadow-md transition-all flex flex-col justify-between"
         >
           <div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E6F8F7] text-[#20B5AD] mb-3 group-hover:bg-[#20B5AD] group-hover:text-white transition-colors">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1E6] text-[#F58220] mb-3 group-hover:bg-[#F58220] group-hover:text-white transition-colors">
               <Package className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-[#20B5AD] transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-[#F58220] transition-colors">
               Lost &amp; Found Reports
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
               Campus inventory, 90-day retention queue, notice periods, and statutory ageing.
             </p>
           </div>
-          <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#20B5AD]">
+          <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#F58220]">
             <span>Manage Inventory</span>
             <ArrowRight className="h-3.5 w-3.5" />
           </span>
@@ -162,7 +162,7 @@ export default function AdminOverviewPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EBF1FD] text-[#356DE8] mb-3 group-hover:bg-[#356DE8] group-hover:text-white transition-colors">
               <Users className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-[#356DE8] transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-[#356DE8] transition-colors">
               User Management
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -184,7 +184,7 @@ export default function AdminOverviewPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-700 mb-3 group-hover:bg-amber-700 group-hover:text-white transition-colors">
               <ClipboardCheck className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-amber-800 transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-amber-800 transition-colors">
               Claim Management
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -206,7 +206,7 @@ export default function AdminOverviewPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 mb-3 group-hover:bg-blue-700 group-hover:text-white transition-colors">
               <Shield className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-blue-800 transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-blue-800 transition-colors">
               Security Officer Management
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -228,7 +228,7 @@ export default function AdminOverviewPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 mb-3 group-hover:bg-slate-800 group-hover:text-white transition-colors">
               <MapPin className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-slate-800 transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-slate-800 transition-colors">
               Custody Locations
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -250,7 +250,7 @@ export default function AdminOverviewPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 mb-3 group-hover:bg-emerald-700 group-hover:text-white transition-colors">
               <ClipboardList className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-emerald-800 transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-emerald-800 transition-colors">
               Audit Logs
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -272,7 +272,7 @@ export default function AdminOverviewPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-700 mb-3 group-hover:bg-purple-700 group-hover:text-white transition-colors">
               <BarChart3 className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-purple-800 transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-purple-800 transition-colors">
               Reports and Analytics
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -288,20 +288,20 @@ export default function AdminOverviewPage() {
         {/* Card 8: Settings */}
         <Link
           href="/admin/settings"
-          className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:border-[#20B5AD] hover:shadow-md transition-all flex flex-col justify-between"
+          className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:border-[#F58220] hover:shadow-md transition-all flex flex-col justify-between"
         >
           <div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E6F8F7] text-[#20B5AD] mb-3 group-hover:bg-[#20B5AD] group-hover:text-white transition-colors">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1E6] text-[#F58220] mb-3 group-hover:bg-[#F58220] group-hover:text-white transition-colors">
               <Sliders className="h-5 w-5" />
             </div>
-            <h3 className="text-sm font-bold text-[#192B4A] group-hover:text-[#20B5AD] transition-colors">
+            <h3 className="text-sm font-bold text-[#283442] group-hover:text-[#F58220] transition-colors">
               Settings &amp; Rules
             </h3>
             <p className="mt-1 text-xs text-slate-500 leading-relaxed">
               Configure retention periods, matching engine thresholds, and cryptographic vaults.
             </p>
           </div>
-          <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#20B5AD]">
+          <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#F58220]">
             <span>Configure</span>
             <ArrowRight className="h-3.5 w-3.5" />
           </span>
@@ -312,12 +312,12 @@ export default function AdminOverviewPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div>
-            <h3 className="text-sm font-bold text-[#192B4A]">Recent Statutory Audit Entries</h3>
+            <h3 className="text-sm font-bold text-[#283442]">Recent Statutory Audit Entries</h3>
             <p className="text-xs text-slate-500">Live cryptographic state transitions across campus security posts.</p>
           </div>
           <Link
             href="/admin/audit"
-            className="text-xs font-bold text-[#20B5AD] hover:underline"
+            className="text-xs font-bold text-[#F58220] hover:underline"
           >
             Full Audit Ledger &rarr;
           </Link>

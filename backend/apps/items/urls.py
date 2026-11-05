@@ -9,7 +9,9 @@ from django.urls import path
 from .views import (
     ItemPublicBoardAPIView,
     ItemDetailAPIView,
+    DailyLostReportLimitAPIView,
     CreateItemReportAPIView,
+    WithdrawItemReportAPIView,
     MyReportsAPIView,
     ImageUploadAPIView,
     ItemChallengesAPIView,
@@ -27,12 +29,18 @@ urlpatterns = [
     # Authenticated user filed reports
     path('my-reports/', MyReportsAPIView.as_view(), name='my-reports'),
     path('my-reports', MyReportsAPIView.as_view(), name='my-reports-no-slash'),
+    path('daily-lost-report-limit/', DailyLostReportLimitAPIView.as_view(), name='daily-lost-report-limit'),
+    path('daily-lost-report-limit', DailyLostReportLimitAPIView.as_view(), name='daily-lost-report-limit-no-slash'),
     
     # Report creation
     path('lost/', CreateItemReportAPIView.as_view(), {'item_type': 'LOST'}, name='create-lost'),
     path('lost', CreateItemReportAPIView.as_view(), {'item_type': 'LOST'}, name='create-lost-no-slash'),
     path('found/', CreateItemReportAPIView.as_view(), {'item_type': 'FOUND'}, name='create-found'),
     path('found', CreateItemReportAPIView.as_view(), {'item_type': 'FOUND'}, name='create-found-no-slash'),
+
+    # Owner-only soft withdrawal
+    path('<str:pk>/withdraw/', WithdrawItemReportAPIView.as_view(), name='item-withdraw'),
+    path('<str:pk>/withdraw', WithdrawItemReportAPIView.as_view(), name='item-withdraw-no-slash'),
     
     # Image upload (with alias)
     path('upload/', ImageUploadAPIView.as_view(), name='image-upload'),

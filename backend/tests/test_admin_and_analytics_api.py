@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from apps.accounts.models import User, UserRole
+from apps.accounts.models import User, UserRole, UserType
 from apps.items.models import ItemCategory, Item, ItemType, ItemStatus
 from apps.locations.models import Location
 from apps.claims.models import Claim, ClaimStatus
@@ -30,6 +30,7 @@ def admin_setup(db):
         full_name='Chief Campus Administrator',
         password='Password123!',
         role=UserRole.CAMPUS_ADMIN,
+        user_type=UserType.CAMPUS_ADMIN,
     )
     security_officer = User.objects.create_user(
         email='officer.sec@lpu.in',
@@ -37,6 +38,7 @@ def admin_setup(db):
         full_name='Officer Ram',
         password='Password123!',
         role=UserRole.SECURITY_PERSONNEL,
+        user_type=UserType.SECURITY_OFFICER,
         security_post='Uni-Mall Gate',
     )
     student = User.objects.create_user(
@@ -45,6 +47,7 @@ def admin_setup(db):
         full_name='Target Student',
         password='Password123!',
         role=UserRole.STUDENT_STAFF,
+        user_type=UserType.STUDENT,
         department='Computer Science',
     )
 
@@ -249,6 +252,16 @@ def test_admin_user_governance_and_self_guards(api_client, admin_setup):
     assert res_self_demote.status_code == status.HTTP_400_BAD_REQUEST
     assert 'cannot demote' in res_self_demote.data['error']['message'].lower()
 
+    res_self_type_change = api_client.patch(
+        f"/api/v1/admin/users/{admin.id}/",
+        {'userType': UserType.STUDENT},
+        format='json',
+    )
+    assert res_self_type_change.status_code == status.HTTP_400_BAD_REQUEST
+    admin.refresh_from_db()
+    assert admin.role == UserRole.CAMPUS_ADMIN
+    assert admin.user_type == UserType.CAMPUS_ADMIN
+
     # 4. Admin successfully promotes student to security personnel
     res_promote = api_client.patch(
         f"/api/v1/admin/users/{student.id}/",
@@ -259,3 +272,106 @@ def test_admin_user_governance_and_self_guards(api_client, admin_setup):
     student.refresh_from_db()
     assert student.role == UserRole.SECURITY_PERSONNEL
     assert student.security_post == 'Block 34 Guard Post'
+
+@pytest.mark.django_db
+def test_admin_can_create_student_staff_and_security_accounts(api_client, admin_setup):
+    admin = admin_setup['admin']
+    api_client.force_authenticate(user=admin)
+
+    definitions = [
+        ('STUDENT', 'Student Account', '12107001', 'new.student@lpu.in', UserRole.STUDENT_STAFF),
+        ('STAFF', 'Staff Account', 'STF07002', 'new.staff@lpu.in', UserRole.STUDENT_STAFF),
+        ('SECURITY_OFFICER', 'Security Account', 'SEC07003', 'new.officer@lpu.in', UserRole.SECURITY_PERSONNEL),
+    ]
+    created = {}
+    for account_type, full_name, registration, email, role in definitions:
+        response = api_client.post(
+            '/api/v1/admin/users/',
+            {
+                'fullName': full_name,
+                'registrationNumber': registration,
+                'email': email,
+                'userType': account_type,
+                'password': 'InitialCampusPassword@2026',
+                'department': 'Campus Test Department',
+                'securityPost': 'North Security Desk' if account_type == 'SECURITY_OFFICER' else '',
+                'isActive': True,
+            },
+            format='json',
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert 'password' not in response.data['data']
+        user = User.objects.get(email=email)
+        created[account_type] = user
+        assert user.full_name == full_name
+        assert user.registration_number == registration
+        assert user.role == role
+        assert user.user_type == account_type
+        assert user.is_active is True
+        assert user.check_password('InitialCampusPassword@2026')
+
+    assert AuditEntry.objects.filter(
+        actor=admin,
+        action=AuditAction.USER_REGISTER,
+        target_id=str(created['STUDENT'].id),
+    ).exists()
+
+    # Administrators retain the existing activate/deactivate controls.
+    deactivated = api_client.patch(
+        f"/api/v1/admin/users/{created['STAFF'].id}/",
+        {'isActive': False},
+        format='json',
+    )
+    assert deactivated.status_code == status.HTTP_200_OK
+    created['STAFF'].refresh_from_db()
+    assert created['STAFF'].is_active is False
+    reactivated = api_client.patch(
+        f"/api/v1/admin/users/{created['STAFF'].id}/",
+        {'isActive': True},
+        format='json',
+    )
+    assert reactivated.status_code == status.HTTP_200_OK
+    created['STAFF'].refresh_from_db()
+    assert created['STAFF'].is_active is True
+
+    listed_staff = api_client.get('/api/v1/admin/users/?userType=STAFF')
+    assert listed_staff.status_code == status.HTTP_200_OK
+    assert any(record['id'] == str(created['STAFF'].id) for record in listed_staff.data['data'])
+
+@pytest.mark.django_db
+def test_non_admin_roles_cannot_manage_accounts_or_change_roles(api_client, admin_setup):
+    student = admin_setup['student']
+    security = admin_setup['security_officer']
+    staff = User.objects.create_user(
+        email='staff.member@lpu.in',
+        registration_number='STF9200',
+        full_name='Staff Member',
+        password='Password123!',
+        role=UserRole.STUDENT_STAFF,
+        user_type=UserType.STAFF,
+    )
+    target = student
+    payload = {
+        'fullName': 'Unauthorized Account',
+        'registrationNumber': 'UNAUTH9200',
+        'email': 'unauthorized@lpu.in',
+        'userType': 'STUDENT',
+        'password': 'InitialCampusPassword@2026',
+    }
+
+    for user in (student, staff, security):
+        api_client.force_authenticate(user=user)
+        assert api_client.post('/api/v1/admin/users/', payload, format='json').status_code == status.HTTP_403_FORBIDDEN
+        assert api_client.get('/api/v1/admin/users/').status_code == status.HTTP_403_FORBIDDEN
+        assert api_client.patch(
+            f'/api/v1/admin/users/{target.id}/',
+            {'role': UserRole.SECURITY_PERSONNEL},
+            format='json',
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert not User.objects.filter(registration_number='UNAUTH9200').exists()
+
+    api_client.force_authenticate(user=None)
+    assert api_client.post('/api/v1/admin/users/', payload, format='json').status_code in (
+        status.HTTP_401_UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN,
+    )

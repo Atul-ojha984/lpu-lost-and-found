@@ -17,7 +17,7 @@ import { Footer } from '@/components/navigation/Footer';
 import { FormField } from '@/components/ui/FormField';
 import { CATEGORY_LABELS, CAMPUS_ZONE_LABELS } from '@/lib/constants';
 import { ItemType, ItemCategory, LPUCampusZone } from '@/types';
-import { apiClient, ApiClientError } from '@/lib/api-client';
+import { apiClient, ApiClientError, type DailyLostReportAllowance } from '@/lib/api-client';
 
 function ReportContent() {
   const searchParams = useSearchParams();
@@ -55,6 +55,7 @@ function ReportContent() {
   // Current User Session
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string } | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [dailyLostReportAllowance, setDailyLostReportAllowance] = useState<DailyLostReportAllowance | null>(null);
 
   useEffect(() => {
     apiClient.getCurrentUser()
@@ -67,6 +68,29 @@ function ReportContent() {
         setIsAuthChecking(false);
       });
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let cancelled = false;
+    apiClient.getDailyLostReportAllowance()
+      .then((allowance) => {
+        if (!cancelled) setDailyLostReportAllowance(allowance);
+      })
+      .catch(() => {
+        if (!cancelled) setDailyLostReportAllowance(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
+
+  const lostReportLimitReached = Boolean(
+    reportType === 'LOST' &&
+    dailyLostReportAllowance?.applies &&
+    dailyLostReportAllowance.remaining === 0
+  );
 
   // Handle Photo selection and Sharp processing
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,6 +146,11 @@ function ReportContent() {
     setFormError(null);
     setFieldErrors({});
 
+    if (reportType === 'LOST' && lostReportLimitReached) {
+      setFormError('Daily limit reached. You can submit new lost-item reports tomorrow.');
+      return;
+    }
+
     // Client-side validation
     const errors: Record<string, string> = {};
     if (!formData.title.trim()) errors.title = 'Title is required';
@@ -161,6 +190,12 @@ function ReportContent() {
         verificationQuestions,
       });
 
+      if (reportType === 'LOST') {
+        apiClient.getDailyLostReportAllowance()
+          .then(setDailyLostReportAllowance)
+          .catch(() => undefined);
+      }
+
       setSubmittedItem({ id: created.id, referenceNumber: created.referenceNumber });
     } catch (err) {
       if (err instanceof ApiClientError) {
@@ -184,18 +219,18 @@ function ReportContent() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F8FC]">
+    <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
       <Navbar />
 
       <main className="flex-1 py-10 sm:py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#20B5AD]">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F58220]">
               <ShieldCheck className="h-4 w-4" />
               <span>Campus Property Incident Reporting</span>
             </span>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#192B4A] sm:text-3xl">
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#283442] sm:text-3xl">
               File a Campus Property Report
             </h1>
             <p className="mt-1 text-xs text-slate-500 max-w-xl mx-auto">
@@ -225,13 +260,13 @@ function ReportContent() {
                 <CheckCircle2 className="h-9 w-9" />
               </div>
 
-              <h2 className="text-xl font-bold text-[#192B4A]">
+              <h2 className="text-xl font-bold text-[#283442]">
                 Report Successfully Logged
               </h2>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 max-w-md mx-auto">
                 <p className="text-xs text-slate-500">Official Tracking Reference</p>
-                <p className="text-2xl font-mono font-extrabold text-[#20B5AD] tracking-wider mt-1">
+                <p className="text-2xl font-mono font-extrabold text-[#F58220] tracking-wider mt-1">
                   {submittedItem.referenceNumber}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-2">
@@ -246,7 +281,7 @@ function ReportContent() {
               <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
                 <Link
                   href={`/items/${submittedItem.id}`}
-                  className="rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                  className="rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
                 >
                   View Public Listing
                 </Link>
@@ -284,7 +319,7 @@ function ReportContent() {
                   onClick={() => setReportType('FOUND')}
                   className={`flex-1 rounded-lg py-2.5 text-xs font-bold tracking-wide transition-all ${
                     reportType === 'FOUND'
-                      ? 'bg-[#20B5AD] text-white shadow-xs'
+                      ? 'bg-[#F58220] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -300,6 +335,23 @@ function ReportContent() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {dailyLostReportAllowance?.applies &&
+                  dailyLostReportAllowance.remaining !== null &&
+                  reportType === 'LOST' && (
+                  <div
+                    role="status"
+                    className={`rounded-xl border p-3 text-xs ${
+                      dailyLostReportAllowance.remaining === 0
+                        ? 'border-amber-300 bg-amber-50 text-amber-900'
+                        : 'border-slate-200 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    {dailyLostReportAllowance.remaining === 0
+                      ? 'Daily limit reached. You can submit new lost-item reports tomorrow.'
+                      : `${dailyLostReportAllowance.remaining} lost-item report${dailyLostReportAllowance.remaining === 1 ? '' : 's'} remaining today.`}
+                  </div>
+                )}
+
                 {/* Section 1: Item Basic Info */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 border-b border-slate-100 pb-2">
@@ -560,8 +612,8 @@ function ReportContent() {
 
                   <button
                     type="submit"
-                    disabled={isLoading || isUploadingImage}
-                    className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-3 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#20B5AD]"
+                    disabled={isLoading || isUploadingImage || lostReportLimitReached}
+                    className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-3 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F58220]"
                   >
                     {isLoading ? (
                       <span>Submitting report to central registry...</span>

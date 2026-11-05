@@ -6,7 +6,7 @@ import { DISCLAIMER_TEXT } from '@/lib/constants';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="border-t border-[#192B4A] bg-[#192B4A] text-slate-300">
+    <footer className="border-t border-[#283442] bg-[#283442] text-slate-300">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           {/* Brand Info */}
@@ -21,7 +21,7 @@ export const Footer: React.FC = () => {
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3.5 text-xs text-slate-300 backdrop-blur-sm">
               <div className="flex items-start gap-2.5">
-                <ShieldCheck className="h-4 w-4 text-[#20B5AD] shrink-0 mt-0.5" />
+                <ShieldCheck className="h-4 w-4 text-[#F58220] shrink-0 mt-0.5" />
                 <span className="text-[11px] leading-relaxed text-slate-300">
                   <strong className="text-white">Confidential Item Identification:</strong> Private identifiers (device serials, IDs, lock screen details) are encrypted in a zero-trust cryptographic vault. Only authorized security officers view decrypted details during physical claim verification.
                 </span>
@@ -36,32 +36,32 @@ export const Footer: React.FC = () => {
             </h4>
             <ul className="space-y-2 text-xs text-slate-300">
               <li>
-                <Link href="/board" className="hover:text-[#20B5AD] transition-colors">
+                <Link href="/board" className="hover:text-[#F58220] transition-colors">
                   Public Search Board
                 </Link>
               </li>
               <li>
-                <Link href="/report?type=LOST" className="hover:text-[#20B5AD] transition-colors">
+                <Link href="/report?type=LOST" className="hover:text-[#F58220] transition-colors">
                   Report Lost Property
                 </Link>
               </li>
               <li>
-                <Link href="/report?type=FOUND" className="hover:text-[#20B5AD] transition-colors">
+                <Link href="/report?type=FOUND" className="hover:text-[#F58220] transition-colors">
                   Report Found Property
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard" className="hover:text-[#20B5AD] transition-colors">
+                <Link href="/dashboard" className="hover:text-[#F58220] transition-colors">
                   Student Portal
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/my-reports" className="hover:text-[#20B5AD] transition-colors">
+                <Link href="/dashboard/my-reports" className="hover:text-[#F58220] transition-colors">
                   My Reports &amp; Claims
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/history" className="hover:text-[#20B5AD] transition-colors">
+                <Link href="/dashboard/history" className="hover:text-[#F58220] transition-colors">
                   Recovery History
                 </Link>
               </li>
@@ -75,23 +75,23 @@ export const Footer: React.FC = () => {
             </h4>
             <ul className="space-y-2 text-xs text-slate-300">
               <li className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
+                <MapPin className="h-3.5 w-3.5 text-[#F58220] shrink-0" />
                 <span>Central Library Helpdesk (Ground Fl.)</span>
               </li>
               <li className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
+                <MapPin className="h-3.5 w-3.5 text-[#F58220] shrink-0" />
                 <span>Uni-Mall Post #2 (Near Food Court)</span>
               </li>
               <li className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
+                <MapPin className="h-3.5 w-3.5 text-[#F58220] shrink-0" />
                 <span>Block 38 Academic Support Desk</span>
               </li>
               <li className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
+                <MapPin className="h-3.5 w-3.5 text-[#F58220] shrink-0" />
                 <span>Gate 1 &amp; Gate 2 Main Security Posts</span>
               </li>
               <li className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
+                <MapPin className="h-3.5 w-3.5 text-[#F58220] shrink-0" />
                 <span>Shanti Devi Sports Complex Desk</span>
               </li>
             </ul>

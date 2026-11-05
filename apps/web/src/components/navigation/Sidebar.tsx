@@ -158,7 +158,7 @@ interface NavItem {
   };
 
   return (
-    <aside className="flex h-full w-64 flex-col justify-between border-r border-[#22395D] bg-[#192B4A] text-white shadow-md">
+    <aside className="portal-sidebar flex h-full w-64 flex-col justify-between border-r border-[#3A4B5E] bg-[#283442] text-white shadow-md">
       {/* Top Branding Section */}
       <div className="p-4 sm:p-5">
         <Link 
@@ -166,23 +166,23 @@ interface NavItem {
           onClick={onCloseMobile}
           className="flex items-center gap-2 mb-5 focus:outline-none"
         >
-          <LPULogo size="sm" showSubtitle={true} wordmarkVariant="stacked-system" inverted={true} />
+          <LPULogo size="sm" showSubtitle={true} wordmarkVariant="stacked-system" inverted={false} />
         </Link>
 
         {/* Authenticated Role Identification Pill */}
-        <div className="rounded-xl border border-[#22395D] bg-[#22395D]/60 p-3 mb-5">
+        <div className="rounded-xl border border-[#3A4B5E] bg-[#3A4B5E]/60 p-3 mb-5">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#20B5AD]">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#F58220]">
               Authenticated Scope
             </span>
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#20B5AD] bg-[#20B5AD]/15 px-1.5 py-0.5 rounded">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#20B5AD] animate-pulse" />
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#F58220] bg-[#F58220]/15 px-1.5 py-0.5 rounded">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#F58220] animate-pulse" />
               Verified
             </span>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#20B5AD] text-xs font-black text-[#192B4A] shadow-xs">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F58220] text-xs font-black text-[#283442] shadow-xs">
               {roleCodeBadge}
             </div>
             <div className="overflow-hidden">
@@ -213,16 +213,16 @@ interface NavItem {
                 onClick={onCloseMobile}
                 className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
                   active
-                    ? 'bg-[#20B5AD]/20 text-white font-bold shadow-xs border-l-3 border-[#20B5AD]'
-                    : 'text-slate-300 hover:bg-[#22395D] hover:text-white'
+                    ? 'bg-[#F58220]/20 text-white font-bold shadow-xs border-l-3 border-[#F58220]'
+                    : 'text-slate-300 hover:bg-[#3A4B5E] hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#20B5AD]' : 'text-slate-400'}`} />
+                  <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#F58220]' : 'text-slate-400'}`} />
                   <span className="truncate">{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className="rounded-full bg-[#20B5AD] px-1.5 py-0.2 text-[9px] font-bold text-[#192B4A]">
+                  <span className="rounded-full bg-[#F58220] px-1.5 py-0.2 text-[9px] font-bold text-[#283442]">
                     {item.badge}
                   </span>
                 )}
@@ -233,13 +233,13 @@ interface NavItem {
       </div>
 
       {/* Bottom Session & Sign Out Actions */}
-      <div className="border-t border-[#22395D] p-4 space-y-1.5 bg-[#162540]">
+      <div className="border-t border-[#3A4B5E] p-4 space-y-1.5 bg-[#162540]">
         <Link
           href="/board"
           onClick={onCloseMobile}
-          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 hover:bg-[#22395D] hover:text-white transition-colors"
+          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 hover:bg-[#3A4B5E] hover:text-white transition-colors"
         >
-          <Search className="h-3.5 w-3.5 text-[#20B5AD]" />
+          <Search className="h-3.5 w-3.5 text-[#F58220]" />
           <span>Public Board Search</span>
         </Link>
 

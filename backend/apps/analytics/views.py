@@ -7,13 +7,14 @@ Admin & Analytics Views
 
 from datetime import datetime, timezone
 from django.db import transaction
+from django.db.utils import IntegrityError
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
-from apps.accounts.models import User
+from apps.accounts.models import User, UserRole, UserType
 from apps.accounts.permissions import IsCampusAdmin
 from apps.items.models import Item, ItemStatus
 from apps.custody.models import CustodyRecord, CustodyAction
@@ -21,6 +22,7 @@ from apps.disposal.models import DisposalRecord
 from apps.audit.models import AuditEntry, AuditAction
 from .services import get_analytics_dashboard, get_ageing_queue
 from .serializers import (
+    CreateAdminUserSerializer,
     DisposalApprovalInputSerializer,
     AdminUserSerializer,
     UpdateUserAdminSerializer,
@@ -218,6 +220,54 @@ class AdminUsersAPIView(APIView):
 
     @extend_schema(
         tags=['Administration'],
+        summary='Create Student, Staff, or Security Officer Account',
+        request=CreateAdminUserSerializer,
+        responses={201: AdminUserSerializer},
+    )
+    def post(self, request):
+        serializer = CreateAdminUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+                AuditEntry.objects.create(
+                    actor=request.user,
+                    actor_role=request.user.role,
+                    action=AuditAction.USER_REGISTER,
+                    target_entity='User',
+                    target_id=str(user.id),
+                    ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={
+                        'event': 'ADMIN_CREATED_ACCOUNT',
+                        'targetUserType': user.user_type,
+                        'targetRole': user.role,
+                        'targetActive': user.is_active,
+                    },
+                )
+        except IntegrityError:
+            return Response(
+                {
+                    'success': False,
+                    'statusCode': status.HTTP_409_CONFLICT,
+                    'error': {'code': 'DUPLICATE_USER', 'message': 'An account with that email or registration number already exists.'},
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(
+            {
+                'success': True,
+                'statusCode': status.HTTP_201_CREATED,
+                'message': 'Campus account created successfully.',
+                'data': AdminUserSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=['Administration'],
         summary='List Campus Users',
         parameters=[
             OpenApiParameter('role', str, description='Filter by user role'),
@@ -234,6 +284,10 @@ class AdminUsersAPIView(APIView):
         role = request.query_params.get('role')
         if role and role.upper() != 'ALL':
             queryset = queryset.filter(role=role.upper())
+
+        user_type = request.query_params.get('userType')
+        if user_type and user_type.upper() != 'ALL':
+            queryset = queryset.filter(user_type=user_type.upper())
 
         is_active = request.query_params.get('isActive')
         if is_active is not None and is_active.lower() in ('true', 'false'):
@@ -340,6 +394,10 @@ class AdminUserDetailAPIView(APIView):
 
         if 'role' in vd:
             user.role = vd['role']
+        if 'userType' in vd:
+            user.user_type = vd['userType']
+        elif vd.get('role') == UserRole.STUDENT_STAFF and user.user_type not in (UserType.STUDENT, UserType.STAFF):
+            user.user_type = UserType.UNSPECIFIED
         if 'securityPost' in vd:
             user.security_post = vd['securityPost'].strip()
         if 'department' in vd:
@@ -366,6 +424,7 @@ class AdminUserDetailAPIView(APIView):
                 'targetRegistrationNumber': user.registration_number,
                 'previousRole': previous_role,
                 'newRole': user.role,
+                'newUserType': user.user_type,
                 'previousActive': previous_active,
                 'newActive': user.is_active,
                 'previousSecurityPost': previous_security_post,

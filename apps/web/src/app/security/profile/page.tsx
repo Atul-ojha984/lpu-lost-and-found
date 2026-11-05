@@ -63,7 +63,7 @@ export default function SecurityProfilePage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-[#192B4A]">{officer.fullName}</h2>
+                <h2 className="text-lg font-bold text-[#283442]">{officer.fullName}</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#EBF1FD] px-2 py-0.5 text-[10px] font-bold text-[#356DE8] border border-[#356DE8]/20">
                   <Shield className="w-3 h-3" />
                   Authorized Custody Officer
@@ -101,7 +101,7 @@ export default function SecurityProfilePage() {
         {/* Station Details Form */}
         <form onSubmit={handleSave} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-sm font-bold text-[#192B4A]">Custody Post &amp; Shift Assignment</h3>
+            <h3 className="text-sm font-bold text-[#283442]">Custody Post &amp; Shift Assignment</h3>
             <p className="text-xs text-slate-500">Assigned security desk responsible for property intake and OTP claim verification.</p>
           </div>
 
@@ -161,14 +161,14 @@ export default function SecurityProfilePage() {
                   type="text"
                   value={officer.stationExtension}
                   onChange={(e) => setOfficer({ ...officer, stationExtension: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#E6F8F7] border border-[#20B5AD]/25 text-xs space-y-1">
-            <span className="font-bold text-[#192B4A] block">Vault Authorization Matrix:</span>
+          <div className="p-4 rounded-xl bg-[#FFF1E6] border border-[#F58220]/25 text-xs space-y-1">
+            <span className="font-bold text-[#283442] block">Vault Authorization Matrix:</span>
             <p className="text-slate-600 leading-relaxed">
               This officer account is authorized for <strong>Level-2 Vault Decryption</strong> to cross-examine high-risk identifiers (IMEIs, serial numbers, engraved names) against claimant responses.
             </p>
@@ -177,7 +177,7 @@ export default function SecurityProfilePage() {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
             >
               <Save className="w-4 h-4" />
               <span>Update Station Details</span>

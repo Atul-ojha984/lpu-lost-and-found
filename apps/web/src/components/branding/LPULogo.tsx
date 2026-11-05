@@ -24,12 +24,12 @@ export const LPULogo: React.FC<LPULogoProps> = ({
 }) => {
   const [imageError, setImageError] = useState(false);
 
-  // Logo aspect ratio is approximately 1.83 (1024x558)
+  // Square mark dimensions keep the icon crisp beside every wordmark variant.
   const dimensions = {
-    sm: { width: 64, height: 35, maxHeight: 'h-8 max-h-8' },
-    md: { width: 84, height: 46, maxHeight: 'h-10 max-h-10' },
-    lg: { width: 110, height: 60, maxHeight: 'h-12 max-h-12 sm:h-14 sm:max-h-14' },
-    xl: { width: 146, height: 80, maxHeight: 'h-16 max-h-16 sm:h-20 sm:max-h-20' },
+    sm: { width: 32, height: 32, sizeClass: 'h-8 w-8' },
+    md: { width: 40, height: 40, sizeClass: 'h-10 w-10' },
+    lg: { width: 52, height: 52, sizeClass: 'h-12 w-12 sm:h-14 sm:w-14' },
+    xl: { width: 64, height: 64, sizeClass: 'h-16 w-16 sm:h-20 sm:w-20' },
   }[size];
 
   return (
@@ -37,18 +37,18 @@ export const LPULogo: React.FC<LPULogoProps> = ({
       {!imageError ? (
         <div className="relative flex items-center shrink-0">
           <Image
-            src="/images/lost-and-found-logo.png"
+            src="/images/lost-and-found-logo.svg"
             alt="Lost & Found Property Recovery Portal"
             width={dimensions.width}
             height={dimensions.height}
-            className={`w-auto ${dimensions.maxHeight} object-contain`}
+            className={`${dimensions.sizeClass} object-contain`}
             priority
             onError={() => setImageError(true)}
           />
         </div>
       ) : (
-        /* Minimal graceful fallback retaining navy/teal visual language */
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#192B4A] text-xs font-black text-[#20B5AD] border border-[#20B5AD]/30 shadow-xs">
+        /* Minimal graceful fallback retaining the charcoal and orange palette */
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#283442] text-xs font-black text-[#F58220] border border-[#F58220]/30 shadow-xs">
           LF
         </div>
       )}
@@ -61,12 +61,12 @@ export const LPULogo: React.FC<LPULogoProps> = ({
             <div className="flex flex-col text-left justify-center">
               <span
                 className={`text-xs font-black tracking-wider uppercase leading-tight font-sans ${
-                  inverted ? 'text-white' : 'text-[#192B4A]'
+                  inverted ? 'text-white' : 'text-[#283442]'
                 }`}
               >
                 LOST &amp; FOUND
               </span>
-              <span className="text-[10px] font-extrabold tracking-widest text-[#20B5AD] uppercase leading-tight">
+              <span className="text-[10px] font-extrabold tracking-widest text-[#F58220] uppercase leading-tight">
                 MANAGEMENT SYSTEM
               </span>
             </div>
@@ -74,12 +74,12 @@ export const LPULogo: React.FC<LPULogoProps> = ({
             <div className="flex flex-col text-left justify-center">
               <span
                 className={`text-xs sm:text-sm font-extrabold tracking-tight ${
-                  inverted ? 'text-white' : 'text-[#192B4A]'
+                  inverted ? 'text-white' : 'text-[#283442]'
                 }`}
               >
                 {titleText || 'LOST & FOUND'}
               </span>
-              <span className="text-[10px] sm:text-xs text-[#20B5AD] font-bold leading-tight">
+              <span className="text-[10px] sm:text-xs text-[#F58220] font-bold leading-tight">
                 {subtitleText || 'Campus Property Recovery Portal'}
               </span>
             </div>
@@ -87,12 +87,12 @@ export const LPULogo: React.FC<LPULogoProps> = ({
             <div className="hidden sm:flex sm:flex-col text-left justify-center">
               <span
                 className={`text-xs font-bold tracking-tight ${
-                  inverted ? 'text-white' : 'text-[#192B4A]'
+                  inverted ? 'text-white' : 'text-[#283442]'
                 }`}
               >
                 {titleText || 'LOST & FOUND'}
               </span>
-              <span className="text-[10px] text-[#20B5AD] font-semibold leading-tight">
+              <span className="text-[10px] text-[#F58220] font-semibold leading-tight">
                 {subtitleText || 'Property Recovery'}
               </span>
             </div>

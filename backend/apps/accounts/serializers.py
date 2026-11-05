@@ -7,7 +7,7 @@ Accounts Serializers
 
 from django.conf import settings
 from rest_framework import serializers
-from .models import User, UserRole
+from .models import User, UserRole, UserType
 
 class UserSerializer(serializers.ModelSerializer):
     """Public safe representation of a university user."""
@@ -89,6 +89,57 @@ class RegisterSerializer(serializers.Serializer):
             department=validated_data.get('department', ''),
             phone=validated_data.get('phone', ''),
             role=UserRole.STUDENT_STAFF,
+        )
+
+class CreateAdminUserSerializer(serializers.Serializer):
+    """Create an active campus account from the authorized user-management screen."""
+    fullName = serializers.CharField(max_length=150)
+    registrationNumber = serializers.CharField(max_length=30)
+    email = serializers.EmailField()
+    userType = serializers.ChoiceField(choices=[
+        (UserType.STUDENT, UserType.STUDENT.label),
+        (UserType.STAFF, UserType.STAFF.label),
+        (UserType.SECURITY_OFFICER, UserType.SECURITY_OFFICER.label),
+    ])
+    password = serializers.CharField(write_only=True, min_length=8, trim_whitespace=False)
+    department = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
+    securityPost = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    isActive = serializers.BooleanField(required=False, default=True)
+
+    def validate_fullName(self, value):
+        return value.strip()
+
+    def validate_registrationNumber(self, value):
+        normalized = value.strip().upper()
+        if User.objects.filter(registration_number__iexact=normalized).exists():
+            raise serializers.ValidationError('An account with this registration number already exists.')
+        return normalized
+
+    def validate_email(self, value):
+        normalized = str(value).strip().lower()
+        if normalized.rsplit('@', 1)[-1] != 'lpu.in':
+            raise serializers.ValidationError('Accounts must use an official @lpu.in email address.')
+        if User.objects.filter(email__iexact=normalized).exists():
+            raise serializers.ValidationError('An account with this email address already exists.')
+        return normalized
+
+    def create(self, validated_data):
+        user_type = validated_data.pop('userType')
+        is_active = validated_data.pop('isActive', True)
+        security_post = validated_data.pop('securityPost', '')
+        role = UserRole.SECURITY_PERSONNEL if user_type == UserType.SECURITY_OFFICER else UserRole.STUDENT_STAFF
+        return User.objects.create_user(
+            email=validated_data['email'],
+            registration_number=validated_data['registrationNumber'],
+            full_name=validated_data['fullName'],
+            password=validated_data['password'],
+            role=role,
+            user_type=user_type,
+            is_active=is_active,
+            department=validated_data.get('department', '').strip(),
+            security_post=security_post.strip(),
+            phone=validated_data.get('phone', '').strip(),
         )
 
 # Canonical alias mappings between UI quick-fill identifiers and historical seeder identifiers

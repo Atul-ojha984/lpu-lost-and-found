@@ -5,18 +5,20 @@ Handovers App Views
 ==============================================================================
 """
 
-from datetime import datetime, timezone
+import logging
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from apps.accounts.permissions import IsSecurityOrAdmin
+from apps.accounts.permissions import IsSecurityOrAdmin, IsStudentOrStaff
 from apps.audit.models import AuditEntry, AuditAction
 from apps.custody.models import CustodyRecord, CustodyAction
-from apps.items.models import ItemStatus
+from apps.items.models import Item, ItemStatus
 from apps.claims.models import Claim, ClaimStatus
 from .models import Handover
 from .serializers import (
@@ -24,6 +26,54 @@ from .serializers import (
     HandoverReceiptSerializer,
     PendingHandoverItemSerializer,
 )
+from apps.items.serializers import PublicItemSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class MyRecoveryHistoryAPIView(APIView):
+    """Return only the authenticated student's/staff member's completed handovers."""
+    permission_classes = [IsAuthenticated, IsStudentOrStaff]
+
+    @extend_schema(tags=['Custody'], summary='Get My Completed Recoveries')
+    def get(self, request):
+        handovers = Handover.objects.filter(
+            recipient=request.user,
+            claim__claimant=request.user,
+            claim__claim_status=ClaimStatus.COMPLETED,
+            is_completed=True,
+        ).select_related(
+            'item__category', 'item__location', 'claim', 'recipient', 'supervising_officer'
+        ).order_by('-completed_at', '-created_at')
+
+        return Response([
+            {
+                'id': str(handover.id),
+                'handoverId': str(handover.id),
+                'handoverReference': f"HND-{str(handover.id).split('-')[0].upper()}",
+                'claimId': str(handover.claim_id),
+                'claimReference': f"CLM-{str(handover.claim_id)[:8].upper()}",
+                'claimStatement': handover.claim.statement,
+                'claimSubmittedAt': handover.claim.created_at,
+                'itemId': str(handover.item_id),
+                'itemTitle': handover.item.title,
+                'itemReference': handover.item.reference_number,
+                'itemType': handover.item.item_type,
+                'category': handover.item.category.name,
+                'publicDescription': handover.item.public_description,
+                'primaryImageUrl': handover.item.primary_image_url,
+                'item': PublicItemSerializer(handover.item, context={'request': request}).data,
+                'recoveryDate': handover.completed_at,
+                'custodyDesk': handover.physical_desk_location,
+                'handoverOfficer': handover.supervising_officer.full_name,
+                'handoverOfficerRegistrationNumber': handover.supervising_officer.registration_number,
+                'idCardPresentedType': handover.id_card_presented_type,
+                'idCardNumberMasked': handover.id_card_number_masked,
+                'acknowledgementNotes': handover.acknowledgement_notes,
+                'status': ClaimStatus.COMPLETED,
+            }
+            for handover in handovers
+        ], status=status.HTTP_200_OK)
 
 def mask_id_number(raw_id: str) -> str:
     """Masks ID number for safe display and logging."""
@@ -49,7 +99,11 @@ class PendingHandoversAPIView(APIView):
         responses={200: PendingHandoverItemSerializer(many=True)},
     )
     def get(self, request):
-        queryset = Handover.objects.filter(is_completed=False).select_related(
+        queryset = Handover.objects.filter(
+            is_completed=False,
+            claim__claim_status=ClaimStatus.APPROVED,
+            item__status=ItemStatus.READY_FOR_HANDOVER,
+        ).select_related(
             'item__category', 'item__location', 'claim', 'recipient', 'supervising_officer'
         ).order_by('-created_at')
 
@@ -80,9 +134,18 @@ class VerifyOtpHandoverAPIView(APIView):
         serializer = VerifyOtpInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
+        claim_id = vd['claimId']
+        verification_requested_at = timezone.now()
+
+        logger.info(
+            'handover_otp_verification_requested claim_id=%s officer_id=%s requested_at=%s',
+            claim_id,
+            request.user.pk,
+            verification_requested_at.isoformat(),
+        )
 
         try:
-            claim = Claim.objects.select_related('item', 'claimant').get(pk=vd['claimId'])
+            item_id = Claim.objects.values_list('item_id', flat=True).get(pk=claim_id)
         except Claim.DoesNotExist:
             return Response(
                 {
@@ -93,111 +156,190 @@ class VerifyOtpHandoverAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if claim.claim_status == ClaimStatus.COMPLETED:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_400_BAD_REQUEST,
-                    'error': {'code': 'DUPLICATE_HANDOVER', 'message': 'Duplicate Handover Guard: This claim has already completed handover.'},
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if claim.claim_status != ClaimStatus.APPROVED:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_400_BAD_REQUEST,
-                    'error': {'code': 'INVALID_STATUS', 'message': f"Cannot execute handover: Claim is in status '{claim.claim_status}'. Only APPROVED claims can be handed over."},
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        item = claim.item
-        if item.status == ItemStatus.HANDED_OVER:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_409_CONFLICT,
-                    'error': {'code': 'CONFLICT', 'message': 'Duplicate Handover Guard: This property has already been handed over.'},
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        handover = Handover.objects.filter(claim=claim).first()
-        if not handover:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_404_NOT_FOUND,
-                    'error': {'code': 'NOT_FOUND', 'message': 'No handover tracking record found for this claim.'},
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if handover.is_completed:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_400_BAD_REQUEST,
-                    'error': {'code': 'DUPLICATE_HANDOVER', 'message': 'Duplicate Handover Guard: Handover record is already marked as completed.'},
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # OTP Expiry check
-        if handover.otp_expires_at and handover.otp_expires_at < datetime.now(timezone.utc):
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_400_BAD_REQUEST,
-                    'error': {'code': 'OTP_EXPIRED', 'message': 'Handover OTP has expired. Security supervisor must re-issue OTP.'},
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # OTP Attempt limits
-        if handover.otp_attempts_count >= 5:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_400_BAD_REQUEST,
-                    'error': {'code': 'SECURITY_LOCKOUT', 'message': 'Maximum OTP attempts (5) exceeded. Handover locked for security.'},
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        is_otp_valid = handover.verify_otp(vd['otp'])
-        if not is_otp_valid:
-            handover.otp_attempts_count += 1
-            handover.save(update_fields=['otp_attempts_count'])
-
-            AuditEntry.objects.create(
-                actor=request.user,
-                actor_role=request.user.role,
-                action='HANDOVER_OTP_FAILED',
-                target_entity='Handover',
-                target_id=str(handover.id),
-                ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                metadata={'claimId': str(claim.id), 'itemId': str(item.id), 'attemptNumber': handover.otp_attempts_count},
-            )
-
-            remaining = max(0, 5 - handover.otp_attempts_count)
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_400_BAD_REQUEST,
-                    'error': {'code': 'INVALID_OTP', 'message': f'Invalid Handover OTP. {remaining} attempt(s) remaining before lockout.'},
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        masked_id = mask_id_number(vd['idCardNumber'])
-        completion_time = datetime.now(timezone.utc)
-
         with transaction.atomic():
-            # Update Item
+            # Use the same lock order as claim approval (item, claim, handover)
+            # so verification cannot race an approval or a second redemption.
+            try:
+                item = Item.objects.select_for_update().get(pk=item_id)
+                claim = Claim.objects.select_for_update().select_related('claimant').get(
+                    pk=claim_id,
+                    item_id=item.pk,
+                )
+                handover = Handover.objects.select_for_update().get(claim=claim)
+            except Item.DoesNotExist:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_404_NOT_FOUND,
+                        'error': {'code': 'NOT_FOUND', 'message': 'Claim not found.'},
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except Claim.DoesNotExist:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_404_NOT_FOUND,
+                        'error': {'code': 'NOT_FOUND', 'message': 'Claim not found.'},
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except Handover.DoesNotExist:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_404_NOT_FOUND,
+                        'error': {'code': 'NOT_FOUND', 'message': 'No handover tracking record found for this claim.'},
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if claim.claim_status == ClaimStatus.COMPLETED or handover.is_completed:
+                logger.warning(
+                    'handover_otp_verification_result result=already_used claim_id=%s handover_id=%s officer_id=%s verified_at=%s',
+                    claim.pk,
+                    handover.pk,
+                    request.user.pk,
+                    timezone.now().isoformat(),
+                )
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_400_BAD_REQUEST,
+                        'error': {'code': 'DUPLICATE_HANDOVER', 'message': 'OTP Already Used. Duplicate Handover Guard: This claim has already completed handover.'},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if claim.claim_status != ClaimStatus.APPROVED:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_400_BAD_REQUEST,
+                        'error': {'code': 'INVALID_STATUS', 'message': f"Cannot execute handover: Claim is in status '{claim.claim_status}'. Only APPROVED claims can be handed over."},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if item.status == ItemStatus.HANDED_OVER:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {'code': 'CONFLICT', 'message': 'Duplicate Handover Guard: This property has already been handed over.'},
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if handover.item_id != item.pk or handover.recipient_id != claim.claimant_id:
+                logger.error(
+                    'handover_otp_relationship_mismatch claim_id=%s handover_id=%s claim_item_id=%s handover_item_id=%s claimant_id=%s recipient_id=%s',
+                    claim.pk,
+                    handover.pk,
+                    item.pk,
+                    handover.item_id,
+                    claim.claimant_id,
+                    handover.recipient_id,
+                )
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {'code': 'HANDOVER_RELATIONSHIP_MISMATCH', 'message': 'Handover record does not match this approved claim and cannot be verified.'},
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            verified_at = timezone.now()
+            if handover.otp_expires_at <= verified_at:
+                logger.warning(
+                    'handover_otp_expiration_validation result=expired claim_id=%s handover_id=%s officer_id=%s verified_at=%s otp_expires_at=%s',
+                    claim.pk,
+                    handover.pk,
+                    request.user.pk,
+                    verified_at.isoformat(),
+                    handover.otp_expires_at.isoformat(),
+                )
+                logger.warning(
+                    'handover_otp_verification_result result=expired claim_id=%s handover_id=%s officer_id=%s verified_at=%s',
+                    claim.pk,
+                    handover.pk,
+                    request.user.pk,
+                    verified_at.isoformat(),
+                )
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_400_BAD_REQUEST,
+                        'error': {'code': 'OTP_EXPIRED', 'message': 'Handover OTP has expired. Security supervisor must re-issue OTP.'},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            logger.info(
+                'handover_otp_expiration_validation result=valid claim_id=%s handover_id=%s verified_at=%s otp_expires_at=%s',
+                claim.pk,
+                handover.pk,
+                verified_at.isoformat(),
+                handover.otp_expires_at.isoformat(),
+            )
+
+            if handover.otp_attempts_count >= 5:
+                logger.warning(
+                    'handover_otp_verification_result result=locked claim_id=%s handover_id=%s officer_id=%s verified_at=%s',
+                    claim.pk,
+                    handover.pk,
+                    request.user.pk,
+                    verified_at.isoformat(),
+                )
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_400_BAD_REQUEST,
+                        'error': {'code': 'SECURITY_LOCKOUT', 'message': 'Maximum OTP attempts (5) exceeded. Handover locked for security.'},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            is_otp_valid = handover.verify_otp(vd['otp'])
+            if not is_otp_valid:
+                handover.otp_attempts_count += 1
+                handover.save(update_fields=['otp_attempts_count', 'updated_at'])
+
+                AuditEntry.objects.create(
+                    actor=request.user,
+                    actor_role=request.user.role,
+                    action='HANDOVER_OTP_FAILED',
+                    target_entity='Handover',
+                    target_id=str(handover.id),
+                    ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={'claimId': str(claim.id), 'itemId': str(item.id), 'attemptNumber': handover.otp_attempts_count},
+                )
+
+                remaining = max(0, 5 - handover.otp_attempts_count)
+                logger.warning(
+                    'handover_otp_verification_result result=invalid claim_id=%s handover_id=%s officer_id=%s attempt=%s verified_at=%s',
+                    claim.pk,
+                    handover.pk,
+                    request.user.pk,
+                    handover.otp_attempts_count,
+                    verified_at.isoformat(),
+                )
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_400_BAD_REQUEST,
+                        'error': {'code': 'INVALID_OTP', 'message': f'Invalid Handover OTP. {remaining} attempt(s) remaining before lockout.'},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            masked_id = mask_id_number(vd['idCardNumber'])
+            completion_time = verified_at
+            previous_custody_desk = item.current_custody_desk or vd['physicalDeskLocation'].strip()
+
+            # All successful redemption writes are covered by this transaction.
             item.status = ItemStatus.HANDED_OVER
             item.current_custody_desk = f"Handed over to {claim.claimant.full_name}"
             item.save()
@@ -222,7 +364,7 @@ class VerifyOtpHandoverAPIView(APIView):
             CustodyRecord.objects.create(
                 item=item,
                 action=CustodyAction.HANDED_OVER,
-                from_location=item.current_custody_desk or vd['physicalDeskLocation'],
+                from_location=previous_custody_desk,
                 to_location='CLAIMANT_HANDOVER_COMPLETE',
                 evidence_reference=vd.get('proofEvidenceUrl', '').strip(),
                 handled_by=request.user,
@@ -248,6 +390,14 @@ class VerifyOtpHandoverAPIView(APIView):
                     'idCardNumberMasked': masked_id,
                 },
             )
+
+        logger.info(
+            'handover_otp_verification_result result=accepted claim_id=%s handover_id=%s officer_id=%s verified_at=%s',
+            claim.pk,
+            handover.pk,
+            request.user.pk,
+            completion_time.isoformat(),
+        )
 
         receipt = {
             'handoverId': str(handover.id),

@@ -93,8 +93,12 @@ function MyClaimsContent() {
     }
 
     loadClaims();
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadClaims();
+    }, 20000);
     return () => {
       isSubscribed = false;
+      window.clearInterval(refreshInterval);
     };
   }, [refreshKey]);
 
@@ -226,6 +230,7 @@ function MyClaimsContent() {
               const isUnderReview = claim.claimStatus === 'UNDER_REVIEW';
               const isChallengeRequired = claim.claimStatus === 'CHALLENGE_REQUIRED';
               const isRejected = claim.claimStatus === 'REJECTED';
+              const isCompleted = claim.claimStatus === 'COMPLETED';
 
               return (
                 <div
@@ -432,7 +437,7 @@ function MyClaimsContent() {
                           </p>
                         </div>
 
-                        {!isRejected && (
+                        {!isRejected && !isCompleted && (
                           <div>
                             <label
                               htmlFor={`evidence-upload-${claim.id}`}
@@ -461,6 +466,11 @@ function MyClaimsContent() {
                               onChange={(e) => handleFileUpload(claim.id, e)}
                             />
                           </div>
+                        )}
+                        {isCompleted && (
+                          <p className="text-[11px] text-slate-500">
+                            Evidence submission is closed because this item has already been successfully recovered.
+                          </p>
                         )}
                       </div>
 

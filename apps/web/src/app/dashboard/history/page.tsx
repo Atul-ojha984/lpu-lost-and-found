@@ -1,7 +1,8 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element -- Recovered item images may use existing external storage URLs. */
+
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { 
   Clock, 
   CheckCircle2, 
@@ -16,13 +17,25 @@ import { apiClient } from '@/lib/api-client';
 
 interface RecoveryEvent {
   id: string;
+  handoverId: string;
+  claimId: string;
+  claimReference: string;
+  claimStatement: string;
+  claimSubmittedAt: string;
+  itemId: string;
   referenceNumber: string;
   itemTitle: string;
   category: string;
+  publicDescription: string;
+  primaryImageUrl: string;
   recoveryDate: string;
   custodyDesk: string;
   status: string;
   handoverOfficer: string;
+  handoverOfficerRegistrationNumber: string;
+  idCardPresentedType: string;
+  idCardNumberMasked: string;
+  acknowledgementNotes: string;
   receiptNumber: string;
 }
 
@@ -32,35 +45,50 @@ export default function StudentRecoveryHistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isSubscribed = true;
     async function loadHistory() {
       try {
-        const claims = await apiClient.getMyClaims();
-        if (Array.isArray(claims) && claims.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const recovered = claims.filter((c: any) => c.claimStatus === 'APPROVED' || c.claimStatus === 'RESOLVED');
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setHistoryItems(recovered.map((c: any, idx: number) => ({
-            id: c.id || `rec-${idx}`,
-            referenceNumber: c.item?.referenceNumber || `LPU-REC-2026-00${idx + 1}`,
-            itemTitle: c.item?.title || 'Recovered Belonging',
-            category: c.item?.category || 'ELECTRONICS',
-            recoveryDate: c.reviewedAt || '2026-10-18T14:30:00Z',
-            custodyDesk: 'Block 38 Security Post',
-            status: 'HANDED_OVER',
-            handoverOfficer: 'Officer Rajesh Verma (LPU-SEC-001)',
-            receiptNumber: `RCPT-${Math.floor(100000 + Math.random() * 900000)}`,
-          })));
-        } else {
-          setHistoryItems([]);
-        }
+        const recoveries = await apiClient.getMyRecoveryHistory();
+        if (!isSubscribed) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setHistoryItems((Array.isArray(recoveries) ? recoveries : []).map((record: any) => ({
+          id: record.handoverId,
+          handoverId: record.handoverId,
+          claimId: record.claimId,
+          claimReference: record.claimReference,
+          claimStatement: record.claimStatement,
+          claimSubmittedAt: record.claimSubmittedAt,
+          itemId: record.itemId,
+          referenceNumber: record.itemReference,
+          itemTitle: record.itemTitle,
+          category: record.category,
+          publicDescription: record.publicDescription,
+          primaryImageUrl: record.primaryImageUrl,
+          recoveryDate: record.recoveryDate,
+          custodyDesk: record.custodyDesk,
+          status: record.status,
+          handoverOfficer: record.handoverOfficer,
+          handoverOfficerRegistrationNumber: record.handoverOfficerRegistrationNumber,
+          idCardPresentedType: record.idCardPresentedType,
+          idCardNumberMasked: record.idCardNumberMasked,
+          acknowledgementNotes: record.acknowledgementNotes,
+          receiptNumber: record.handoverReference,
+        })));
       } catch {
-        setHistoryItems([]);
+        if (isSubscribed) setHistoryItems([]);
       } finally {
-        setLoading(false);
+        if (isSubscribed) setLoading(false);
       }
     }
 
     loadHistory();
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadHistory();
+    }, 20000);
+    return () => {
+      isSubscribed = false;
+      window.clearInterval(refreshInterval);
+    };
   }, []);
 
   const filteredItems = historyItems.filter((i) => 
@@ -68,6 +96,17 @@ export default function StudentRecoveryHistoryPage() {
     i.referenceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     i.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const recoveryDurations = historyItems
+    .map((item) => new Date(item.recoveryDate).getTime() - new Date(item.claimSubmittedAt).getTime())
+    .filter((duration) => Number.isFinite(duration) && duration >= 0);
+  const averageRecoveryHours = recoveryDurations.length
+    ? recoveryDurations.reduce((total, duration) => total + duration, 0) / recoveryDurations.length / (1000 * 60 * 60)
+    : null;
+  const averageRecoveryLabel = averageRecoveryHours === null
+    ? '—'
+    : averageRecoveryHours >= 24
+      ? `${(averageRecoveryHours / 24).toFixed(1)}d`
+      : `${averageRecoveryHours.toFixed(1)}h`;
 
   return (
     <DashboardLayout
@@ -86,7 +125,7 @@ export default function StudentRecoveryHistoryPage() {
               <CheckCircle2 className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">{historyItems.length}</p>
+          <p className="mt-2 text-2xl font-black text-[#283442]">{historyItems.length}</p>
           <span className="text-[11px] text-emerald-700 font-semibold">100% verified release</span>
         </div>
 
@@ -95,11 +134,11 @@ export default function StudentRecoveryHistoryPage() {
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               OTP Verified Handovers
             </span>
-            <div className="h-8 w-8 rounded-xl bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+            <div className="h-8 w-8 rounded-xl bg-[#FFF1E6] text-[#F58220] flex items-center justify-center">
               <ShieldCheck className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">{historyItems.length}</p>
+          <p className="mt-2 text-2xl font-black text-[#283442]">{historyItems.length}</p>
           <span className="text-[11px] text-slate-500">Cryptographic audit trail</span>
         </div>
 
@@ -112,8 +151,8 @@ export default function StudentRecoveryHistoryPage() {
               <Clock className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">4.2h</p>
-          <span className="text-[11px] text-slate-500">From match to physical release</span>
+          <p className="mt-2 text-2xl font-black text-[#283442]">{averageRecoveryLabel}</p>
+          <span className="text-[11px] text-slate-500">From claim submission to handover</span>
         </div>
       </div>
 
@@ -126,7 +165,7 @@ export default function StudentRecoveryHistoryPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search recovery history by item title, reference number, or receipt..."
-            className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] placeholder-slate-400 focus:border-[#20B5AD] focus:bg-white focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] placeholder-slate-400 focus:border-[#F58220] focus:bg-white focus:outline-none"
           />
         </div>
       </div>
@@ -135,10 +174,10 @@ export default function StudentRecoveryHistoryPage() {
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-[#192B4A]">Verified Recovery Receipts</h3>
+            <h3 className="text-sm font-bold text-[#283442]">Verified Recovery Receipts</h3>
             <p className="text-xs text-slate-500">Official proof-of-handover records issued by campus security.</p>
           </div>
-          <span className="text-xs font-bold text-[#20B5AD] bg-[#E6F8F7] px-2.5 py-1 rounded-lg">
+          <span className="text-xs font-bold text-[#F58220] bg-[#FFF1E6] px-2.5 py-1 rounded-lg">
             {filteredItems.length} Records
           </span>
         </div>
@@ -154,7 +193,7 @@ export default function StudentRecoveryHistoryPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {filteredItems.map((item) => (
-              <div key={item.id} className="p-4 sm:p-5 hover:bg-[#F5F8FC] transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div key={item.id} className="p-4 sm:p-5 hover:bg-[#F5F5F5] transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] font-bold text-[#356DE8] bg-[#EBF1FD] px-2 py-0.5 rounded">
@@ -165,11 +204,11 @@ export default function StudentRecoveryHistoryPage() {
                       Handover Complete
                     </span>
                     <span className="font-mono text-[10px] text-slate-400">
-                      Receipt: {item.receiptNumber}
+                      Handover: {item.receiptNumber}
                     </span>
                   </div>
 
-                  <h4 className="text-sm font-bold text-[#192B4A]">
+                  <h4 className="text-sm font-bold text-[#283442]">
                     {item.itemTitle}
                   </h4>
 
@@ -180,10 +219,12 @@ export default function StudentRecoveryHistoryPage() {
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      {new Date(item.recoveryDate).toLocaleDateString('en-IN', {
+                      {new Date(item.recoveryDate).toLocaleString('en-IN', {
                         day: 'numeric',
                         month: 'short',
-                        year: 'numeric'
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
                       })}
                     </span>
                     <span className="text-slate-400">
@@ -192,20 +233,45 @@ export default function StudentRecoveryHistoryPage() {
                   </div>
                 </div>
 
-                <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0">
+                <div className="relative flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0">
                   <div className="text-right">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                       Verification Method
                     </span>
-                    <span className="text-xs font-bold text-[#192B4A]">Single-Use OTP</span>
+                    <span className="text-xs font-bold text-[#283442]">Single-Use OTP</span>
                   </div>
-                  <Link
-                    href={`/board`}
-                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#356DE8] hover:text-[#356DE8] transition-colors"
-                  >
-                    <span>View Archival</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
+                  <details className="text-left">
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#356DE8] hover:text-[#356DE8] transition-colors">
+                      <span>View Recovery Details</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </summary>
+                    <div className="mt-3 w-full max-w-lg rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-xs text-slate-600 sm:absolute sm:right-5 sm:z-10 sm:shadow-lg">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-800">Claim:</span>
+                        <span className="font-mono">{item.claimReference}</span>
+                        <span className="text-slate-400">({item.claimId})</span>
+                      </div>
+                      <p className="mt-2"><strong className="text-slate-700">Category:</strong> {item.category}</p>
+                      <p className="mt-1"><strong className="text-slate-700">Description:</strong> {item.publicDescription}</p>
+                      <p className="mt-1"><strong className="text-slate-700">Claim submitted:</strong> {new Date(item.claimSubmittedAt).toLocaleString('en-IN')}</p>
+                      <p className="mt-1"><strong className="text-slate-700">ID verified:</strong> {item.idCardPresentedType} ({item.idCardNumberMasked})</p>
+                      <p className="mt-1"><strong className="text-slate-700">Security officer:</strong> {item.handoverOfficer}{item.handoverOfficerRegistrationNumber ? ` (${item.handoverOfficerRegistrationNumber})` : ''}</p>
+                      <p className="mt-1"><strong className="text-slate-700">Final status:</strong> {item.status}</p>
+                      {item.acknowledgementNotes && (
+                        <p className="mt-1"><strong className="text-slate-700">Handover notes:</strong> {item.acknowledgementNotes}</p>
+                      )}
+                      {item.primaryImageUrl && (
+                        <img
+                          src={item.primaryImageUrl}
+                          alt={`${item.itemTitle} recovered item`}
+                          className="mt-3 max-h-40 rounded-lg border border-slate-200 object-contain"
+                        />
+                      )}
+                      <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-emerald-800">
+                        Evidence submission is closed because this item has already been successfully recovered.
+                      </p>
+                    </div>
+                  </details>
                 </div>
               </div>
             ))}

@@ -142,6 +142,13 @@ function SecurityClaimsContent() {
     fetchClaimsRegister();
   }, [fetchClaimsRegister]);
 
+  useEffect(() => {
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') fetchClaimsRegister();
+    }, 20000);
+    return () => window.clearInterval(refreshInterval);
+  }, [fetchClaimsRegister]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAppliedSearch(searchQuery.trim());
@@ -283,7 +290,7 @@ function SecurityClaimsContent() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by Claim ID (CLM-...), Item Ref, Title, Claimant Name or Reg No..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-9 pr-8 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#20B5AD] focus:bg-white focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-9 pr-8 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#F58220] focus:bg-white focus:outline-none"
             />
             {searchQuery && (
               <button
@@ -298,7 +305,7 @@ function SecurityClaimsContent() {
           <div className="flex gap-2">
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#192B4A] px-4 py-2 text-xs font-semibold text-white hover:bg-[#203a63] transition-colors shadow-2xs"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#283442] px-4 py-2 text-xs font-semibold text-white hover:bg-[#203a63] transition-colors shadow-2xs"
             >
               <Search className="h-3.5 w-3.5" />
               <span>Search</span>
@@ -327,7 +334,7 @@ function SecurityClaimsContent() {
                 onClick={() => setActiveFilter(tab.id)}
                 className={`shrink-0 rounded-lg px-3 py-1.5 font-medium transition-colors ${
                   isActive
-                    ? 'bg-[#192B4A] text-white shadow-2xs'
+                    ? 'bg-[#283442] text-white shadow-2xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                 }`}
               >
@@ -380,7 +387,7 @@ function SecurityClaimsContent() {
                   {/* Top Bar: References & Status */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-[#192B4A] bg-slate-100 px-2 py-0.5 rounded-md">
+                      <span className="font-mono text-xs font-bold text-[#283442] bg-slate-100 px-2 py-0.5 rounded-md">
                         {claimRef}
                       </span>
                       <span className="text-xs text-slate-400">•</span>
@@ -559,7 +566,7 @@ function SecurityClaimsContent() {
                           setDecisionModal({ isOpen: true, claim, action: 'APPROVE' });
                           setDecisionError(null);
                         }}
-                        className="rounded-lg bg-[#20B5AD] hover:bg-[#1ca19a] px-4 py-1.5 text-xs font-bold text-white transition-colors shadow-2xs"
+                        className="rounded-lg bg-[#F58220] hover:bg-[#1ca19a] px-4 py-1.5 text-xs font-bold text-white transition-colors shadow-2xs"
                       >
                         Approve &amp; Generate Handover OTP
                       </button>
@@ -693,7 +700,7 @@ function SecurityClaimsContent() {
               value={decisionNotes}
               onChange={(e) => setDecisionNotes(e.target.value)}
               placeholder={decisionModal.action === 'APPROVE' ? 'Review notes (optional)...' : 'Mandatory rejection reason...'}
-              className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 focus:border-[#20B5AD] focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900 focus:border-[#F58220] focus:outline-none"
               required={decisionModal.action === 'REJECT'}
             />
 
@@ -711,7 +718,7 @@ function SecurityClaimsContent() {
                 onClick={handleDecisionSubmit}
                 disabled={isSubmittingDecision || (decisionModal.action === 'REJECT' && !decisionNotes.trim())}
                 className={`rounded-lg px-4 py-2 text-xs font-bold text-white shadow-xs disabled:opacity-60 ${
-                  decisionModal.action === 'APPROVE' ? 'bg-[#20B5AD] hover:bg-[#1ca19a]' : 'bg-rose-700 hover:bg-rose-800'
+                  decisionModal.action === 'APPROVE' ? 'bg-[#F58220] hover:bg-[#1ca19a]' : 'bg-rose-700 hover:bg-rose-800'
                 }`}
               >
                 {isSubmittingDecision

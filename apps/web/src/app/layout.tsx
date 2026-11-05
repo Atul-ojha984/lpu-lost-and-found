@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   description:
     'Campus property recovery portal for Lovely Professional University. Report lost and found property, search listings across campus blocks, and verify custody handovers securely.',
   icons: {
-    icon: '/images/lost-and-found-logo.png',
-    apple: '/images/lost-and-found-logo.png',
+    icon: '/images/lost-and-found-logo.svg',
+    apple: '/images/lost-and-found-logo.svg',
   },
 };
 
@@ -17,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full bg-[#F5F8FC] font-sans text-[#17243B] antialiased flex flex-col selection:bg-[#20B5AD]/20 selection:text-[#192B4A]">
+    <html lang="en" className="h-full" data-scroll-behavior="smooth">
+      <body className="min-h-full bg-[#F5F5F5] font-sans text-[#17243B] antialiased flex flex-col selection:bg-[#F58220]/20 selection:text-[#283442]">
         {children}
       </body>
     </html>

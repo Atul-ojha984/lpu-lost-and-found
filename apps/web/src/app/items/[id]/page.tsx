@@ -202,7 +202,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F8FC]">
+    <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
       <Navbar />
 
       <main className="flex-1 py-8 sm:py-12">
@@ -211,13 +211,13 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
           <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-xs text-slate-500">
             <Link
               href="/board"
-              className="inline-flex items-center gap-1.5 font-medium hover:text-[#192B4A] transition-colors"
+              className="inline-flex items-center gap-1.5 font-medium hover:text-[#283442] transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Back to Campus Board</span>
             </Link>
             <span>/</span>
-            <span className="font-mono text-[#192B4A] font-semibold truncate">
+            <span className="font-mono text-[#283442] font-semibold truncate">
               {item ? item.referenceNumber : 'Item Details'}
             </span>
           </nav>
@@ -240,7 +240,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
               <button
                 type="button"
                 onClick={fetchItemData}
-                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
               >
                 Retry Loading
               </button>
@@ -279,7 +279,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                     <span
                       className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-bold tracking-wider uppercase ${
                         item.itemType === 'FOUND'
-                          ? 'bg-[#E6F8F7] text-[#16A89F] border border-[#20B5AD]/30'
+                          ? 'bg-[#FFF1E6] text-[#E66F00] border border-[#F58220]/30'
                           : 'bg-[#EBF1FD] text-[#356DE8] border border-[#356DE8]/30'
                       }`}
                     >
@@ -374,8 +374,8 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                 </div>
 
                 {/* Privacy & Anti-Fraud Notice */}
-                <div className="rounded-2xl border border-[#20B5AD]/25 bg-[#E6F8F7] p-4 text-xs text-slate-700 flex items-start gap-2.5">
-                  <Lock className="h-4 w-4 text-[#20B5AD] shrink-0 mt-0.5" />
+                <div className="rounded-2xl border border-[#F58220]/25 bg-[#FFF1E6] p-4 text-xs text-slate-700 flex items-start gap-2.5">
+                  <Lock className="h-4 w-4 text-[#F58220] shrink-0 mt-0.5" />
                   <p className="text-[11px] leading-relaxed">
                     <strong>Zero-Leak Privacy Protocol:</strong> Private identifying details, serial numbers, and wallet contents have been encrypted into the campus vault and are strictly excluded from public display to prevent fraudulent claims.
                   </p>
@@ -392,7 +392,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                       <button
                         type="button"
                         onClick={handleClaimClick}
-                        className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                        className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-6 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
                       >
                         <ShieldCheck className="h-4 w-4" />
                         <span>File Ownership Claim</span>
@@ -411,10 +411,10 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setAuthRequiredPrompt(false)} />
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200 z-10 animate-fade-in text-center space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E6F8F7] text-[#20B5AD]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E6] text-[#F58220]">
               <Lock className="h-7 w-7" />
             </div>
-            <h3 className="text-base font-bold text-[#192B4A]">
+            <h3 className="text-base font-bold text-[#283442]">
               University Authentication Required
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
@@ -430,7 +430,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
               </button>
               <Link
                 href={`/login?redirect=${encodeURIComponent('/items/' + itemId + '?claim=true')}`}
-                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                className="rounded-xl lpu-btn-primary px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
               >
                 Log In to Claim
               </Link>
@@ -491,7 +491,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                 <div className="flex items-center justify-center gap-3 pt-2">
                   <Link
                     href="/dashboard/my-claims"
-                    className="inline-flex items-center gap-1.5 rounded-lg lpu-btn-primary px-4 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg lpu-btn-primary px-4 py-2 text-xs font-semibold shadow-xs hover:bg-[#E66F00] transition-colors"
                   >
                     <span>View in My Claims</span>
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -651,7 +651,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
                   <button
                     type="submit"
                     disabled={isSubmittingClaim}
-                    className="rounded-lg lpu-btn-primary px-5 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
+                    className="rounded-lg lpu-btn-primary px-5 py-2 text-xs font-semibold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60"
                   >
                     {isSubmittingClaim ? 'Submitting...' : 'Submit Claim'}
                   </button>

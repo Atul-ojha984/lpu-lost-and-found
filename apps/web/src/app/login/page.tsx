@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -29,15 +29,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(() => {
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('session_expired') === '1') {
-        return 'Your session has expired. Please sign in again with your credentials.';
+        setError('Your session has expired. Please sign in again with your credentials.');
       }
     }
-    return null;
-  });
+  }, []);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,7 +132,7 @@ export default function LoginPage() {
 
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F8FC] selection:bg-[#20B5AD]/20 selection:text-[#192B4A]">
+    <div className="portal-login-page min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F5F5] selection:bg-[#F58220]/20 selection:text-[#283442]">
       {/* =========================================================================
           LEFT BRANDING PANEL
           - Deep Navy to Royal Blue visual treatment
@@ -139,9 +140,9 @@ export default function LoginPage() {
           - Lost & Found heading & property recovery service overview
           - Clean glassmorphism feature cards in teal & royal blue accents
           ========================================================================= */}
-      <div className="relative hidden lg:flex lg:col-span-5 xl:col-span-6 flex-col justify-between p-10 xl:p-14 bg-gradient-to-br from-[#192B4A] via-[#1E355B] to-[#22395D] text-white border-r border-[#192B4A]/50 overflow-hidden">
+      <div className="portal-login-brand relative hidden lg:flex lg:col-span-5 xl:col-span-6 flex-col justify-between p-10 xl:p-14 bg-gradient-to-br from-[#283442] via-[#1E355B] to-[#3A4B5E] text-white border-r border-[#283442]/50 overflow-hidden">
         {/* Subtle decorative teal and royal blue ambient glow shapes */}
-        <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[#20B5AD]/15 blur-3xl" />
+        <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[#F58220]/15 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -right-32 w-[32rem] h-[32rem] rounded-full bg-[#356DE8]/15 blur-3xl" />
         <svg
           className="pointer-events-none absolute inset-0 w-full h-full opacity-[0.05]"
@@ -149,11 +150,11 @@ export default function LoginPage() {
           viewBox="0 0 800 800"
           fill="none"
         >
-          <circle cx="700" cy="150" r="280" stroke="#20B5AD" strokeWidth="2.5" strokeDasharray="8 8" />
+          <circle cx="700" cy="150" r="280" stroke="#F58220" strokeWidth="2.5" strokeDasharray="8 8" />
           <circle cx="700" cy="150" r="380" stroke="#356DE8" strokeWidth="1.5" />
           <path
             d="M-100 650 Q 200 500 500 700 T 900 600"
-            stroke="#20B5AD"
+            stroke="#F58220"
             strokeWidth="3"
             strokeLinecap="round"
           />
@@ -168,11 +169,11 @@ export default function LoginPage() {
         {/* Top: Uploaded Logo & Headline */}
         <div className="relative z-10">
           <Link href="/" className="inline-block focus:outline-none mb-8">
-            <LPULogo size="lg" inverted={true} showSubtitle={false} />
+            <LPULogo size="lg" inverted={false} showSubtitle={false} />
           </Link>
 
           <div className="mt-4 space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#20B5AD]/15 border border-[#20B5AD]/30 text-[#20B5AD] text-xs font-semibold tracking-wide uppercase">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F58220]/15 border border-[#F58220]/30 text-[#F58220] text-xs font-semibold tracking-wide uppercase">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Campus Property Recovery System</span>
             </div>
@@ -189,12 +190,12 @@ export default function LoginPage() {
         <div className="relative z-10 my-8 py-2">
           <div className="grid grid-cols-2 gap-4 max-w-md">
             {/* Feature Card 1 */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#20B5AD]/40">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#F58220]/40">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl bg-[#20B5AD]/20 text-[#20B5AD] flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-[#F58220]/20 text-[#F58220] flex items-center justify-center">
                   <CreditCard className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#20B5AD] bg-[#20B5AD]/15 px-2 py-0.5 rounded-full border border-[#20B5AD]/30">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#F58220] bg-[#F58220]/15 px-2 py-0.5 rounded-full border border-[#F58220]/30">
                   Secured
                 </span>
               </div>
@@ -217,7 +218,7 @@ export default function LoginPage() {
             </div>
 
             {/* Feature Card 3 */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#20B5AD]/40">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#F58220]/40">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center">
                   <Briefcase className="w-5 h-5" />
@@ -233,10 +234,10 @@ export default function LoginPage() {
             {/* Feature Card 4 */}
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 transition-all hover:bg-white/10 hover:border-[#356DE8]/40">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl bg-[#20B5AD]/20 text-[#20B5AD] flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-[#F58220]/20 text-[#F58220] flex items-center justify-center">
                   <Key className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-semibold text-[#20B5AD] bg-[#20B5AD]/15 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-semibold text-[#F58220] bg-[#F58220]/15 px-2 py-0.5 rounded-full">
                   Drop Points
                 </span>
               </div>
@@ -255,22 +256,22 @@ export default function LoginPage() {
 
       {/* =========================================================================
           RIGHT AUTHENTICATION PANEL
-          - Light background (#F5F8FC)
+          - Light background (#F5F5F5)
           - Centered white login card with rounded corners and soft shadow
           - Input fields with teal focus ring
-          - Primary teal login button (#20B5AD)
+          - Primary teal login button (#F58220)
           ========================================================================= */}
-      <div className="col-span-1 lg:col-span-7 xl:col-span-6 bg-[#F5F8FC] flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative min-h-screen">
+      <div className="portal-login-form-panel col-span-1 lg:col-span-7 xl:col-span-6 bg-[#F5F5F5] flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative min-h-screen">
         {/* Mobile Header Branding for small screens */}
         <div className="lg:hidden w-full max-w-md text-center mb-6">
           <Link href="/" className="inline-block focus:outline-none mb-3">
             <LPULogo size="md" showSubtitle={false} />
           </Link>
           <div className="flex flex-col items-center">
-            <span className="text-sm font-extrabold tracking-wider text-[#192B4A] uppercase">
+            <span className="text-sm font-extrabold tracking-wider text-[#283442] uppercase">
               LOST &amp; FOUND
             </span>
-            <span className="text-xs font-bold tracking-widest text-[#20B5AD] uppercase">
+            <span className="text-xs font-bold tracking-widest text-[#F58220] uppercase">
               MANAGEMENT SYSTEM
             </span>
           </div>
@@ -283,19 +284,19 @@ export default function LoginPage() {
           </div>
           <div className="h-10 w-[2px] bg-[#E2E8F0]" />
           <div className="flex flex-col text-left">
-            <span className="text-sm font-black tracking-wider text-[#192B4A] uppercase leading-tight font-sans">
+            <span className="text-sm font-black tracking-wider text-[#283442] uppercase leading-tight font-sans">
               LOST &amp; FOUND
             </span>
-            <span className="text-xs font-extrabold tracking-widest text-[#20B5AD] uppercase leading-tight">
+            <span className="text-xs font-extrabold tracking-widest text-[#F58220] uppercase leading-tight">
               MANAGEMENT SYSTEM
             </span>
           </div>
         </div>
 
         {/* Main White Login Card */}
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_10px_30px_rgba(25,43,74,0.06)] border border-[#E2E8F0] p-7 sm:p-9 relative z-10">
+        <div className="portal-login-card w-full max-w-md bg-white rounded-2xl shadow-[0_10px_30px_rgba(25,43,74,0.06)] border border-[#E2E8F0] p-7 sm:p-9 relative z-10">
           <div className="text-left mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#192B4A] tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-bold text-[#283442] tracking-tight">
               Welcome Back
             </h2>
             <p className="text-xs text-slate-500 mt-1">
@@ -317,7 +318,7 @@ export default function LoginPage() {
             <div>
               <label 
                 htmlFor="login-regno" 
-                className="block text-xs font-bold text-[#192B4A] uppercase tracking-wider mb-1.5"
+                className="block text-xs font-bold text-[#283442] uppercase tracking-wider mb-1.5"
               >
                 Registration Number
               </label>
@@ -343,7 +344,7 @@ export default function LoginPage() {
             <div>
               <label 
                 htmlFor="login-password" 
-                className="block text-xs font-bold text-[#192B4A] uppercase tracking-wider mb-1.5"
+                className="block text-xs font-bold text-[#283442] uppercase tracking-wider mb-1.5"
               >
                 Password
               </label>
@@ -365,7 +366,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-[#20B5AD] transition-colors focus:outline-none"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-[#F58220] transition-colors focus:outline-none"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -380,7 +381,7 @@ export default function LoginPage() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#20B5AD] focus:ring-[#20B5AD]"
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#F58220] focus:ring-[#F58220]"
                 />
                 <span className="font-medium text-[11px]">Remember terminal</span>
               </label>
@@ -398,7 +399,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-sm font-bold text-white lpu-btn-primary disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#20B5AD]"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-sm font-bold text-white lpu-btn-primary disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F58220]"
             >
               {isLoading ? (
                 <>
@@ -418,13 +419,7 @@ export default function LoginPage() {
           {/* Public Board & Registration Links */}
           <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-2 text-center text-xs text-slate-500">
             <div>
-              <span>First time using the recovery platform? </span>
-              <Link
-                href="/register"
-                className="font-bold text-[#20B5AD] hover:text-[#16A89F] hover:underline transition-colors"
-              >
-                Register student account
-              </Link>
+              <span>Need an account? Contact an authorized campus administrator.</span>
             </div>
             <div>
               <Link
@@ -458,11 +453,11 @@ export default function LoginPage() {
               <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF1E6] text-[#F58220] flex items-center justify-center">
                 <HelpCircle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-[#192B4A]">Account Password Recovery</h3>
+                <h3 className="text-base font-bold text-[#283442]">Account Password Recovery</h3>
                 <p className="text-xs text-slate-500">Lost &amp; Found Portal Access</p>
               </div>
             </div>
@@ -470,8 +465,8 @@ export default function LoginPage() {
               <p>
                 To maintain physical property security and prevent fraudulent claim submissions, account credential resets require physical verification.
               </p>
-              <div className="rounded-xl bg-[#F5F8FC] p-3 border border-slate-200 space-y-1.5">
-                <div className="font-semibold text-[#192B4A]">Verification Options:</div>
+              <div className="rounded-xl bg-[#F5F5F5] p-3 border border-slate-200 space-y-1.5">
+                <div className="font-semibold text-[#283442]">Verification Options:</div>
                 <ul className="list-disc list-inside space-y-1 text-slate-600">
                   <li>Visit the <strong>Gate 1 Main Security Desk</strong> with your physical Student/Staff ID.</li>
                   <li>Contact the Campus Recovery Desk: <code>lostandfound@lpu.co.in</code>.</li>

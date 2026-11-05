@@ -79,7 +79,7 @@ export default function AdminLocationsPage() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
             Active Intake Checkpoints
           </span>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : desks.length}
           </p>
           <span className="text-[11px] text-emerald-700 font-semibold">100% operational stations</span>
@@ -89,7 +89,7 @@ export default function AdminLocationsPage() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
             Locker Utilization
           </span>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : `${totalOccupied} / ${totalLockers}`}
           </p>
           <span className="text-[11px] text-[#356DE8] font-semibold">
@@ -101,7 +101,7 @@ export default function AdminLocationsPage() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
             Covered Campus Desks
           </span>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : `${desks.length} Posts`}
           </p>
           <span className="text-[11px] text-slate-500">600+ acre university campus</span>
@@ -117,7 +117,7 @@ export default function AdminLocationsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search custody desks by post name, campus zone, or building..."
-            className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
           />
         </div>
       </div>
@@ -139,7 +139,7 @@ export default function AdminLocationsPage() {
               <div key={desk.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#16A89F] bg-[#E6F8F7] px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#E66F00] bg-[#FFF1E6] px-2 py-0.5 rounded">
                       {desk.zone}
                     </span>
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
@@ -148,23 +148,23 @@ export default function AdminLocationsPage() {
                     </span>
                   </div>
 
-                  <h4 className="text-sm font-bold text-[#192B4A]">{desk.name}</h4>
+                  <h4 className="text-sm font-bold text-[#283442]">{desk.name}</h4>
                   <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     {desk.building}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[#F5F8FC] p-3 text-xs space-y-2 border border-slate-100">
+                <div className="rounded-xl bg-[#F5F5F5] p-3 text-xs space-y-2 border border-slate-100">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Secure Storage Lockers:</span>
-                    <span className="font-bold text-[#192B4A]">
+                    <span className="font-bold text-[#283442]">
                       {desk.lockersOccupied} of {desk.lockersTotal}
                     </span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#20B5AD] rounded-full transition-all"
+                      className="h-full bg-[#F58220] rounded-full transition-all"
                       style={{ width: `${occupancyRate}%` }}
                     />
                   </div>

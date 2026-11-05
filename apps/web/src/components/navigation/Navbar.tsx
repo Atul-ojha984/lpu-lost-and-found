@@ -76,9 +76,9 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#E2E8F0] bg-white/95 backdrop-blur-md shadow-2xs">
       {/* Top Banner Strip */}
-      <div className="bg-[#192B4A] border-b border-[#22395D] px-4 py-1.5 text-center text-[11px] text-white/90">
+      <div className="portal-notice-bar bg-[#283442] border-b border-[#3A4B5E] px-4 py-1.5 text-center text-[11px] text-white/90">
         <div className="mx-auto flex max-w-7xl items-center justify-center gap-2">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#20B5AD] shrink-0" />
+          <ShieldCheck className="h-3.5 w-3.5 text-[#F58220] shrink-0" />
           <span>
             <strong className="text-white">Campus Property Recovery Network:</strong> Official Lost &amp; Found management portal for Lovely Professional University.
           </span>
@@ -100,8 +100,8 @@ export const Navbar: React.FC = () => {
               href={link.href}
               className={`rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight transition-colors ${
                 isActive(link.href)
-                  ? 'bg-[#E6F8F7] text-[#0E706A] font-bold border border-[#20B5AD]/25'
-                  : 'text-slate-600 hover:bg-[#F5F8FC] hover:text-[#192B4A]'
+                  ? 'bg-[#FFF1E6] text-[#A34A00] font-bold border border-[#F58220]/25'
+                  : 'text-slate-600 hover:bg-[#F5F5F5] hover:text-[#283442]'
               }`}
             >
               {link.label}
@@ -113,7 +113,7 @@ export const Navbar: React.FC = () => {
         <div className="hidden sm:flex items-center gap-2.5">
           <Link
             href="/board"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F8FC] px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#20B5AD]/40 hover:text-[#192B4A] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F5F5] px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#F58220]/40 hover:text-[#283442] transition-colors"
           >
             <Search className="h-3.5 w-3.5 text-slate-500" />
             <span>Search Board</span>
@@ -137,9 +137,9 @@ export const Navbar: React.FC = () => {
                     ? '/admin'
                     : '/dashboard'
                 }
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#E6F8F7] border border-[#20B5AD]/30 px-2.5 py-1.5 text-xs font-bold text-[#0E706A]"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#FFF1E6] border border-[#F58220]/30 px-2.5 py-1.5 text-xs font-bold text-[#A34A00]"
               >
-                <UserIcon className="h-3.5 w-3.5 text-[#20B5AD]" />
+                <UserIcon className="h-3.5 w-3.5 text-[#F58220]" />
                 <span className="max-w-[120px] truncate">{currentUser.fullName || currentUser.email}</span>
               </Link>
               <button
@@ -154,9 +154,9 @@ export const Navbar: React.FC = () => {
           ) : (
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#192B4A]/20 bg-white px-3.5 py-2 text-xs font-bold text-[#192B4A] hover:bg-[#F5F8FC] hover:border-[#20B5AD] hover:text-[#20B5AD] transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#283442]/20 bg-white px-3.5 py-2 text-xs font-bold text-[#283442] hover:bg-[#F5F5F5] hover:border-[#F58220] hover:text-[#F58220] transition-colors"
             >
-              <LogIn className="h-3.5 w-3.5 text-[#20B5AD]" />
+              <LogIn className="h-3.5 w-3.5 text-[#F58220]" />
               <span>Login</span>
             </Link>
           )}
@@ -176,7 +176,7 @@ export const Navbar: React.FC = () => {
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle navigation menu"
-            className="rounded-xl p-2 text-slate-600 hover:bg-[#F5F8FC] focus:outline-none"
+            className="rounded-xl p-2 text-slate-600 hover:bg-[#F5F5F5] focus:outline-none"
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
@@ -194,8 +194,8 @@ export const Navbar: React.FC = () => {
                 onClick={() => setMobileMenuOpen(false)}
                 className={`rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
                   isActive(link.href)
-                    ? 'bg-[#E6F8F7] text-[#0E706A]'
-                    : 'text-slate-600 hover:bg-[#F5F8FC]'
+                    ? 'bg-[#FFF1E6] text-[#A34A00]'
+                    : 'text-slate-600 hover:bg-[#F5F5F5]'
                 }`}
               >
                 {link.label}

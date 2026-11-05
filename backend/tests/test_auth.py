@@ -7,7 +7,7 @@ Phase 1 Test Suite: Identity, Authentication & JWT Access Control
 
 import pytest
 from rest_framework.test import APIClient
-from apps.accounts.models import User, UserRole
+from apps.accounts.models import User, UserRole, UserType
 
 @pytest.mark.django_db
 class TestAuthenticationSuite:
@@ -16,8 +16,8 @@ class TestAuthenticationSuite:
     def setup_method(self):
         self.client = APIClient()
 
-    def test_student_registration_success(self):
-        """Valid registration creates account and returns JWT token and cookie."""
+    def test_public_student_registration_is_disabled(self):
+        """A public request cannot create an account or receive credentials."""
         payload = {
             'fullName': 'Aman Sharma',
             'registrationNumber': '12104501',
@@ -28,23 +28,10 @@ class TestAuthenticationSuite:
             'phone': '+91 98765 43210',
         }
         response = self.client.post('/api/v1/auth/register/', payload, format='json')
-        assert response.status_code == 201
-
-        body = response.json()
-        assert body['success'] is True
-        assert body['statusCode'] == 201
-        data = body['data']
-        assert 'token' in data
-        assert 'user' in data
-        user = data['user']
-        assert user['registrationNumber'] == '12104501'
-        assert user['email'] == 'aman.12104501@lpu.in'
-        assert user['fullName'] == 'Aman Sharma'
-        assert user['role'] == UserRole.STUDENT_STAFF
-        assert 'password' not in user
-
-        # Cookie assertion
-        assert 'lpu_session_token' in response.cookies
+        assert response.status_code == 403
+        assert response.json()['error']['code'] == 'ADMIN_CREATION_REQUIRED'
+        assert not User.objects.filter(registration_number='12104501').exists()
+        assert 'lpu_session_token' not in response.cookies
 
     def test_registration_domain_rejection(self):
         """Non-LPU email domains must be rejected with validation error."""
@@ -56,11 +43,11 @@ class TestAuthenticationSuite:
             'confirmPassword': 'Password@123',
         }
         response = self.client.post('/api/v1/auth/register/', payload, format='json')
-        assert response.status_code == 400
+        assert response.status_code == 403
         body = response.json()
         assert body['success'] is False
-        assert body['statusCode'] == 400
-        assert body['error']['code'] == 'VALIDATION_ERROR'
+        assert body['statusCode'] == 403
+        assert body['error']['code'] == 'ADMIN_CREATION_REQUIRED'
 
     def test_registration_password_mismatch(self):
         """Mismatched confirmation password must be rejected."""
@@ -72,10 +59,10 @@ class TestAuthenticationSuite:
             'confirmPassword': 'DifferentPassword@123',
         }
         response = self.client.post('/api/v1/auth/register/', payload, format='json')
-        assert response.status_code == 400
+        assert response.status_code == 403
         body = response.json()
         assert body['success'] is False
-        assert body['error']['code'] == 'VALIDATION_ERROR'
+        assert body['error']['code'] == 'ADMIN_CREATION_REQUIRED'
 
     def test_login_with_email_and_regno(self):
         """User can authenticate using either official email or registration number."""
@@ -134,6 +121,7 @@ class TestAuthenticationSuite:
             full_name='Dr. Harpreet Singh',
             password='StaffPassword@1',
             role=UserRole.STUDENT_STAFF,
+            user_type=UserType.STAFF,
         )
 
         # Unauthenticated request fails with 401
@@ -160,6 +148,17 @@ class TestAuthenticationSuite:
         assert body_auth['success'] is True
         assert body_auth['data']['user']['registrationNumber'] == 'STF1020'
         assert body_auth['data']['user']['fullName'] == 'Dr. Harpreet Singh'
+
+        # Profile endpoints do not accept role or account-type updates.
+        role_update = auth_client.patch(
+            '/api/v1/auth/me/',
+            {'role': UserRole.SYSTEM_ADMIN, 'userType': UserType.SYSTEM_ADMIN},
+            format='json',
+        )
+        assert role_update.status_code == 405
+        user.refresh_from_db()
+        assert user.role == UserRole.STUDENT_STAFF
+        assert user.user_type == UserType.STAFF
 
     def test_current_user_profile_with_cookie(self):
         """Current user profile endpoint authenticates seamlessly using HttpOnly cookie."""

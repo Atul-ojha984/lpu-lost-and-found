@@ -5,11 +5,13 @@ Claims App Services: Submission, Challenge Evaluation, Adjudication
 ==============================================================================
 """
 
+import logging
+import secrets
 import uuid
-import random
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 from django.db import transaction
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotFound
 
 from apps.core.crypto import encrypt_field
@@ -19,9 +21,11 @@ from apps.verification.models import VerificationChallenge
 from apps.handovers.models import Handover
 from .models import Claim, ClaimChallengeAnswer, ClaimStatus
 
+logger = logging.getLogger(__name__)
+
 def generate_secure_numeric_otp(digits: int = 6) -> str:
     """Generates a cryptographically strong numeric OTP string."""
-    return ''.join(str(random.randint(0, 9)) for _ in range(digits))
+    return ''.join(str(secrets.randbelow(10)) for _ in range(digits))
 
 def submit_claim(user, item_id: str, statement: str, challenge_answers: list = None, private_evidence_urls: list = None, req_ip: str = '127.0.0.1', user_agent: str = '') -> Claim:
     """Submit an ownership claim against an item."""
@@ -42,25 +46,31 @@ def submit_claim(user, item_id: str, statement: str, challenge_answers: list = N
     if not item:
         raise NotFound(f"Campus property '{target_id_str}' was not found or is no longer active.")
 
-    if item.status in (ItemStatus.HANDED_OVER, ItemStatus.DISPOSED):
-        raise ValidationError(f"This item is in status '{item.status}' and is not eligible for new claims.")
-
-    if item.reported_by_id == user.id and item.item_type == ItemType.FOUND:
-        raise ValidationError("You are listed as the finder of this property. You cannot submit an ownership claim against it.")
-
-    # Check for existing active claim
-    existing_claim = Claim.objects.filter(
-        item=item,
-        claimant=user,
-        claim_status__in=[ClaimStatus.SUBMITTED, ClaimStatus.UNDER_REVIEW, ClaimStatus.CHALLENGE_REQUIRED, ClaimStatus.APPROVED],
-    ).exists()
-    if existing_claim:
-        raise ValidationError("You already have an active claim under review for this campus property.")
-
-    challenges = list(VerificationChallenge.objects.filter(item=item, is_active=True))
     answers_map = {a.get('challengeId'): a.get('providedAnswer', '') for a in (challenge_answers or [])}
 
     with transaction.atomic():
+        # Serialize claim submission with owner withdrawal and security custody
+        # intake so an active report cannot be withdrawn while a claim is added.
+        try:
+            item = Item.objects.select_for_update().get(pk=item.pk, is_archived=False)
+        except Item.DoesNotExist:
+            raise NotFound(f"Campus property '{target_id_str}' was not found or is no longer active.")
+
+        if item.status in (ItemStatus.HANDED_OVER, ItemStatus.DISPOSED, ItemStatus.EXPIRED):
+            raise ValidationError(f"This item is in status '{item.status}' and is not eligible for new claims.")
+
+        if item.reported_by_id == user.id and item.item_type == ItemType.FOUND:
+            raise ValidationError("You are listed as the finder of this property. You cannot submit an ownership claim against it.")
+
+        existing_claim = Claim.objects.filter(
+            item=item,
+            claimant=user,
+            claim_status__in=[ClaimStatus.SUBMITTED, ClaimStatus.UNDER_REVIEW, ClaimStatus.CHALLENGE_REQUIRED, ClaimStatus.APPROVED],
+        ).exists()
+        if existing_claim:
+            raise ValidationError("You already have an active claim under review for this campus property.")
+
+        challenges = list(VerificationChallenge.objects.filter(item=item, is_active=True))
         initial_status = ClaimStatus.UNDER_REVIEW if len(challenges) == 0 else ClaimStatus.CHALLENGE_REQUIRED
         passed_count = 0
 
@@ -125,7 +135,7 @@ def answer_challenge(claim_id: str, user, challenge_id: str, answer_text: str, r
     except VerificationChallenge.DoesNotExist:
         raise NotFound("Verification challenge not found or no longer active.")
 
-    if challenge.expires_at and challenge.expires_at < datetime.now(timezone.utc):
+    if challenge.expires_at and challenge.expires_at <= timezone.now():
         raise ValidationError("This verification challenge has expired. Please contact campus security.")
 
     max_attempts = challenge.max_attempts or 3
@@ -175,26 +185,40 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
         raise PermissionDenied("Only security officers and campus administrators are authorized to review claims.")
 
     try:
-        claim = Claim.objects.select_related('item', 'claimant').get(pk=claim_id)
+        item_id = Claim.objects.only('item_id').get(pk=claim_id).item_id
     except Claim.DoesNotExist:
         raise NotFound("Claim not found.")
 
-    # Guard 1: Claimant cannot approve own claim
-    if claim.claimant_id == reviewer.id:
-        raise PermissionDenied("Anti-Self-Approval Guard: You cannot adjudicate your own claim.")
-
-    # Guard 2: Reporter of item cannot approve claim on that item
-    if claim.item.reported_by_id == reviewer.id:
-        raise PermissionDenied("Anti-Self-Approval Guard: You cannot adjudicate claims on property you originally reported.")
-
-    if claim.claim_status in (ClaimStatus.APPROVED, ClaimStatus.COMPLETED):
-        raise ValidationError("This claim has already reached an approved/completed state and cannot be modified.")
-
-    item = claim.item
-
     with transaction.atomic():
+        # Serialize decisions for the same item before locking a claim. This
+        # keeps competing claims from being approved concurrently and prevents
+        # a repeated approval from replacing an already-issued handover OTP.
+        try:
+            item = Item.objects.select_for_update().get(pk=item_id)
+            claim = Claim.objects.select_for_update().select_related('claimant').get(
+                pk=claim_id,
+                item_id=item.id,
+            )
+        except (Item.DoesNotExist, Claim.DoesNotExist):
+            raise NotFound("Claim not found.")
+
+        # Guard 1: Claimant cannot approve own claim
+        if claim.claimant_id == reviewer.id:
+            raise PermissionDenied("Anti-Self-Approval Guard: You cannot adjudicate your own claim.")
+
+        # Guard 2: Reporter of item cannot approve claim on that item
+        if item.reported_by_id == reviewer.id:
+            raise PermissionDenied("Anti-Self-Approval Guard: You cannot adjudicate claims on property you originally reported.")
+
+        if claim.claim_status in (ClaimStatus.APPROVED, ClaimStatus.COMPLETED):
+            raise ValidationError("This claim has already reached an approved/completed state and cannot be modified.")
+
+        if action == 'APPROVE' and claim.claim_status != ClaimStatus.UNDER_REVIEW:
+            raise ValidationError("This claim must pass ownership verification before it can be approved.")
+
+        claim.item = item
         claim.reviewed_by = reviewer
-        claim.reviewed_at = datetime.now(timezone.utc)
+        claim.reviewed_at = timezone.now()
         claim.review_notes = review_notes.strip()
 
         if action == 'APPROVE':
@@ -202,12 +226,14 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
 
             raw_otp = generate_secure_numeric_otp(6)
             enc_otp = encrypt_field(raw_otp)
+            otp_created_at = timezone.now()
+            otp_expires_at = otp_created_at + timedelta(hours=48)
 
             claim.handover_otp = raw_otp
             claim.handover_otp_cipher = enc_otp['ciphertext']
             claim.handover_otp_iv = enc_otp['iv']
             claim.handover_otp_tag = enc_otp['authTag']
-            claim.handover_otp_expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
+            claim.handover_otp_expires_at = otp_expires_at
             claim.save()
 
             item.status = ItemStatus.READY_FOR_HANDOVER
@@ -219,7 +245,7 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
                     'item': item,
                     'recipient': claim.claimant,
                     'supervising_officer': reviewer,
-                    'otp_expires_at': claim.handover_otp_expires_at,
+                    'otp_expires_at': otp_expires_at,
                     'otp_attempts_count': 0,
                     'physical_desk_location': item.current_custody_desk or 'Central Security Desk - Block 30',
                     'id_card_presented_type': 'PENDING_VERIFICATION',
@@ -230,6 +256,16 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
             handover.set_otp(raw_otp)
             handover.save()
 
+            logger.info(
+                'handover_otp_generated claim_id=%s item_id=%s handover_id=%s officer_id=%s otp_created_at=%s otp_expires_at=%s',
+                claim.pk,
+                item.pk,
+                handover.pk,
+                reviewer.pk,
+                otp_created_at.isoformat(),
+                otp_expires_at.isoformat(),
+            )
+
             # Competing Claims Resolution: reject all other active claims on this item
             Claim.objects.filter(
                 item=item,
@@ -239,7 +275,7 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
                 rejection_reason='Competing claim accepted: Another claimant provided verified proof accepted by security.',
                 review_notes='Rejected due to competing claim approval.',
                 reviewed_by=reviewer,
-                reviewed_at=datetime.now(timezone.utc),
+                reviewed_at=timezone.now(),
             )
 
             AuditEntry.objects.create(

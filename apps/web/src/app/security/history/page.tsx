@@ -98,7 +98,7 @@ export default function SecurityCustodyHistoryPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search custody ledger by item, ref number, officer..."
-            className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
           />
         </div>
 
@@ -106,7 +106,7 @@ export default function SecurityCustodyHistoryPage() {
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#20B5AD] focus:outline-none w-full sm:w-auto"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#F58220] focus:outline-none w-full sm:w-auto"
           >
             <option value="ALL">All Custody Actions</option>
             <option value="INTAKE">Property Intake</option>
@@ -120,10 +120,10 @@ export default function SecurityCustodyHistoryPage() {
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-[#192B4A]">Physical Custody Ledger Entries</h3>
+            <h3 className="text-sm font-bold text-[#283442]">Physical Custody Ledger Entries</h3>
             <p className="text-xs text-slate-500">Immutable chain-of-custody entries with officer cryptographic timestamps.</p>
           </div>
-          <span className="text-xs font-bold text-[#20B5AD] bg-[#E6F8F7] px-2.5 py-1 rounded-lg">
+          <span className="text-xs font-bold text-[#F58220] bg-[#FFF1E6] px-2.5 py-1 rounded-lg">
             {loading ? '...' : `${filtered.length} Entries`}
           </span>
         </div>
@@ -150,7 +150,7 @@ export default function SecurityCustodyHistoryPage() {
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : log.action === 'TRANSFER'
                         ? 'bg-[#EBF1FD] text-[#356DE8] border border-[#356DE8]/30'
-                        : 'bg-[#E6F8F7] text-[#16A89F] border border-[#20B5AD]/30'
+                        : 'bg-[#FFF1E6] text-[#E66F00] border border-[#F58220]/30'
                     }`}>
                       {log.action}
                     </span>
@@ -163,14 +163,14 @@ export default function SecurityCustodyHistoryPage() {
                   </span>
                 </div>
 
-                <h4 className="text-sm font-bold text-[#192B4A]">{log.itemTitle}</h4>
+                <h4 className="text-sm font-bold text-[#283442]">{log.itemTitle}</h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 bg-[#F5F8FC] p-3 rounded-xl border border-slate-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 bg-[#F5F5F5] p-3 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-400 text-[11px]">Custody Path:</span>
                     <span className="font-semibold text-slate-700">{log.fromLocation}</span>
                     <span className="text-slate-400">&rarr;</span>
-                    <span className="font-semibold text-[#20B5AD]">{log.toLocation}</span>
+                    <span className="font-semibold text-[#F58220]">{log.toLocation}</span>
                   </div>
                   <div className="flex items-center gap-1.5 sm:justify-end">
                     <User className="w-3.5 h-3.5 text-slate-400" />

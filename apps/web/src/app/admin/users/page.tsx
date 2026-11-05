@@ -7,12 +7,13 @@ import {
   UserCheck,
   Edit,
   X,
-  UserX
+  UserX,
+  UserPlus
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { apiClient } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/constants';
-import { UserRole } from '@/types';
+import { UserRole, UserType } from '@/types';
 
 interface CampusUser {
   _id: string;
@@ -20,6 +21,7 @@ interface CampusUser {
   email: string;
   fullName: string;
   role: UserRole;
+  userType: UserType;
   department?: string;
   securityPost?: string;
   phone?: string;
@@ -27,15 +29,40 @@ interface CampusUser {
   createdAt: string;
 }
 
+const USER_TYPE_LABELS: Record<UserType, string> = {
+  STUDENT: 'Student',
+  STAFF: 'Staff',
+  SECURITY_OFFICER: 'Security Officer',
+  CAMPUS_ADMIN: 'Campus Administrator',
+  SYSTEM_ADMIN: 'System Administrator',
+  UNSPECIFIED: 'Unspecified Student / Staff',
+};
+
+const EMPTY_NEW_USER = {
+  fullName: '',
+  registrationNumber: '',
+  email: '',
+  userType: 'STUDENT' as 'STUDENT' | 'STAFF' | 'SECURITY_OFFICER',
+  password: '',
+  department: '',
+  securityPost: '',
+  phone: '',
+  isActive: true,
+};
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<CampusUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [selectedUser, setSelectedUser] = useState<CampusUser | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newUser, setNewUser] = useState(EMPTY_NEW_USER);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   // Edit Modal form state
-  const [editRole, setEditRole] = useState<UserRole>('STUDENT_STAFF');
+  const [editUserType, setEditUserType] = useState<UserType>('UNSPECIFIED');
   const [editSecurityPost, setEditSecurityPost] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
@@ -77,50 +104,7 @@ export default function AdminUsersPage() {
           if (Array.isArray(res)) {
             setUsers(res);
           } else {
-            setUsers([
-              {
-                _id: 'u1',
-                fullName: 'Rajesh Verma',
-                registrationNumber: 'SEC-8812',
-                email: 'rajesh.sec@lpu.in',
-                role: 'SECURITY_PERSONNEL',
-                securityPost: 'Uni-Mall Security Post',
-                department: 'Campus Security',
-                isActive: true,
-                createdAt: '2026-08-10T10:00:00.000Z',
-              },
-              {
-                _id: 'u2',
-                fullName: 'Harpreet Kaur',
-                registrationNumber: 'SEC-8814',
-                email: 'harpreet.sec@lpu.in',
-                role: 'SECURITY_PERSONNEL',
-                securityPost: 'Block 34 Security Desk',
-                department: 'Campus Security',
-                isActive: true,
-                createdAt: '2026-08-12T10:00:00.000Z',
-              },
-              {
-                _id: 'u3',
-                fullName: 'Dr. Sorabh Lakhanpal',
-                registrationNumber: 'ADM-1001',
-                email: 'dean.dsw@lpu.in',
-                role: 'CAMPUS_ADMIN',
-                department: 'Division of Student Welfare (DSW)',
-                isActive: true,
-                createdAt: '2026-07-01T10:00:00.000Z',
-              },
-              {
-                _id: 'u4',
-                fullName: 'Aarav Sharma',
-                registrationNumber: '12108492',
-                email: 'aarav.12108492@lpu.in',
-                role: 'STUDENT_STAFF',
-                department: 'B.Tech CSE',
-                isActive: true,
-                createdAt: '2026-09-01T10:00:00.000Z',
-              },
-            ]);
+            setUsers([]);
           }
         }
       } catch {
@@ -141,7 +125,7 @@ export default function AdminUsersPage() {
 
   function openEditModal(user: CampusUser) {
     setSelectedUser(user);
-    setEditRole(user.role);
+    setEditUserType(user.userType || 'UNSPECIFIED');
     setEditSecurityPost(user.securityPost || '');
     setEditDepartment(user.department || '');
     setEditIsActive(user.isActive);
@@ -159,7 +143,7 @@ export default function AdminUsersPage() {
 
     try {
       await apiClient.updateAdminUser(selectedUser._id, {
-        role: editRole,
+        userType: editUserType,
         securityPost: editSecurityPost.trim() || undefined,
         department: editDepartment.trim() || undefined,
         isActive: editIsActive,
@@ -175,6 +159,31 @@ export default function AdminUsersPage() {
       setErrorMsg(msg);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError('');
+
+    try {
+      await apiClient.createAdminUser({
+        ...newUser,
+        fullName: newUser.fullName.trim(),
+        registrationNumber: newUser.registrationNumber.trim().toUpperCase(),
+        email: newUser.email.trim().toLowerCase(),
+        department: newUser.department.trim(),
+        securityPost: newUser.securityPost.trim(),
+        phone: newUser.phone.trim(),
+      });
+      setIsCreateModalOpen(false);
+      setNewUser(EMPTY_NEW_USER);
+      await loadUsers();
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create campus account.');
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -232,7 +241,7 @@ export default function AdminUsersPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -250,6 +259,17 @@ export default function AdminUsersPage() {
             className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200"
           >
             Filter
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCreateError('');
+              setIsCreateModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-800"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Create User
           </button>
         </div>
       </div>
@@ -286,6 +306,7 @@ export default function AdminUsersPage() {
                   label: user.role,
                   badgeClass: 'bg-slate-100 text-slate-800',
                 };
+                const accountTypeLabel = USER_TYPE_LABELS[user.userType] || roleConfig.label;
 
                 return (
                   <tr key={user._id} className="hover:bg-slate-50/60 transition-colors">
@@ -308,7 +329,7 @@ export default function AdminUsersPage() {
                       <span
                         className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold ${roleConfig.badgeClass}`}
                       >
-                        {roleConfig.label}
+                        {accountTypeLabel}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -341,6 +362,150 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Create Campus User Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Create Campus Account</h3>
+                <p className="text-xs text-slate-500">Set the account type and initial login password.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                aria-label="Close create account dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200" role="alert">
+                {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Full Name *</label>
+                  <input
+                    value={newUser.fullName}
+                    onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })}
+                    required
+                    maxLength={150}
+                    className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Registration Number *</label>
+                  <input
+                    value={newUser.registrationNumber}
+                    onChange={(e) => setNewUser({ ...newUser, registrationNumber: e.target.value })}
+                    required
+                    maxLength={30}
+                    className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Official @lpu.in Email *</label>
+                  <input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    required
+                    className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Account Type *</label>
+                  <select
+                    value={newUser.userType}
+                    onChange={(e) => setNewUser({ ...newUser, userType: e.target.value as typeof newUser.userType })}
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  >
+                    <option value="STUDENT">Student</option>
+                    <option value="STAFF">Staff</option>
+                    <option value="SECURITY_OFFICER">Security Officer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Initial Password *</label>
+                  <input
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  />
+                  <span className="mt-1 block text-[10px] text-slate-400">At least 8 characters. Share it with the user securely.</span>
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Department</label>
+                  <input
+                    value={newUser.department}
+                    onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                    maxLength={150}
+                    className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+                {newUser.userType === 'SECURITY_OFFICER' && (
+                  <div>
+                    <label className="mb-1 block font-semibold text-slate-700">Security Post</label>
+                    <input
+                      value={newUser.securityPost}
+                      onChange={(e) => setNewUser({ ...newUser, securityPost: e.target.value })}
+                      maxLength={150}
+                      className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Phone</label>
+                  <input
+                    value={newUser.phone}
+                    onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                    maxLength={20}
+                    className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 pt-1 font-semibold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={newUser.isActive}
+                  onChange={(e) => setNewUser({ ...newUser, isActive: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300 text-red-700 focus:ring-red-600"
+                />
+                Account Active &amp; Authorized
+              </label>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white shadow-xs hover:bg-red-800 disabled:opacity-50"
+                >
+                  {creating ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Role & Security Post Modal */}
       {selectedUser && (
@@ -375,20 +540,22 @@ export default function AdminUsersPage() {
 
             <form onSubmit={handleSaveUser} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Assigned Role</label>
+                <label className="block font-semibold text-slate-700 mb-1">Account Type &amp; Role</label>
                 <select
-                  value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as UserRole)}
+                  value={editUserType}
+                  onChange={(e) => setEditUserType(e.target.value as UserType)}
                   className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
                 >
-                  <option value="STUDENT_STAFF">Student / Staff</option>
-                  <option value="SECURITY_PERSONNEL">Security Personnel</option>
+                  <option value="STUDENT">Student</option>
+                  <option value="STAFF">Staff</option>
+                  <option value="SECURITY_OFFICER">Security Officer</option>
                   <option value="CAMPUS_ADMIN">Campus Administrator</option>
                   <option value="SYSTEM_ADMIN">System Administrator</option>
+                  <option value="UNSPECIFIED">Unspecified Student / Staff</option>
                 </select>
               </div>
 
-              {editRole === 'SECURITY_PERSONNEL' && (
+              {editUserType === 'SECURITY_OFFICER' && (
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Security Post Station Assignment

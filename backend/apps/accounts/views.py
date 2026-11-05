@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from .serializers import RegisterSerializer, LoginSerializer, UserSerializer
+from .serializers import LoginSerializer, UserSerializer
 
 def set_auth_cookie(response, token_str: str):
     """Sets secure HttpOnly session cookie matching Express configuration."""
@@ -28,44 +28,27 @@ def set_auth_cookie(response, token_str: str):
     )
 
 class RegisterAPIView(APIView):
-    """Public registration endpoint for university students and staff."""
+    """Retained compatibility route that explicitly disables self-registration."""
     authentication_classes = []
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=['Authentication'],
-        summary='Register Student / Staff Account',
-        request=RegisterSerializer,
-        responses={201: OpenApiResponse(description='Account created successfully')}
+        summary='Public self-registration disabled',
+        responses={403: OpenApiResponse(description='Account creation requires an administrator')}
     )
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-
-        refresh = RefreshToken.for_user(user)
-        refresh['userId'] = str(user.id)
-        refresh['user_id'] = str(user.id)
-        refresh['role'] = user.role
-        refresh['email'] = user.email
-        refresh['registration_number'] = user.registration_number
-
-        access_token = str(refresh.access_token)
-        refresh_token = str(refresh)
-
-        user_data = UserSerializer(user).data
-        res = Response(
+        return Response(
             {
-                'user': user_data,
-                'token': access_token,
-                'accessToken': access_token,
-                'refreshToken': refresh_token,
-                'refresh': refresh_token,
+                'success': False,
+                'statusCode': status.HTTP_403_FORBIDDEN,
+                'error': {
+                    'code': 'ADMIN_CREATION_REQUIRED',
+                    'message': 'Public self-registration is disabled. Contact a campus administrator to request an account.',
+                },
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_403_FORBIDDEN,
         )
-        set_auth_cookie(res, access_token)
-        return res
 
 class LoginAPIView(APIView):
     """Authentication endpoint accepting email or student registration number."""

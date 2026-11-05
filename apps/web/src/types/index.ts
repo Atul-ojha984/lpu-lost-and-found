@@ -4,6 +4,14 @@ export type UserRole =
   | 'CAMPUS_ADMIN' 
   | 'SYSTEM_ADMIN';
 
+export type UserType =
+  | 'STUDENT'
+  | 'STAFF'
+  | 'SECURITY_OFFICER'
+  | 'CAMPUS_ADMIN'
+  | 'SYSTEM_ADMIN'
+  | 'UNSPECIFIED';
+
 export type ItemType = 'LOST' | 'FOUND';
 
 export type ItemCategory = 

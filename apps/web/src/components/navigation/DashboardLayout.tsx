@@ -122,12 +122,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-[#F5F8FC] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4">
           <LPULogo size="md" showSubtitle={false} />
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-[#20B5AD]/30 border-t-[#20B5AD] rounded-full animate-spin" />
-            <span className="text-xs font-semibold text-[#192B4A]">Verifying portal access permissions...</span>
+            <div className="w-4 h-4 border-2 border-[#F58220]/30 border-t-[#F58220] rounded-full animate-spin" />
+            <span className="text-xs font-semibold text-[#283442]">Verifying portal access permissions...</span>
           </div>
         </div>
       </div>
@@ -135,7 +135,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }
 
   return (
-    <div className="flex min-h-screen bg-[#F5F8FC] text-[#17243B]">
+    <div className="portal-dashboard-shell flex min-h-screen bg-[#F5F5F5] text-[#17243B]">
       {/* Desktop Persistent Sidebar */}
       <div className="hidden lg:flex lg:shrink-0">
         <Sidebar currentRole={currentUser?.role || role} />
@@ -145,7 +145,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div
-            className="fixed inset-0 bg-[#192B4A]/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-[#283442]/60 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileSidebarOpen(false)}
           />
           <div className="relative flex w-full max-w-xs flex-1 flex-col bg-white">
@@ -182,7 +182,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="rounded-xl p-2 text-slate-600 hover:bg-[#F5F8FC] lg:hidden focus:outline-none"
+              className="rounded-xl p-2 text-slate-600 hover:bg-[#F5F5F5] lg:hidden focus:outline-none"
               aria-label="Open mobile navigation"
             >
               <Menu className="h-5 w-5" />
@@ -193,7 +193,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
 
             <div className="hidden sm:block">
-              <h1 className="text-sm sm:text-base font-bold text-[#192B4A] tracking-tight">{title}</h1>
+              <h1 className="text-sm sm:text-base font-bold text-[#283442] tracking-tight">{title}</h1>
               {subtitle && <p className="text-[11px] text-slate-500 leading-tight">{subtitle}</p>}
             </div>
           </div>
@@ -202,7 +202,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/board"
-              className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F8FC] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#20B5AD]/40 transition-colors"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F5F5] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#F58220]/40 transition-colors"
             >
               <Search className="h-3.5 w-3.5 text-slate-400" />
               <span>Public Board</span>
@@ -213,20 +213,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <button
                 type="button"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="relative rounded-xl p-2 text-slate-600 hover:bg-[#F5F8FC] hover:text-[#20B5AD] transition-colors focus:outline-none"
+                className="relative rounded-xl p-2 text-slate-600 hover:bg-[#F5F5F5] hover:text-[#F58220] transition-colors focus:outline-none"
                 aria-label="View notifications"
               >
                 <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#20B5AD] ring-2 ring-white" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#F58220] ring-2 ring-white" />
               </button>
 
               {notificationsOpen && (
                 <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-white shadow-xl border border-slate-200 p-4 z-50 animate-fade-in">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#192B4A]">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#283442]">
                       Recovery Notifications
                     </span>
-                    <span className="text-[10px] font-bold text-[#20B5AD] bg-[#E6F8F7] px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-[#F58220] bg-[#FFF1E6] px-2 py-0.5 rounded-full">
                       2 Unread
                     </span>
                   </div>
@@ -258,7 +258,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   <Link
                     href="/dashboard/my-reports"
                     onClick={() => setNotificationsOpen(false)}
-                    className="mt-3 block text-center rounded-xl bg-[#F5F8FC] py-1.5 text-[11px] font-bold text-[#20B5AD] hover:bg-[#E6F8F7] transition-colors"
+                    className="mt-3 block text-center rounded-xl bg-[#F5F5F5] py-1.5 text-[11px] font-bold text-[#F58220] hover:bg-[#FFF1E6] transition-colors"
                   >
                     View All Activity
                   </Link>
@@ -271,13 +271,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <button
                 type="button"
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1 sm:px-2.5 sm:py-1.5 hover:bg-[#F5F8FC] transition-colors focus:outline-none"
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1 sm:px-2.5 sm:py-1.5 hover:bg-[#F5F5F5] transition-colors focus:outline-none"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#192B4A] text-xs font-bold text-white">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#283442] text-xs font-bold text-white">
                   <UserIcon className="h-3.5 w-3.5" />
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold text-[#192B4A] max-w-[130px] truncate leading-tight">
+                  <span className="text-xs font-bold text-[#283442] max-w-[130px] truncate leading-tight">
                     {currentUser?.fullName || 'Campus User'}
                   </span>
                   <span className="text-[10px] text-slate-500 font-medium leading-tight">
@@ -291,13 +291,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               {profileDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white shadow-xl border border-slate-200 p-3 z-50 animate-fade-in">
                   <div className="p-2 border-b border-slate-100">
-                    <p className="text-xs font-bold text-[#192B4A]">
+                    <p className="text-xs font-bold text-[#283442]">
                       {currentUser?.fullName || 'Campus User'}
                     </p>
                     <p className="text-[11px] text-slate-500 font-mono truncate">
                       {currentUser?.email || 'user@lpu.in'}
                     </p>
-                    <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider text-[#20B5AD] bg-[#E6F8F7] px-2 py-0.5 rounded-md">
+                    <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider text-[#F58220] bg-[#FFF1E6] px-2 py-0.5 rounded-md">
                       {activeRoleLabel}
                     </span>
                   </div>
@@ -306,7 +306,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <Link
                       href={getProfileLink()}
                       onClick={() => setProfileDropdownOpen(false)}
-                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-[#F5F8FC] hover:text-[#20B5AD] transition-colors"
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-[#F5F5F5] hover:text-[#F58220] transition-colors"
                     >
                       <UserIcon className="h-3.5 w-3.5 text-slate-400" />
                       <span>My Profile</span>
@@ -316,7 +316,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       <Link
                         href="/admin/audit"
                         onClick={() => setProfileDropdownOpen(false)}
-                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-[#F5F8FC] transition-colors"
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-[#F5F5F5] transition-colors"
                       >
                         <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
                         <span>Security Audit Trail</span>
@@ -342,7 +342,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {actionButton || (
               <Link
                 href="/report"
-                className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3.5 py-1.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3.5 py-1.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
               >
                 <PlusCircle className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Report Item</span>
@@ -354,10 +354,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Page Content Body */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-6xl space-y-6">
+          <div className="portal-dashboard-content mx-auto max-w-6xl space-y-6">
             {/* Header for small screens */}
             <div className="sm:hidden">
-              <h1 className="text-base font-bold text-[#192B4A] tracking-tight">{title}</h1>
+              <h1 className="text-base font-bold text-[#283442] tracking-tight">{title}</h1>
               {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
             </div>
 

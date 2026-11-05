@@ -17,6 +17,8 @@ class AuditAction(models.TextChoices):
     USER_LOGOUT = 'USER_LOGOUT', 'User Logout'
     ITEM_REPORT_LOST = 'ITEM_REPORT_LOST', 'Report Lost Property'
     ITEM_REPORT_FOUND = 'ITEM_REPORT_FOUND', 'Report Found Property'
+    ITEM_REPORT_WITHDRAW = 'ITEM_REPORT_WITHDRAW', 'Withdraw Property Report'
+    ITEM_REPORT_EXPIRE = 'ITEM_REPORT_EXPIRE', 'Expire Lost Property Report'
     PRIVATE_VAULT_VIEW = 'PRIVATE_VAULT_VIEW', 'View Private Vault'
     CLAIM_SUBMIT = 'CLAIM_SUBMIT', 'Submit Ownership Claim'
     CLAIM_REVIEW = 'CLAIM_REVIEW', 'Review Ownership Claim'

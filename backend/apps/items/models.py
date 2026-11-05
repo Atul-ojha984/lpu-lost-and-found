@@ -22,6 +22,7 @@ class ItemStatus(models.TextChoices):
     READY_FOR_HANDOVER = 'READY_FOR_HANDOVER', 'Ready for Handover'
     HANDED_OVER = 'HANDED_OVER', 'Handed Over to Owner'
     UNCLAIMED_EXPIRED = 'UNCLAIMED_EXPIRED', 'Unclaimed Expired'
+    EXPIRED = 'EXPIRED', 'Lost Report Expired'
     DISPOSED = 'DISPOSED', 'Disposed / Donated'
 
 class ItemCategory(models.Model):

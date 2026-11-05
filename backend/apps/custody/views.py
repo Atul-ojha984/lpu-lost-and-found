@@ -105,19 +105,19 @@ class CustodyTransferAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
 
-        try:
-            item = Item.objects.get(pk=vd['itemId'], is_archived=False)
-        except Item.DoesNotExist:
-            return Response(
-                {
-                    'success': False,
-                    'statusCode': status.HTTP_404_NOT_FOUND,
-                    'error': {'code': 'NOT_FOUND', 'message': 'Item not found.'},
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
         with transaction.atomic():
+            try:
+                item = Item.objects.select_for_update().get(pk=vd['itemId'], is_archived=False)
+            except Item.DoesNotExist:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_404_NOT_FOUND,
+                        'error': {'code': 'NOT_FOUND', 'message': 'Item not found.'},
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
             from_loc = item.current_custody_desk or 'Initial Intake'
             to_loc = vd['toLocation'].strip()
 

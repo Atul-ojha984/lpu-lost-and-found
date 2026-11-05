@@ -5,10 +5,12 @@ Test Suite: Claims & Handover APIs, Challenge Verification & Duplicate Guard
 ==============================================================================
 """
 
+import logging
 import pytest
 from datetime import datetime, timezone, timedelta
 from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import User, UserRole
 from apps.items.models import ItemCategory, Item, ItemType, ItemStatus
@@ -19,6 +21,8 @@ from apps.handovers.models import Handover
 from apps.custody.models import CustodyRecord, CustodyAction
 from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.audit.models import AuditEntry, AuditAction
+from django.utils import timezone as django_timezone
+from django.utils.dateparse import parse_datetime
 
 @pytest.fixture
 def api_client():
@@ -144,34 +148,132 @@ def test_claim_submission_and_challenge_answering(api_client, workflow_setup):
     assert claim.claim_status == ClaimStatus.UNDER_REVIEW
 
 @pytest.mark.django_db
-def test_anti_self_approval_guard(api_client, workflow_setup):
-    """Ensure a reporter or claimant cannot approve their own claim."""
+def test_item_reporter_cannot_approve_but_independent_security_officer_can(api_client, workflow_setup):
+    """The reporter is blocked while a different security officer can review the same claim."""
     item = workflow_setup['found_item']
     reporter = workflow_setup['reporter']
 
-    # Make reporter also a security officer for testing self-approval guard
+    # The original reporter remains linked to the item even when they hold a
+    # security role; the role change must not let them adjudicate their report.
     reporter.role = UserRole.SECURITY_PERSONNEL
     reporter.save()
 
     claim = Claim.objects.create(
         item=item,
-        claimant=reporter,
-        statement='I found it but actually it is mine.',
+        claimant=workflow_setup['claimant1'],
+        statement='Valid claimant with ownership evidence.',
         claim_status=ClaimStatus.UNDER_REVIEW,
     )
 
     api_client.force_authenticate(user=reporter)
-    res = api_client.post(
+    res = api_client.patch(
         f"/api/v1/claims/{claim.id}/review/",
-        {'action': 'APPROVE', 'reviewNotes': 'Approving my own property claim'},
+        {'action': 'APPROVE', 'reviewNotes': 'Review by original reporter'},
         format='json'
     )
-    assert res.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN)
-    assert 'SELF_APPROVAL' in str(res.data) or 'own' in str(res.data).lower()
+    assert res.status_code == status.HTTP_403_FORBIDDEN
+    assert 'originally reported' in str(res.data).lower()
+    claim.refresh_from_db()
+    assert claim.claim_status == ClaimStatus.UNDER_REVIEW
+    assert not claim.handover_otp
+    assert not Handover.objects.filter(claim=claim).exists()
+
+    # A separate authorized officer can adjudicate without changing reporter
+    # or claimant relationships.
+    independent_officer = workflow_setup['security_officer']
+    access_token = AccessToken.for_user(independent_officer)
+    assert access_token['userId'] == str(independent_officer.id)
+    api_client.force_authenticate(user=None)
+    api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+    res = api_client.patch(
+        f"/api/v1/claims/{claim.id}/review/",
+        {'action': 'APPROVE', 'reviewNotes': 'Independent verification passed.'},
+        format='json'
+    )
+    assert res.status_code == status.HTTP_200_OK
+    claim.refresh_from_db()
+    item.refresh_from_db()
+    assert claim.claim_status == ClaimStatus.APPROVED
+    assert claim.reviewed_by_id == independent_officer.id
+    assert claim.claimant_id == workflow_setup['claimant1'].id
+    assert item.reported_by_id == reporter.id
+    assert len(claim.handover_otp) == 6
+    assert Handover.objects.filter(claim=claim, supervising_officer=independent_officer).count() == 1
+
 
 @pytest.mark.django_db
-def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setup):
+def test_claimant_cannot_approve_own_claim_even_with_security_role(api_client, workflow_setup):
+    """Claimant self-approval remains blocked even if claimant is also a reviewer role."""
+    claimant = workflow_setup['claimant1']
+    claimant.role = UserRole.SECURITY_PERSONNEL
+    claimant.save()
+    claim = Claim.objects.create(
+        item=workflow_setup['found_item'],
+        claimant=claimant,
+        statement='My own claim.',
+        claim_status=ClaimStatus.UNDER_REVIEW,
+    )
+
+    api_client.force_authenticate(user=claimant)
+    res = api_client.patch(
+        f"/api/v1/claims/{claim.id}/review/",
+        {'action': 'APPROVE'},
+        format='json'
+    )
+    assert res.status_code == status.HTTP_403_FORBIDDEN
+    assert 'own claim' in str(res.data).lower()
+    claim.refresh_from_db()
+    assert claim.claim_status == ClaimStatus.UNDER_REVIEW
+    assert not claim.handover_otp
+
+
+@pytest.mark.django_db
+def test_student_cannot_approve_claim(api_client, workflow_setup):
+    """An authenticated student without a reviewer role is denied by endpoint RBAC."""
+    claim = Claim.objects.create(
+        item=workflow_setup['found_item'],
+        claimant=workflow_setup['claimant1'],
+        statement='Claim requiring review.',
+        claim_status=ClaimStatus.UNDER_REVIEW,
+    )
+    api_client.force_authenticate(user=workflow_setup['claimant2'])
+    res = api_client.patch(
+        f"/api/v1/claims/{claim.id}/review/",
+        {'action': 'APPROVE'},
+        format='json'
+    )
+    assert res.status_code == status.HTTP_403_FORBIDDEN
+    claim.refresh_from_db()
+    assert claim.claim_status == ClaimStatus.UNDER_REVIEW
+    assert not claim.handover_otp
+
+
+@pytest.mark.django_db
+def test_claim_cannot_be_approved_before_verification(api_client, workflow_setup):
+    """Approval requires the verification workflow to move the claim to UNDER_REVIEW."""
+    claim = Claim.objects.create(
+        item=workflow_setup['found_item'],
+        claimant=workflow_setup['claimant1'],
+        statement='Claim awaiting challenge answers.',
+        claim_status=ClaimStatus.CHALLENGE_REQUIRED,
+    )
+    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    res = api_client.patch(
+        f"/api/v1/claims/{claim.id}/review/",
+        {'action': 'APPROVE'},
+        format='json'
+    )
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'pass ownership verification' in str(res.data).lower()
+    claim.refresh_from_db()
+    assert claim.claim_status == ClaimStatus.CHALLENGE_REQUIRED
+    assert not claim.handover_otp
+    assert not Handover.objects.filter(claim=claim).exists()
+
+@pytest.mark.django_db
+def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setup, caplog):
     """Approving one claim resolves competing claims and issues 6-digit handover OTP."""
+    caplog.set_level(logging.INFO)
     item = workflow_setup['found_item']
     claim1 = Claim.objects.create(
         item=item,
@@ -187,7 +289,7 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     )
 
     api_client.force_authenticate(user=workflow_setup['security_officer'])
-    res = api_client.post(
+    res = api_client.patch(
         f"/api/v1/claims/{claim1.id}/review/",
         {'action': 'APPROVE', 'reviewNotes': 'Presented purchase bill and photo match.'},
         format='json'
@@ -211,6 +313,149 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     handover = Handover.objects.filter(claim=claim1).first()
     assert handover is not None
     assert handover.is_completed is False
+    assert handover.claim_id == claim1.id
+    assert handover.item_id == item.id
+    assert handover.recipient_id == claim1.claimant_id
+    assert handover.otp_expires_at == claim1.handover_otp_expires_at
+    assert django_timezone.is_aware(handover.otp_expires_at)
+    assert handover.otp_expires_at > django_timezone.now()
+    assert handover.otp_expires_at - claim1.reviewed_at >= timedelta(hours=48)
+    assert 'handover_otp_generated' in caplog.text
+    assert issued_otp not in caplog.text
+
+    # Claimants receive the same current OTP through the existing My Claims API.
+    api_client.force_authenticate(user=claim1.claimant)
+    claimant_claims = api_client.get('/api/v1/claims/my-claims/')
+    assert claimant_claims.status_code == status.HTTP_200_OK
+    delivered_claim = next(c for c in claimant_claims.data if c['id'] == str(claim1.id))
+    assert delivered_claim['handoverOtp'] == issued_otp
+    assert delivered_claim['claimStatus'] == ClaimStatus.APPROVED
+    assert api_client.get('/api/v1/handovers/my-recovery-history/').data == []
+
+    # Security's existing pending-handover feed references the same claim and expiry.
+    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    pending_handovers = api_client.get('/api/v1/handovers/pending/')
+    assert pending_handovers.status_code == status.HTTP_200_OK
+    pending_record = next(h for h in pending_handovers.data if h['claim']['id'] == str(claim1.id))
+    assert pending_record['claim']['handoverOtp'] == issued_otp
+    assert parse_datetime(pending_record['otpExpiresAt']) == handover.otp_expires_at
+
+    api_client.force_authenticate(user=None)
+    api_client.credentials(
+        HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(workflow_setup['security_officer'])}"
+    )
+
+    # An OTP without the required in-person release confirmation is not enough
+    # to complete a handover or remove the claim from the active list.
+    unconfirmed_handover = api_client.post(
+        '/api/v1/handovers/verify-otp/',
+        {'claimId': str(claim1.id), 'otp': issued_otp},
+        format='json',
+    )
+    assert unconfirmed_handover.status_code == status.HTTP_400_BAD_REQUEST
+    claim1.refresh_from_db()
+    assert claim1.claim_status == ClaimStatus.APPROVED
+    api_client.force_authenticate(user=claim1.claimant)
+    active_before_release = api_client.get('/api/v1/claims/my-claims/')
+    assert str(claim1.id) in {record['id'] for record in active_before_release.data}
+    assert api_client.get('/api/v1/handovers/my-recovery-history/').data == []
+    api_client.force_authenticate(user=workflow_setup['security_officer'])
+
+    # The OTP created by approval can complete the supervised handover and
+    # append its custody record through the existing endpoint.
+    handover_res = api_client.post(
+        '/api/v1/handovers/verify-otp/',
+        {
+            'claimId': str(claim1.id),
+            'otp': issued_otp,
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': workflow_setup['claimant1'].registration_number,
+            'acknowledgementNotes': 'Identity and ownership evidence verified in person.',
+        },
+        format='json'
+    )
+    assert handover_res.status_code == status.HTTP_200_OK
+    claim1.refresh_from_db()
+    item.refresh_from_db()
+    handover.refresh_from_db()
+    assert claim1.claim_status == ClaimStatus.COMPLETED
+    assert item.status == ItemStatus.HANDED_OVER
+    assert handover.is_completed is True
+    assert handover.completed_at is not None
+    custody_record = CustodyRecord.objects.get(item=item, action=CustodyAction.HANDED_OVER)
+    assert custody_record.handled_by_id == workflow_setup['security_officer'].id
+    assert custody_record.from_location == 'Central Security Desk'
+    assert custody_record.to_location == 'CLAIMANT_HANDOVER_COMPLETE'
+    assert 'handover_otp_verification_result result=accepted' in caplog.text
+    assert issued_otp not in caplog.text
+
+    # Completed records leave both active security portals and remain in the
+    # dedicated completed handover history filter.
+    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    pending_after_release = api_client.get('/api/v1/handovers/pending/')
+    assert pending_after_release.status_code == status.HTTP_200_OK
+    assert all(record['claim']['id'] != str(claim1.id) for record in pending_after_release.data)
+    approved_claims = api_client.get('/api/v1/claims/pending/', {'status': 'APPROVED'})
+    assert approved_claims.status_code == status.HTTP_200_OK
+    assert str(claim1.id) not in {record['id'] for record in approved_claims.data}
+    completed_claims = api_client.get('/api/v1/claims/pending/', {'status': 'COMPLETED'})
+    assert str(claim1.id) in {record['id'] for record in completed_claims.data}
+
+    # The authenticated claimant now sees this only in persisted recovery history.
+    api_client.force_authenticate(user=workflow_setup['claimant1'])
+    active_claims = api_client.get('/api/v1/claims/my-claims/')
+    assert active_claims.status_code == status.HTTP_200_OK
+    assert str(claim1.id) not in {record['id'] for record in active_claims.data}
+    recovery_history = api_client.get('/api/v1/handovers/my-recovery-history/')
+    assert recovery_history.status_code == status.HTTP_200_OK
+    recovered_record = next(record for record in recovery_history.data if record['claimId'] == str(claim1.id))
+    assert recovered_record['status'] == ClaimStatus.COMPLETED
+    assert recovered_record['itemReference'] == item.reference_number
+    assert recovered_record['claimReference'] == f'CLM-{str(claim1.id)[:8].upper()}'
+    assert recovered_record['recoveryDate'] == handover.completed_at
+    assert recovered_record['custodyDesk'] == 'Central Security Desk'
+    assert recovered_record['handoverOfficer'] == workflow_setup['security_officer'].full_name
+    # Re-reading after a simulated page refresh returns the same database receipt.
+    assert api_client.get('/api/v1/handovers/my-recovery-history/').data == recovery_history.data
+
+    # Another student can query only their own history and cannot retrieve this record.
+    api_client.force_authenticate(user=workflow_setup['claimant2'])
+    other_history = api_client.get('/api/v1/handovers/my-recovery-history/')
+    assert other_history.status_code == status.HTTP_200_OK
+    assert all(record['claimId'] != str(claim1.id) for record in other_history.data)
+
+    # Direct multipart requests are also blocked after completion; existing evidence stays intact.
+    api_client.force_authenticate(user=workflow_setup['claimant1'])
+    evidence_before = list(claim1.private_evidence_proof_urls)
+    closed_upload = api_client.post(
+        f'/api/v1/claims/{claim1.id}/evidence/',
+        {'file': SimpleUploadedFile('after-recovery.pdf', b'%PDF-1.4 late evidence', content_type='application/pdf')},
+        format='multipart',
+    )
+    assert closed_upload.status_code == status.HTTP_409_CONFLICT
+    assert closed_upload.data['error']['code'] == 'RECOVERY_COMPLETED'
+    assert 'successfully recovered' in closed_upload.data['error']['message']
+    claim1.refresh_from_db()
+    assert claim1.private_evidence_proof_urls == evidence_before
+
+    # Repeated confirmation cannot replace the OTP or create another handover
+    # or OTP-generation audit entry.
+    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    otp_before_duplicate = claim1.handover_otp
+    duplicate = api_client.patch(
+        f"/api/v1/claims/{claim1.id}/review/",
+        {'action': 'APPROVE', 'reviewNotes': 'Duplicate approval attempt.'},
+        format='json'
+    )
+    assert duplicate.status_code == status.HTTP_400_BAD_REQUEST
+    claim1.refresh_from_db()
+    assert claim1.handover_otp == otp_before_duplicate
+    assert Handover.objects.filter(claim=claim1).count() == 1
+    assert AuditEntry.objects.filter(
+        action=AuditAction.HANDOVER_OTP_GENERATE,
+        target_id=str(handover.id),
+    ).count() == 1
 
 @pytest.mark.django_db
 def test_supervised_handover_and_duplicate_prevention(api_client, workflow_setup):
@@ -258,6 +503,11 @@ def test_supervised_handover_and_duplicate_prevention(api_client, workflow_setup
 
     handover.refresh_from_db()
     assert handover.otp_attempts_count == 1
+    api_client.force_authenticate(user=claimant)
+    active_claims = api_client.get('/api/v1/claims/my-claims/')
+    assert str(claim.id) in {record['id'] for record in active_claims.data}
+    assert api_client.get('/api/v1/handovers/my-recovery-history/').data == []
+    api_client.force_authenticate(user=officer)
 
     # 2. Correct OTP attempt
     res = api_client.post(
@@ -301,6 +551,159 @@ def test_supervised_handover_and_duplicate_prevention(api_client, workflow_setup
     )
     assert res_dup.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_409_CONFLICT)
     assert 'DUPLICATE_HANDOVER' in str(res_dup.data)
+    assert 'OTP Already Used' in str(res_dup.data)
+
+
+@pytest.mark.django_db
+def test_expired_handover_otp_is_rejected(api_client, workflow_setup, caplog):
+    """An expired code remains rejected using timezone-aware database timestamps."""
+    item = workflow_setup['found_item']
+    claimant = workflow_setup['claimant1']
+    officer = workflow_setup['security_officer']
+    expired_at = django_timezone.now() - timedelta(seconds=1)
+
+    claim = Claim.objects.create(
+        item=item,
+        claimant=claimant,
+        statement='Expired handover OTP claim.',
+        claim_status=ClaimStatus.APPROVED,
+        handover_otp='849201',
+        handover_otp_expires_at=expired_at,
+    )
+    item.status = ItemStatus.READY_FOR_HANDOVER
+    item.save()
+
+    handover = Handover(
+        item=item,
+        claim=claim,
+        recipient=claimant,
+        supervising_officer=officer,
+        otp_expires_at=expired_at,
+    )
+    handover.set_otp('849201')
+    handover.save()
+
+    api_client.force_authenticate(user=officer)
+    res = api_client.post(
+        '/api/v1/handovers/verify-otp/',
+        {
+            'claimId': str(claim.id),
+            'otp': '849201',
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': claimant.registration_number,
+        },
+        format='json',
+    )
+
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert res.data['error']['code'] == 'OTP_EXPIRED'
+    handover.refresh_from_db()
+    claim.refresh_from_db()
+    assert not handover.is_completed
+    assert handover.otp_attempts_count == 0
+    assert claim.claim_status == ClaimStatus.APPROVED
+    assert 'handover_otp_expiration_validation result=expired' in caplog.text
+    assert '849201' not in caplog.text
+    api_client.force_authenticate(user=claimant)
+    active_claims = api_client.get('/api/v1/claims/my-claims/')
+    assert str(claim.id) in {record['id'] for record in active_claims.data}
+    assert api_client.get('/api/v1/handovers/my-recovery-history/').data == []
+
+
+@pytest.mark.django_db
+def test_otp_from_another_claim_is_rejected(api_client, workflow_setup):
+    """Verification selects the handover belonging to the submitted claim only."""
+    category = workflow_setup['found_item'].category
+    location = workflow_setup['found_item'].location
+    reporter = workflow_setup['reporter']
+    claimant = workflow_setup['claimant1']
+    other_claimant = workflow_setup['claimant2']
+    officer = workflow_setup['security_officer']
+    now = django_timezone.now()
+    second_item = Item.objects.create(
+        reference_number='LPU-F-20261018-8888',
+        item_type=ItemType.FOUND,
+        title='Second item for OTP isolation',
+        category=category,
+        location=location,
+        specific_location='Library counter',
+        event_date=now - timedelta(days=1),
+        public_description='Second found item.',
+        status=ItemStatus.READY_FOR_HANDOVER,
+        reported_by=reporter,
+        retention_expires_at=now + timedelta(days=90),
+    )
+
+    first_claim = Claim.objects.create(
+        item=workflow_setup['found_item'],
+        claimant=claimant,
+        statement='First approved claim.',
+        claim_status=ClaimStatus.APPROVED,
+        handover_otp='135790',
+        handover_otp_expires_at=now + timedelta(hours=48),
+    )
+    second_claim = Claim.objects.create(
+        item=second_item,
+        claimant=other_claimant,
+        statement='Second approved claim.',
+        claim_status=ClaimStatus.APPROVED,
+        handover_otp='246801',
+        handover_otp_expires_at=now + timedelta(hours=48),
+    )
+    for claim, item, recipient, otp in (
+        (first_claim, workflow_setup['found_item'], claimant, '135790'),
+        (second_claim, second_item, other_claimant, '246801'),
+    ):
+        handover = Handover(
+            item=item,
+            claim=claim,
+            recipient=recipient,
+            supervising_officer=officer,
+            otp_expires_at=claim.handover_otp_expires_at,
+        )
+        handover.set_otp(otp)
+        handover.save()
+
+    api_client.force_authenticate(user=officer)
+    res = api_client.post(
+        '/api/v1/handovers/verify-otp/',
+        {
+            'claimId': str(second_claim.id),
+            'otp': '135790',
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': other_claimant.registration_number,
+        },
+        format='json',
+    )
+
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert res.data['error']['code'] == 'INVALID_OTP'
+    second_handover = Handover.objects.get(claim=second_claim)
+    assert second_handover.otp_attempts_count == 1
+    assert not second_handover.is_completed
+
+    # Even a matching OTP cannot be redeemed if the handover recipient is
+    # inconsistent with the claimant on the submitted claim.
+    second_handover.recipient = claimant
+    second_handover.save(update_fields=['recipient'])
+    res_mismatched_recipient = api_client.post(
+        '/api/v1/handovers/verify-otp/',
+        {
+            'claimId': str(second_claim.id),
+            'otp': '246801',
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': other_claimant.registration_number,
+        },
+        format='json',
+    )
+
+    assert res_mismatched_recipient.status_code == status.HTTP_409_CONFLICT
+    assert res_mismatched_recipient.data['error']['code'] == 'HANDOVER_RELATIONSHIP_MISMATCH'
+    second_handover.refresh_from_db()
+    assert not second_handover.is_completed
 
 @pytest.mark.django_db
 def test_claim_evidence_upload_and_download_flow(api_client, workflow_setup):

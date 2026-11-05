@@ -12,7 +12,8 @@ import {
   AlertCircle,
   X,
   CheckCircle2,
-  ShieldCheck
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -41,6 +42,12 @@ function MyReportsContent() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
   const [editErrorMsg, setEditErrorMsg] = useState<string | null>(null);
+
+  // Report withdrawal confirmation state
+  const [withdrawingItem, setWithdrawingItem] = useState<PublicItem | null>(null);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawErrorMsg, setWithdrawErrorMsg] = useState<string | null>(null);
+  const [reportActionNotice, setReportActionNotice] = useState<string | null>(null);
 
   const handleOpenEdit = useCallback((item: PublicItem) => {
     setEditingItem(item);
@@ -155,6 +162,31 @@ function MyReportsContent() {
     }
   };
 
+  const handleWithdrawReport = async () => {
+    if (!withdrawingItem || !withdrawingItem.isOwner) return;
+
+    setIsWithdrawing(true);
+    setWithdrawErrorMsg(null);
+
+    try {
+      await apiClient.withdrawReport(withdrawingItem.id);
+      setItems((prev) => prev.filter((item) => item.id !== withdrawingItem.id));
+      setReportActionNotice(`Report ${withdrawingItem.referenceNumber} was removed from your active reports.`);
+      setWithdrawingItem(null);
+
+      // Re-fetch the authenticated user's active reports after withdrawal.
+      void apiClient.getMyReports().then(setItems).catch(() => undefined);
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        setWithdrawErrorMsg(err.message);
+      } else {
+        setWithdrawErrorMsg('Unable to remove this report right now. Please retry.');
+      }
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
   const filteredItems = items.filter((i) => {
     if (filterType !== 'ALL' && i.itemType !== filterType) return false;
     return true;
@@ -187,12 +219,27 @@ function MyReportsContent() {
 
         <Link
           href="/report"
-          className="inline-flex items-center gap-1.5 rounded-lg lpu-btn-primary px-3.5 py-1.5 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg lpu-btn-primary px-3.5 py-1.5 text-xs font-semibold shadow-xs hover:bg-[#E66F00] transition-colors"
         >
           <PlusCircle className="h-3.5 w-3.5" />
           <span>Submit New Report</span>
         </Link>
       </div>
+
+      {reportActionNotice && (
+        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-900 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span>{reportActionNotice}</span>
+          <button
+            type="button"
+            onClick={() => setReportActionNotice(null)}
+            className="ml-auto rounded p-1 text-emerald-700 hover:bg-emerald-100"
+            aria-label="Dismiss notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Loading State */}
       {isLoading && (
@@ -212,7 +259,7 @@ function MyReportsContent() {
           <div className="flex items-center justify-center gap-3 pt-2">
             <Link
               href="/login?redirect=/dashboard/my-reports"
-              className="rounded-lg lpu-btn-primary px-4 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors"
+              className="rounded-lg lpu-btn-primary px-4 py-2 text-xs font-semibold shadow-xs hover:bg-[#E66F00] transition-colors"
             >
               Log In
             </Link>
@@ -299,6 +346,21 @@ function MyReportsContent() {
                         >
                           <Edit3 className="h-3.5 w-3.5 text-slate-400" />
                           <span>Edit</span>
+                        </button>
+                      )}
+
+                      {item.isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWithdrawErrorMsg(null);
+                            setWithdrawingItem(item);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 transition-colors"
+                          title="Remove this report"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Remove</span>
                         </button>
                       )}
                     </div>
@@ -401,13 +463,71 @@ function MyReportsContent() {
                   <button
                     type="submit"
                     disabled={isSavingEdit}
-                    className="rounded-lg lpu-btn-primary px-5 py-2 text-xs font-semibold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
+                    className="rounded-lg lpu-btn-primary px-5 py-2 text-xs font-semibold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60"
                   >
                     {isSavingEdit ? 'Saving Changes...' : 'Save Changes'}
                   </button>
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Withdraw Report Confirmation Modal */}
+      {withdrawingItem && (
+        <div role="dialog" aria-modal="true" aria-labelledby="withdraw-report-title" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
+            onClick={() => !isWithdrawing && setWithdrawingItem(null)}
+          />
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl border border-slate-200 z-10 animate-fade-in">
+            <button
+              type="button"
+              onClick={() => setWithdrawingItem(null)}
+              disabled={isWithdrawing}
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+              aria-label="Close confirmation"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-red-700">Remove Your Report</span>
+              <h3 id="withdraw-report-title" className="text-lg font-bold text-slate-900 mt-0.5">
+                Remove Report: {withdrawingItem.referenceNumber}
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                Are you sure you want to remove this report? If you have already recovered the item or resolved the matter independently, you can remove this report. This action cannot be undone from your account.
+              </p>
+            </div>
+
+            {withdrawErrorMsg && (
+              <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-700 mt-0.5" />
+                <span>{withdrawErrorMsg}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setWithdrawingItem(null)}
+                disabled={isWithdrawing}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleWithdrawReport}
+                disabled={isWithdrawing}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-700 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-red-800 transition-colors disabled:opacity-60"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {isWithdrawing ? 'Removing Report...' : 'Confirm Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

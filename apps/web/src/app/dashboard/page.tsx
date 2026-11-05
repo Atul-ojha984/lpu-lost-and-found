@@ -36,9 +36,10 @@ export default function StudentDashboardOverview() {
 
     async function loadDashboardData() {
       try {
-        const [reportsRes, claimsRes] = await Promise.allSettled([
+        const [reportsRes, claimsRes, recoveriesRes] = await Promise.allSettled([
           apiClient.getMyReports(),
           apiClient.getMyClaims(),
+          apiClient.getMyRecoveryHistory(),
         ]);
 
         if (!isMounted) return;
@@ -56,12 +57,17 @@ export default function StudentDashboardOverview() {
         }
         setMyClaims(claimsData);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const recoveryData: any[] = recoveriesRes.status === 'fulfilled' && Array.isArray(recoveriesRes.value)
+          ? recoveriesRes.value
+          : [];
+
         // Calculate accurate real metrics
         const lostCount = reportsData.filter((i) => i.itemType === 'LOST').length;
         const foundCount = reportsData.filter((i) => i.itemType === 'FOUND').length;
         const pendingClaimsCount = claimsData.filter((c) => c.claimStatus === 'UNDER_REVIEW' || c.claimStatus === 'SUBMITTED').length;
         const inCustodyCount = reportsData.filter((i) => i.status === 'IN_CUSTODY' || i.status === 'READY_FOR_HANDOVER').length;
-        const returnedCount = claimsData.filter((c) => c.claimStatus === 'APPROVED' || c.claimStatus === 'COMPLETED').length;
+        const returnedCount = recoveryData.length;
 
         setMetrics({
           activeLostReports: lostCount,
@@ -101,7 +107,7 @@ export default function StudentDashboardOverview() {
           </Link>
           <Link
             href="/report?type=FOUND"
-            className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3 py-1.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3 py-1.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
           >
             <PlusCircle className="w-3.5 h-3.5" />
             <span>Report Found</span>
@@ -121,7 +127,7 @@ export default function StudentDashboardOverview() {
               <FileText className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : metrics.activeLostReports}
           </p>
           <span className="text-[10px] text-slate-500 font-medium">Logged by you</span>
@@ -133,11 +139,11 @@ export default function StudentDashboardOverview() {
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Found Items
             </span>
-            <div className="w-7 h-7 rounded-lg bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-[#FFF1E6] text-[#F58220] flex items-center justify-center">
               <Package className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : metrics.foundItemsReported}
           </p>
           <span className="text-[10px] text-slate-500 font-medium">Surrendered</span>
@@ -153,7 +159,7 @@ export default function StudentDashboardOverview() {
               <HelpCircle className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : metrics.pendingClaims}
           </p>
           <span className="text-[10px] text-amber-700 font-medium">In verification</span>
@@ -169,7 +175,7 @@ export default function StudentDashboardOverview() {
               <ShieldAlert className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : metrics.itemsInCustody}
           </p>
           <span className="text-[10px] text-[#356DE8] font-medium">Station lockers</span>
@@ -185,7 +191,7 @@ export default function StudentDashboardOverview() {
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-black text-[#192B4A]">
+          <p className="mt-2 text-2xl font-black text-[#283442]">
             {loading ? '...' : metrics.itemsSuccessfullyReturned}
           </p>
           <span className="text-[10px] text-emerald-700 font-medium">Verified release</span>
@@ -194,17 +200,17 @@ export default function StudentDashboardOverview() {
 
       {/* Action Banner: Approved Claim Ready for Collection OTP */}
       {myClaims.some((c) => c.claimStatus === 'APPROVED' && c.handoverOtp) && (
-        <div className="rounded-2xl border border-[#20B5AD]/30 bg-gradient-to-r from-[#E6F8F7] to-[#F0FBFA] p-5 shadow-xs">
+        <div className="rounded-2xl border border-[#F58220]/30 bg-gradient-to-r from-[#FFF1E6] to-[#F0FBFA] p-5 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-[#20B5AD] text-white flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-11 h-11 rounded-xl bg-[#F58220] text-white flex items-center justify-center shrink-0 shadow-sm">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#16A89F] bg-white/80 px-2 py-0.5 rounded-md border border-[#20B5AD]/30">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#E66F00] bg-white/80 px-2 py-0.5 rounded-md border border-[#F58220]/30">
                   Action Required • Collection Ready
                 </span>
-                <h3 className="text-sm font-bold text-[#192B4A] mt-1">
+                <h3 className="text-sm font-bold text-[#283442] mt-1">
                   Claim Approved &amp; Awaiting Handover
                 </h3>
                 <p className="text-xs text-slate-600 mt-0.5">
@@ -215,7 +221,7 @@ export default function StudentDashboardOverview() {
 
             <Link
               href="/dashboard/my-claims"
-              className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-4 py-2 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors shrink-0"
             >
               <span>View Handover Pass</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -229,12 +235,12 @@ export default function StudentDashboardOverview() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div>
-              <h3 className="text-sm sm:text-base font-bold text-[#192B4A]">My Recent Property Reports</h3>
+              <h3 className="text-sm sm:text-base font-bold text-[#283442]">My Recent Property Reports</h3>
               <p className="text-xs text-slate-500">Items you logged across university premises.</p>
             </div>
             <Link
               href="/dashboard/my-reports"
-              className="text-xs font-bold text-[#20B5AD] hover:underline"
+              className="text-xs font-bold text-[#F58220] hover:underline"
             >
               View All ({myReports.length})
             </Link>
@@ -251,7 +257,7 @@ export default function StudentDashboardOverview() {
                       </span>
                       <StatusBadge status={item.status} />
                     </div>
-                    <h4 className="text-xs sm:text-sm font-bold text-[#192B4A] mt-1.5 truncate">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#283442] mt-1.5 truncate">
                       {item.title}
                     </h4>
                     <p className="text-[11px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
@@ -262,7 +268,7 @@ export default function StudentDashboardOverview() {
 
                   <Link
                     href={`/items/${item.id}`}
-                    className="self-start sm:self-auto rounded-xl border border-slate-200 bg-[#F5F8FC] px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#356DE8] hover:text-[#356DE8] hover:bg-white transition-colors shrink-0"
+                    className="self-start sm:self-auto rounded-xl border border-slate-200 bg-[#F5F5F5] px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#356DE8] hover:text-[#356DE8] hover:bg-white transition-colors shrink-0"
                   >
                     Inspect Details
                   </Link>
@@ -280,7 +286,7 @@ export default function StudentDashboardOverview() {
                   </Link>
                   <Link
                     href="/report?type=FOUND"
-                    className="font-bold text-[#20B5AD] hover:underline"
+                    className="font-bold text-[#F58220] hover:underline"
                   >
                     Report Found Item &rarr;
                   </Link>

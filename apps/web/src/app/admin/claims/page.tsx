@@ -94,14 +94,14 @@ export default function AdminClaimsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search claims by item, claimant name, reg number, reference..."
-            className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
           />
         </div>
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#20B5AD] focus:outline-none w-full sm:w-auto"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#F58220] focus:outline-none w-full sm:w-auto"
         >
           <option value="ALL">All Claim Statuses</option>
           <option value="UNDER_REVIEW">Under Review</option>
@@ -115,10 +115,10 @@ export default function AdminClaimsPage() {
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-[#192B4A]">Adjudicated Property Claims</h3>
+            <h3 className="text-sm font-bold text-[#283442]">Adjudicated Property Claims</h3>
             <p className="text-xs text-slate-500">Supervised claim outcomes reviewed by campus security officers.</p>
           </div>
-          <span className="text-xs font-bold text-[#16A89F] bg-[#E6F8F7] px-2.5 py-1 rounded-lg">
+          <span className="text-xs font-bold text-[#E66F00] bg-[#FFF1E6] px-2.5 py-1 rounded-lg">
             {loading ? '...' : `${filtered.length} Claims`}
           </span>
         </div>
@@ -134,7 +134,7 @@ export default function AdminClaimsPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {filtered.map((item) => (
-              <div key={item.id} className="p-4 sm:p-5 hover:bg-[#F5F8FC] transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div key={item.id} className="p-4 sm:p-5 hover:bg-[#F5F5F5] transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] font-bold text-[#356DE8] bg-[#EBF1FD] px-2 py-0.5 rounded">
@@ -151,7 +151,7 @@ export default function AdminClaimsPage() {
                     </span>
                   </div>
 
-                  <h4 className="text-sm font-bold text-[#192B4A]">{item.itemTitle}</h4>
+                  <h4 className="text-sm font-bold text-[#283442]">{item.itemTitle}</h4>
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                     <span className="flex items-center gap-1">
@@ -184,7 +184,7 @@ export default function AdminClaimsPage() {
                   </span>
                   <Link
                     href="/admin/audit"
-                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#20B5AD] hover:text-[#20B5AD] transition-colors"
+                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#F58220] hover:text-[#F58220] transition-colors"
                   >
                     View Audit Trail
                   </Link>

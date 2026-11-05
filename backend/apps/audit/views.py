@@ -8,13 +8,86 @@ Audit App Views: Security Dashboard Stats, Compliance Audit Trail & Admin Logs
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
+from apps.accounts.models import UserRole
 from apps.accounts.permissions import IsSecurityOrAdmin, IsCampusAdmin
 from apps.claims.models import Claim, ClaimStatus
 from apps.items.models import Item, ItemStatus
+from apps.items.serializers import SecurityReportQueueSerializer
 from .models import AuditEntry
 from .serializers import AuditEntrySerializer
+
+
+class SecuritySubmittedReportsAPIView(APIView):
+    """List current student/staff reports awaiting security review."""
+    permission_classes = [IsSecurityOrAdmin]
+
+    @extend_schema(
+        tags=['Security Operations'],
+        summary='Get Submitted Reports for Security Review',
+        parameters=[
+            OpenApiParameter('itemType', str, description='Filter by LOST or FOUND'),
+            OpenApiParameter('search', str, description='Search title, description, or reference'),
+            OpenApiParameter('page', int, description='Page number (default 1)'),
+            OpenApiParameter('limit', int, description='Page size (default 20, max 100)'),
+        ],
+        responses={200: OpenApiResponse(description='Student/staff reports awaiting review')},
+    )
+    def get(self, request):
+        queryset = Item.objects.filter(
+            reported_by__role=UserRole.STUDENT_STAFF,
+            is_archived=False,
+            status__in=(ItemStatus.REPORTED, ItemStatus.MATCH_PENDING),
+        ).select_related('category', 'location', 'reported_by').order_by('-created_at', '-id')
+
+        item_type = request.query_params.get('itemType')
+        if item_type and item_type.upper() != 'ALL':
+            queryset = queryset.filter(item_type=item_type.upper())
+
+        search = request.query_params.get('search')
+        if search and search.strip():
+            term = search.strip()
+            queryset = queryset.filter(
+                Q(title__icontains=term) |
+                Q(public_description__icontains=term) |
+                Q(reference_number__icontains=term)
+            )
+
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except ValueError:
+            page = 1
+        try:
+            limit = min(100, max(1, int(request.query_params.get('limit', 20))))
+        except ValueError:
+            limit = 20
+
+        total_items = queryset.count()
+        total_pages = max(1, (total_items + limit - 1) // limit)
+        offset = (page - 1) * limit
+        items = list(queryset[offset:offset + limit])
+        serialized = SecurityReportQueueSerializer(
+            items,
+            many=True,
+            context={'request': request},
+        ).data
+
+        return Response(
+            {
+                'items': serialized,
+                'pagination': {
+                    'page': page,
+                    'limit': limit,
+                    'totalItems': total_items,
+                    'totalPages': total_pages,
+                    'hasNextPage': page < total_pages,
+                    'hasPrevPage': page > 1,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class SecurityDashboardStatsAPIView(APIView):
     """

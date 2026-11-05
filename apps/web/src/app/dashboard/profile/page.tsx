@@ -61,12 +61,12 @@ export default function StudentProfilePage() {
         {/* Profile Card Header */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-[#E6F8F7] border border-[#20B5AD]/30 text-[#20B5AD] flex items-center justify-center text-xl font-black">
+            <div className="w-16 h-16 rounded-2xl bg-[#FFF1E6] border border-[#F58220]/30 text-[#F58220] flex items-center justify-center text-xl font-black">
               {profile.fullName.slice(0, 2).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-[#192B4A]">{profile.fullName}</h2>
+                <h2 className="text-lg font-bold text-[#283442]">{profile.fullName}</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
                   <ShieldCheck className="w-3 h-3" />
                   Verified Campus User
@@ -104,7 +104,7 @@ export default function StudentProfilePage() {
         {/* Profile Details Form */}
         <form onSubmit={handleSave} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-sm font-bold text-[#192B4A]">Claim Contact Details</h3>
+            <h3 className="text-sm font-bold text-[#283442]">Claim Contact Details</h3>
             <p className="text-xs text-slate-500">Used by security officers to verify ownership and coordinate physical handovers.</p>
           </div>
 
@@ -119,7 +119,7 @@ export default function StudentProfilePage() {
                   type="text"
                   value={profile.fullName}
                   onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
                 />
               </div>
             </div>
@@ -165,7 +165,7 @@ export default function StudentProfilePage() {
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                   placeholder="+91 XXXXX XXXXX"
-                  className="w-full rounded-xl border border-slate-200 bg-[#F5F8FC] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#20B5AD] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
                 />
               </div>
             </div>
@@ -173,20 +173,20 @@ export default function StudentProfilePage() {
 
           {/* Recovery Notifications Settings */}
           <div className="pt-4 border-t border-slate-100 space-y-3">
-            <h4 className="text-xs font-bold text-[#192B4A] uppercase tracking-wider">
+            <h4 className="text-xs font-bold text-[#283442] uppercase tracking-wider">
               Lost &amp; Found Alert Preferences
             </h4>
 
 
-            <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-[#F5F8FC] cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-[#F5F5F5] cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={profile.notifyOtp}
                 onChange={(e) => setProfile({ ...profile, notifyOtp: e.target.checked })}
-                className="mt-0.5 w-4 h-4 rounded text-[#20B5AD] focus:ring-[#20B5AD]"
+                className="mt-0.5 w-4 h-4 rounded text-[#F58220] focus:ring-[#F58220]"
               />
               <div className="text-xs">
-                <span className="font-bold text-[#192B4A] block">Claim Approval &amp; Handover OTP Alerts</span>
+                <span className="font-bold text-[#283442] block">Claim Approval &amp; Handover OTP Alerts</span>
                 <span className="text-slate-500">Send an instant notification when a security officer approves my claim and generates a single-use release OTP.</span>
               </div>
             </label>
@@ -196,7 +196,7 @@ export default function StudentProfilePage() {
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60"
             >
               <Save className="w-4 h-4" />
               <span>{loading ? 'Loading Profile...' : 'Save Contact Preferences'}</span>

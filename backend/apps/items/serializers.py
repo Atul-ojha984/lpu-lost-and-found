@@ -6,6 +6,7 @@ Items App Serializers
 """
 
 from rest_framework import serializers
+from apps.accounts.models import User
 from apps.locations.models import Location
 from .models import ItemCategory, Item, ItemType
 from apps.verification.models import VerificationChallenge
@@ -147,6 +148,25 @@ class PublicItemSerializer(serializers.ModelSerializer):
         if request and request.user and request.user.is_authenticated:
             return obj.reported_by_id == request.user.id
         return False
+
+
+class SecurityReportReporterSerializer(serializers.ModelSerializer):
+    """Minimal reporter identity visible only through the security report queue."""
+    fullName = serializers.CharField(source='full_name', read_only=True)
+    registrationNumber = serializers.CharField(source='registration_number', read_only=True)
+    userType = serializers.CharField(source='user_type', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['fullName', 'registrationNumber', 'userType']
+
+
+class SecurityReportQueueSerializer(PublicItemSerializer):
+    """Public item details plus a minimal reporter summary for authorized security staff."""
+    reporter = SecurityReportReporterSerializer(source='reported_by', read_only=True)
+
+    class Meta(PublicItemSerializer.Meta):
+        fields = PublicItemSerializer.Meta.fields + ['reporter']
 
 class VerificationQuestionInputSerializer(serializers.Serializer):
     questionText = serializers.CharField(max_length=300)

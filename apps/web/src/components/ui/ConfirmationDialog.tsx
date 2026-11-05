@@ -98,7 +98,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 ${
               isDestructive
                 ? 'bg-[#DC4545] hover:bg-[#B91C1C]'
-                : 'lpu-btn-primary hover:bg-[#16A89F]'
+                : 'lpu-btn-primary hover:bg-[#E66F00]'
             }`}
           >
             {isLoading ? 'Processing...' : confirmLabel}

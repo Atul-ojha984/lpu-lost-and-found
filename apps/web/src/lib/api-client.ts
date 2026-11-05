@@ -44,6 +44,35 @@ export interface CreateReportPayload {
   verificationQuestions?: Array<{ questionText: string; expectedAnswer: string }>;
 }
 
+export interface DailyLostReportAllowance {
+  applies: boolean;
+  limit: number;
+  submitted: number;
+  remaining: number | null;
+  localDate: string | null;
+}
+
+export interface SecurityReviewReport {
+  id: string;
+  referenceNumber: string;
+  itemType: ItemType;
+  title: string;
+  publicDescription: string;
+  category: { id: string; code: string; name: string };
+  location: { id: string; code: string; name: string; campusZone: string };
+  specificLocation: string;
+  eventDate: string;
+  primaryImageUrl?: string;
+  additionalImages?: string[];
+  status: ItemStatus;
+  createdAt: string;
+  reporter: {
+    fullName: string;
+    registrationNumber: string;
+    userType: string;
+  };
+}
+
 export interface UpdateReportPayload {
   title?: string;
   category?: string;
@@ -374,6 +403,11 @@ export const apiClient = {
     return normalizeApiItem(raw);
   },
 
+  /** Get the current user's student-only lost-report allowance for the local day. */
+  async getDailyLostReportAllowance(): Promise<DailyLostReportAllowance> {
+    return apiFetch<DailyLostReportAllowance>('items/daily-lost-report-limit');
+  },
+
   /**
    * Update an eligible report by its owner
    */
@@ -384,6 +418,15 @@ export const apiClient = {
       body: JSON.stringify(payload),
     });
     return normalizeApiItem(raw);
+  },
+
+  /**
+   * Soft-withdraw an eligible report owned by the authenticated student or staff member
+   */
+  async withdrawReport(id: string): Promise<{ success: boolean; reportId: string; message: string }> {
+    return apiFetch<{ success: boolean; reportId: string; message: string }>(`items/${id}/withdraw`, {
+      method: 'DELETE',
+    });
   },
 
   /**
@@ -486,6 +529,14 @@ export const apiClient = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getMyClaims(): Promise<any[]> {
     return apiFetch('claims/my-claims');
+  },
+
+  /**
+   * Retrieve the authenticated user's persisted, completed recovery receipts
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getMyRecoveryHistory(): Promise<any[]> {
+    return apiFetch('handovers/my-recovery-history');
   },
 
   /**
@@ -739,6 +790,33 @@ export const apiClient = {
     return apiFetch('security/dashboard-stats');
   },
 
+  /** Security Desk: student/staff reports awaiting review. */
+  async getSecuritySubmittedReports(filters?: {
+    search?: string;
+    itemType?: ItemType | 'ALL';
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    items: SecurityReviewReport[];
+    pagination: {
+      page: number;
+      limit: number;
+      totalItems: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.itemType && filters.itemType !== 'ALL') params.set('itemType', filters.itemType);
+    if (filters?.page) params.set('page', filters.page.toString());
+    if (filters?.limit) params.set('limit', filters.limit.toString());
+
+    const query = params.toString();
+    return apiFetch(`security/reports${query ? `?${query}` : ''}`);
+  },
+
   /**
    * Security Audit Trail: Paginated security events
    */
@@ -813,6 +891,7 @@ export const apiClient = {
    */
   async getAdminUsers(filters?: {
     role?: string;
+    userType?: string;
     search?: string;
     isActive?: boolean;
     page?: number;
@@ -821,12 +900,31 @@ export const apiClient = {
   }): Promise<any> {
     const params = new URLSearchParams();
     if (filters?.role) params.set('role', filters.role);
+    if (filters?.userType) params.set('userType', filters.userType);
     if (filters?.search) params.set('search', filters.search);
     if (filters?.isActive !== undefined) params.set('isActive', filters.isActive.toString());
     if (filters?.page) params.set('page', filters.page.toString());
     if (filters?.limit) params.set('limit', filters.limit.toString());
     const qs = params.toString();
     return apiFetch(qs ? `admin/users?${qs}` : 'admin/users');
+  },
+
+  /** Admin Users: Create an active or inactive campus account */
+  async createAdminUser(payload: {
+    fullName: string;
+    registrationNumber: string;
+    email: string;
+    userType: 'STUDENT' | 'STAFF' | 'SECURITY_OFFICER';
+    password: string;
+    department?: string;
+    securityPost?: string;
+    phone?: string;
+    isActive?: boolean;
+  }): Promise<Record<string, unknown>> {
+    return apiFetch<Record<string, unknown>>('admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   /**
@@ -836,6 +934,7 @@ export const apiClient = {
     userId: string,
     payload: {
       role?: string;
+      userType?: string;
       securityPost?: string;
       department?: string;
       phone?: string;

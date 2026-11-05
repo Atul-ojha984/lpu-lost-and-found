@@ -88,26 +88,26 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F8FC]">
+    <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
       <Navbar />
 
       {/* Hero Section */}
       <section className="relative border-b border-[#E2E8F0] bg-white py-16 sm:py-24 overflow-hidden">
         {/* Subtle decorative background shapes matching Navy/Teal/Royal theme */}
-        <div className="pointer-events-none absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[#20B5AD]/10 blur-3xl" />
+        <div className="pointer-events-none absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[#F58220]/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-[#356DE8]/10 blur-3xl" />
 
         <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 text-center">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#20B5AD]/30 bg-[#E6F8F7] px-3.5 py-1 text-xs font-bold text-[#16A89F] shadow-2xs mb-6">
-            <span className="flex h-2 w-2 rounded-full bg-[#20B5AD] animate-pulse" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#F58220]/30 bg-[#FFF1E6] px-3.5 py-1 text-xs font-bold text-[#E66F00] shadow-2xs mb-6">
+            <span className="flex h-2 w-2 rounded-full bg-[#F58220] animate-pulse" />
             <span>Lovely Professional University • Campus Property Recovery Portal</span>
           </div>
 
           {/* Heading */}
-          <h1 className="text-3xl font-extrabold tracking-tight text-[#192B4A] sm:text-5xl lg:text-6xl">
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#283442] sm:text-5xl lg:text-6xl">
             Lost something on campus? <br className="hidden sm:inline" />
-            <span className="text-[#20B5AD]">Let&apos;s find it together.</span>
+            <span className="text-[#F58220]">Let&apos;s find it together.</span>
           </h1>
 
           {/* Subtitle */}
@@ -120,7 +120,7 @@ export default function HomePage() {
             onSubmit={handleSearchSubmit}
             className="mx-auto mt-8 max-w-2xl"
           >
-            <div className="flex flex-col sm:flex-row items-center gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-[#20B5AD] focus-within:ring-2 focus-within:ring-[#20B5AD]/20 transition-all">
+            <div className="flex flex-col sm:flex-row items-center gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-[#F58220] focus-within:ring-2 focus-within:ring-[#F58220]/20 transition-all">
               <div className="relative flex-1 w-full flex items-center">
                 <Search className="absolute left-3.5 h-5 w-5 text-slate-400" />
                 <input
@@ -133,7 +133,7 @@ export default function HomePage() {
               </div>
               <button
                 type="submit"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl lpu-btn-primary px-6 py-3 text-sm font-bold text-white shadow-xs hover:bg-[#16A89F] transition-colors shrink-0"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl lpu-btn-primary px-6 py-3 text-sm font-bold text-white shadow-xs hover:bg-[#E66F00] transition-colors shrink-0"
               >
                 <span>Search Listings</span>
                 <ArrowRight className="h-4 w-4" />
@@ -157,7 +157,7 @@ export default function HomePage() {
                   key={catKey}
                   type="button"
                   onClick={() => handleCategoryClick(catKey as ItemCategory)}
-                  className="rounded-xl border border-slate-200 bg-[#F5F8FC] px-3 py-1 font-semibold text-slate-700 hover:border-[#20B5AD] hover:text-[#20B5AD] hover:bg-[#E6F8F7] transition-all"
+                  className="rounded-xl border border-slate-200 bg-[#F5F5F5] px-3 py-1 font-semibold text-slate-700 hover:border-[#F58220] hover:text-[#F58220] hover:bg-[#FFF1E6] transition-all"
                 >
                   {info?.label || catKey}
                 </button>
@@ -176,7 +176,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/report?type=FOUND"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#16A89F] transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
             >
               <Package className="w-4 h-4" />
               <span>Report Found Belonging</span>
@@ -189,31 +189,31 @@ export default function HomePage() {
       <section className="py-12 bg-white border-b border-[#E2E8F0]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-2xl border border-slate-200 bg-[#F5F8FC] p-6 space-y-3 hover:border-[#192B4A]/30 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-[#192B4A]/10 text-[#192B4A] flex items-center justify-center">
+            <div className="rounded-2xl border border-slate-200 bg-[#F5F5F5] p-6 space-y-3 hover:border-[#283442]/30 transition-all">
+              <div className="w-10 h-10 rounded-xl bg-[#283442]/10 text-[#283442] flex items-center justify-center">
                 <Lock className="w-5 h-5" />
               </div>
-              <h3 className="text-sm font-bold text-[#192B4A]">Confidential Item Vaults</h3>
+              <h3 className="text-sm font-bold text-[#283442]">Confidential Item Vaults</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Device serials, student identity card numbers, and identifying marks are encrypted in a zero-trust cryptographic vault. Public listings never expose sensitive proof details.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-[#F5F8FC] p-6 space-y-3 hover:border-[#20B5AD]/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-[#E6F8F7] text-[#20B5AD] flex items-center justify-center">
+            <div className="rounded-2xl border border-slate-200 bg-[#F5F5F5] p-6 space-y-3 hover:border-[#F58220]/40 transition-all">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF1E6] text-[#F58220] flex items-center justify-center">
                 <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-sm font-bold text-[#192B4A]">Verified Custody Desks</h3>
+              <h3 className="text-sm font-bold text-[#283442]">Verified Custody Desks</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Dedicated security checkpoints across all academic blocks, residential hostels, and libraries maintain chain of custody with live digital tracking.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-[#F5F8FC] p-6 space-y-3 hover:border-[#356DE8]/40 transition-all">
+            <div className="rounded-2xl border border-slate-200 bg-[#F5F5F5] p-6 space-y-3 hover:border-[#356DE8]/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-[#EBF1FD] text-[#356DE8] flex items-center justify-center">
                 <KeyRound className="w-5 h-5" />
               </div>
-              <h3 className="text-sm font-bold text-[#192B4A]">Supervised Handover with OTP</h3>
+              <h3 className="text-sm font-bold text-[#283442]">Supervised Handover with OTP</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Claims approved by security officers trigger a single-use 6-digit OTP delivered exclusively to the claimant. Property release occurs only after officer OTP confirmation.
               </p>
@@ -227,7 +227,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-2">
             <div>
-              <h2 className="text-xl font-bold text-[#192B4A] tracking-tight">
+              <h2 className="text-xl font-bold text-[#283442] tracking-tight">
                 Recent Campus Property Listings
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -236,7 +236,7 @@ export default function HomePage() {
             </div>
             <Link
               href="/board"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#20B5AD] hover:text-[#16A89F] hover:underline"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#F58220] hover:text-[#E66F00] hover:underline"
             >
               <span>Explore All Listings</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -275,7 +275,7 @@ export default function HomePage() {
               <p className="text-xs text-slate-500">No active property reports logged at this moment.</p>
               <Link
                 href="/report"
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#20B5AD] hover:underline"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#F58220] hover:underline"
               >
                 Report a lost or found item &rarr;
               </Link>

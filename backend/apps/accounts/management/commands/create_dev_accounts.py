@@ -10,7 +10,7 @@ or exposing sensitive data.
 
 import os
 from django.core.management.base import BaseCommand
-from apps.accounts.models import User, UserRole
+from apps.accounts.models import User, UserRole, UserType
 
 class Command(BaseCommand):
     help = 'Safely creates or verifies local development accounts for Student, Security, and Admin roles.'
@@ -70,6 +70,7 @@ class Command(BaseCommand):
                     'registration_number': student_reg,
                     'full_name': 'Aarav Sharma',
                     'role': UserRole.STUDENT_STAFF,
+                    'user_type': UserType.STUDENT,
                     'department': 'School of Computer Science & Engineering',
                     'phone': '+91 98765 43210',
                     'is_active': True,
@@ -85,6 +86,9 @@ class Command(BaseCommand):
                 if user.registration_number != student_reg:
                     # Update registration number to match canonical identifier
                     user.registration_number = student_reg
+                    updated = True
+                if user.user_type != UserType.STUDENT:
+                    user.user_type = UserType.STUDENT
                     updated = True
                 if reset_passwords or not user.has_usable_password():
                     user.set_password(student_pwd)
@@ -104,6 +108,7 @@ class Command(BaseCommand):
                     'registration_number': security_reg,
                     'full_name': 'Rajesh Verma (Officer)',
                     'role': UserRole.SECURITY_PERSONNEL,
+                    'user_type': UserType.SECURITY_OFFICER,
                     'department': 'Campus Security Department',
                     'security_post': 'Main Gate 1 Security Desk',
                     'phone': '+91 98765 43211',
@@ -123,6 +128,9 @@ class Command(BaseCommand):
                 if user.role != UserRole.SECURITY_PERSONNEL:
                     user.role = UserRole.SECURITY_PERSONNEL
                     updated = True
+                if user.user_type != UserType.SECURITY_OFFICER:
+                    user.user_type = UserType.SECURITY_OFFICER
+                    updated = True
                 if reset_passwords or not user.has_usable_password():
                     user.set_password(security_pwd)
                     updated = True
@@ -141,6 +149,7 @@ class Command(BaseCommand):
                     'registration_number': admin_reg,
                     'full_name': 'Sunita Rao (Dean of Student Welfare)',
                     'role': UserRole.CAMPUS_ADMIN,
+                    'user_type': UserType.CAMPUS_ADMIN,
                     'department': 'Division of Student Welfare',
                     'phone': '+91 98765 43212',
                     'is_active': True,
@@ -158,6 +167,10 @@ class Command(BaseCommand):
                     updated = True
                 if user.role not in (UserRole.CAMPUS_ADMIN, UserRole.SYSTEM_ADMIN):
                     user.role = UserRole.CAMPUS_ADMIN
+                    updated = True
+                expected_type = UserType.SYSTEM_ADMIN if user.role == UserRole.SYSTEM_ADMIN else UserType.CAMPUS_ADMIN
+                if user.user_type != expected_type:
+                    user.user_type = expected_type
                     updated = True
                 if not user.is_staff:
                     user.is_staff = True

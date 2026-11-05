@@ -66,6 +66,10 @@ class Handover(models.Model):
         ordering = ['-created_at']
         constraints = [
             models.UniqueConstraint(
+                fields=['claim'],
+                name='unique_handover_per_claim',
+            ),
+            models.UniqueConstraint(
                 fields=['item'],
                 condition=models.Q(is_completed=True),
                 name='unique_completed_handover_per_item',

@@ -6,8 +6,10 @@ Items App Views: Categories, Public Board, Reporting & Ingestion
 """
 
 from datetime import datetime, timezone, timedelta
+import uuid
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone as django_timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -19,9 +21,15 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiRespon
 from apps.accounts.permissions import (
     IsCampusAdmin,
     IsSecurityOrAdmin,
+    IsStudentOrStaff,
     IsRecordOwner,
 )
+from apps.accounts.models import User
 from apps.audit.models import AuditEntry, AuditAction
+from apps.claims.models import Claim, ClaimStatus
+from apps.custody.models import CustodyRecord
+from apps.handovers.models import Handover
+from apps.matching.models import MatchSuggestion, MatchStatus
 from apps.verification.models import PrivateDetail, VerificationChallenge
 from .models import ItemCategory, Item, ItemType, ItemStatus
 from .serializers import (
@@ -34,7 +42,13 @@ from .serializers import (
     PublicChallengeSerializer,
     PrivateVaultResponseSerializer,
 )
-from .services import generate_reference_number, process_and_store_image
+from .services import (
+    STUDENT_DAILY_LOST_REPORT_LIMIT,
+    generate_reference_number,
+    get_student_daily_lost_report_allowance,
+    is_student_reporter,
+    process_and_store_image,
+)
 
 # -----------------------------------------------------------------------------
 # Categories
@@ -235,6 +249,21 @@ class ItemPublicBoardAPIView(APIView):
 # Item Detail & Reporting
 # -----------------------------------------------------------------------------
 
+class DailyLostReportLimitAPIView(APIView):
+    """Return the authenticated student's remaining lost-report allowance."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=['Items'],
+        summary='Get Daily Lost Report Allowance',
+        responses={200: OpenApiResponse(description='Current local-day lost report allowance')},
+    )
+    def get(self, request):
+        return Response(
+            get_student_daily_lost_report_allowance(request.user),
+            status=status.HTTP_200_OK,
+        )
+
 class ItemDetailAPIView(APIView):
     """Retrieve sanitized public or owner item detail by ID or reference number."""
     permission_classes = [AllowAny]
@@ -292,6 +321,19 @@ class ItemDetailAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        if item.status == ItemStatus.EXPIRED:
+            return Response(
+                {
+                    'success': False,
+                    'statusCode': status.HTTP_409_CONFLICT,
+                    'error': {
+                        'code': 'REPORT_EXPIRED',
+                        'message': 'Report expired after 30 days without recovery.',
+                    },
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         if item.reported_by_id != request.user.id and request.user.role not in ('CAMPUS_ADMIN', 'SYSTEM_ADMIN'):
             return Response(
                 {
@@ -343,6 +385,27 @@ class CreateItemReportAPIView(APIView):
         retention_expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
 
         with transaction.atomic():
+            # Serialize count-and-create for this account. PostgreSQL holds this
+            # user-row lock until commit, so simultaneous requests cannot both
+            # observe the same remaining allowance and exceed the cap.
+            if vd['itemType'] == ItemType.LOST and is_student_reporter(request.user):
+                User.objects.select_for_update().only('id').get(pk=request.user.pk)
+                allowance = get_student_daily_lost_report_allowance(request.user)
+                if allowance['remaining'] <= 0:
+                    return Response(
+                        {
+                            'success': False,
+                            'statusCode': status.HTTP_429_TOO_MANY_REQUESTS,
+                            'error': {
+                                'code': 'DAILY_LOST_REPORT_LIMIT_REACHED',
+                                'message': (
+                                    'Daily limit reached. You can submit new lost-item reports tomorrow.'
+                                ),
+                            },
+                        },
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+
             ref_no = generate_reference_number(vd['itemType'])
             item = Item.objects.create(
                 reference_number=ref_no,
@@ -438,6 +501,172 @@ class UpdateItemReportAPIView(APIView):
 
         item.save()
         return Response(PublicItemSerializer(item, context={'request': request}).data, status=status.HTTP_200_OK)
+
+class WithdrawItemReportAPIView(APIView):
+    """Soft-withdraw an eligible report owned by the authenticated student or staff member."""
+    permission_classes = [IsAuthenticated, IsStudentOrStaff]
+
+    @extend_schema(
+        tags=['Items'],
+        summary='Withdraw Own Lost or Found Report',
+        responses={200: OpenApiResponse(description='Report withdrawn or already withdrawn')},
+    )
+    def delete(self, request, pk):
+        try:
+            item_id = uuid.UUID(str(pk))
+        except (ValueError, AttributeError):
+            return Response(
+                {
+                    'success': False,
+                    'statusCode': status.HTTP_404_NOT_FOUND,
+                    'error': {'code': 'NOT_FOUND', 'message': 'Report not found.'},
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with transaction.atomic():
+            item = Item.objects.select_for_update().select_related('reported_by').filter(pk=item_id).first()
+            if not item:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_404_NOT_FOUND,
+                        'error': {'code': 'NOT_FOUND', 'message': 'Report not found.'},
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if item.reported_by_id != request.user.id:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_403_FORBIDDEN,
+                        'error': {'code': 'FORBIDDEN', 'message': 'You can withdraw only reports you created.'},
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            if item.is_archived:
+                return Response(
+                    {
+                        'success': True,
+                        'alreadyWithdrawn': True,
+                        'reportId': str(item.id),
+                        'message': 'This report is already withdrawn or archived.',
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            active_claim_statuses = (
+                ClaimStatus.SUBMITTED,
+                ClaimStatus.UNDER_REVIEW,
+                ClaimStatus.CHALLENGE_REQUIRED,
+                ClaimStatus.APPROVED,
+                ClaimStatus.COMPLETED,
+            )
+            if Claim.objects.filter(item=item, claim_status__in=active_claim_statuses).exists():
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'ACTIVE_CLAIM',
+                            'message': 'This report has an active or approved ownership claim. Continue through the existing claim and security review process.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if Handover.objects.filter(item=item).exists():
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'HANDOVER_DEPENDENCY',
+                            'message': 'This report is linked to a supervised release or handover and cannot be withdrawn here. Continue through the existing security handover process.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if CustodyRecord.objects.filter(item=item).exists():
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'CUSTODY_DEPENDENCY',
+                            'message': 'Security has recorded custody activity for this report. Please continue through the existing security process.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            accepted_match = MatchSuggestion.objects.filter(
+                status=MatchStatus.ACCEPTED,
+            ).filter(Q(lost_item=item) | Q(found_item=item)).exists()
+            if accepted_match:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'ACTIVE_MATCH',
+                            'message': 'This report is part of an accepted item match. Continue through the existing ownership process or contact campus security.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            withdrawable_statuses = (ItemStatus.REPORTED, ItemStatus.MATCH_PENDING)
+            if item.status not in withdrawable_statuses:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'REPORT_WORKFLOW_ACTIVE',
+                            'message': 'This report has entered a security or resolution workflow and cannot be withdrawn here. Continue through the existing claim, custody, or handover process.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            withdrawal_time = django_timezone.now()
+            previous_status = item.status
+            item.is_archived = True
+            item.save(update_fields=['is_archived', 'updated_at'])
+
+            AuditEntry.objects.create(
+                actor=request.user,
+                actor_role=request.user.role,
+                action=AuditAction.ITEM_REPORT_WITHDRAW,
+                target_entity='Item',
+                target_id=str(item.id),
+                ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                timestamp=withdrawal_time,
+                metadata={
+                    'itemType': item.item_type,
+                    'referenceNumber': item.reference_number,
+                    'previousStatus': previous_status,
+                    'withdrawalStatus': 'WITHDRAWN',
+                    'withdrawnAt': withdrawal_time.isoformat(),
+                },
+            )
+
+        return Response(
+            {
+                'success': True,
+                'reportId': str(item.id),
+                'referenceNumber': item.reference_number,
+                'withdrawalStatus': 'WITHDRAWN',
+                'withdrawnAt': withdrawal_time,
+                'message': 'Report withdrawn successfully.',
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class MyReportsAPIView(APIView):
     """Retrieve items submitted by currently authenticated user."""

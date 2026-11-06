@@ -15,9 +15,14 @@ from .views import (
     AdminDisposalApproveAPIView,
     AdminUsersAPIView,
     AdminUserDetailAPIView,
+    AdminInventoryAPIView,
 )
 
 urlpatterns = [
+    # Read-only cross-portal view of security inventory and locker state
+    path('inventory/', AdminInventoryAPIView.as_view(), name='admin-inventory-slash'),
+    path('inventory', AdminInventoryAPIView.as_view(), name='admin-inventory'),
+
     # Analytics Engine
     path('analytics/', AdminAnalyticsAPIView.as_view(), name='admin-analytics-slash'),
     path('analytics', AdminAnalyticsAPIView.as_view(), name='admin-analytics'),

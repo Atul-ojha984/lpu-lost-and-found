@@ -20,9 +20,16 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
-import { apiClient, ApiClientError } from '@/lib/api-client';
+import { apiClient, ApiClientError, type DirectRecoveryRecord } from '@/lib/api-client';
 import { PublicItem } from '@/types';
-import { formatDisplayDate } from '@/lib/formatters';
+import { formatDisplayDate, formatDisplayDateTime } from '@/lib/formatters';
+
+function formatOtpRemaining(seconds?: number) {
+  if (!seconds || seconds <= 0) return 'Expired';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.ceil((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
 
 function MyReportsContent() {
   const router = useRouter();
@@ -30,6 +37,7 @@ function MyReportsContent() {
   const editIdParam = searchParams.get('edit');
 
   const [items, setItems] = useState<PublicItem[]>([]);
+  const [directRecoveries, setDirectRecoveries] = useState<DirectRecoveryRecord[]>([]);
   const [filterType, setFilterType] = useState<'ALL' | 'LOST' | 'FOUND'>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -62,8 +70,12 @@ function MyReportsContent() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const reports = await apiClient.getMyReports();
+      const [reports, recoveries] = await Promise.all([
+        apiClient.getMyReports(),
+        apiClient.getMyDirectRecoveries(),
+      ]);
       setItems(reports);
+      setDirectRecoveries(recoveries);
 
       // If URL param specified an item to edit, open it
       if (editIdParam) {
@@ -92,9 +104,13 @@ function MyReportsContent() {
 
     async function loadReports() {
       try {
-        const reports = await apiClient.getMyReports();
+        const [reports, recoveries] = await Promise.all([
+          apiClient.getMyReports(),
+          apiClient.getMyDirectRecoveries(),
+        ]);
         if (isMounted) {
           setItems(reports);
+          setDirectRecoveries(recoveries);
 
           // If URL param specified an item to edit, open it
           if (editIdParam) {
@@ -125,8 +141,16 @@ function MyReportsContent() {
 
     loadReports();
 
+    const refreshDirectRecoveries = () => {
+      void apiClient.getMyDirectRecoveries().then((recoveries) => {
+        if (isMounted) setDirectRecoveries(recoveries);
+      }).catch(() => undefined);
+    };
+    const directRecoveryPoll = window.setInterval(refreshDirectRecoveries, 20000);
+
     return () => {
       isMounted = false;
+      window.clearInterval(directRecoveryPoll);
     };
   }, [editIdParam, handleOpenEdit]);
 
@@ -280,7 +304,9 @@ function MyReportsContent() {
           {filteredItems.length > 0 ? (
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
               <div className="divide-y divide-slate-100">
-                {filteredItems.map((item) => (
+                {filteredItems.map((item) => {
+                  const directRecovery = directRecoveries.find((recovery) => recovery.itemId === item.id);
+                  return (
                   <div
                     key={item.id}
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 gap-4 hover:bg-slate-50/50 transition-colors"
@@ -307,6 +333,52 @@ function MyReportsContent() {
                       <p className="text-xs text-slate-500 max-w-2xl line-clamp-1">
                         {item.publicDescription}
                       </p>
+
+                      {directRecovery && (
+                        <div className={`mt-3 rounded-lg border p-3 text-xs ${
+                          directRecovery.status === 'APPROVED'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                            : directRecovery.status === 'COMPLETED'
+                              ? 'border-blue-200 bg-blue-50 text-blue-900'
+                              : 'border-amber-200 bg-amber-50 text-amber-900'
+                        }`}>
+                          <p className="font-semibold">
+                            {directRecovery.status === 'INTAKE_RECORDED'
+                              ? 'Security has received the item. Independent ownership review is pending.'
+                              : directRecovery.status === 'APPROVED'
+                                ? 'Ownership was independently verified. Present this OTP at the security office to collect your item.'
+                                : directRecovery.status === 'COMPLETED'
+                                  ? 'Direct security recovery completed. This report is now read-only.'
+                                  : 'Direct recovery was not approved. Contact the security office about this report.'}
+                          </p>
+                          <p className="mt-1 text-[11px]">
+                            Recovery reference: <span className="font-mono">{directRecovery.recoveryReference}</span>
+                          </p>
+                          <p className="mt-1 text-[11px]">
+                            Approval: {directRecovery.status.replaceAll('_', ' ')} · Handover: {directRecovery.handoverStatus?.replaceAll('_', ' ') || 'Pending'}
+                          </p>
+                          {directRecovery.status === 'APPROVED' && directRecovery.otpStatus === 'RENEWED' && (
+                            <p className="mt-1 font-semibold">Your previous 48-hour OTP expired. A new OTP has been issued; use the current code below.</p>
+                          )}
+                          {directRecovery.status === 'APPROVED' && directRecovery.otpStatus === 'EXPIRED' && (
+                            <p className="mt-1 font-semibold">The previous OTP expired. Refresh this section to retrieve its replacement.</p>
+                          )}
+                          {directRecovery.status === 'APPROVED' && directRecovery.handoverOtp && (
+                            <p className="mt-1.5 font-mono text-sm font-bold tracking-[0.2em]">
+                              Collection OTP: {directRecovery.handoverOtp}
+                            </p>
+                          )}
+                          {directRecovery.status === 'APPROVED' && directRecovery.otpGeneratedAt && (
+                            <p className="mt-1 text-[11px]">Generated {formatDisplayDateTime(directRecovery.otpGeneratedAt)}</p>
+                          )}
+                          {directRecovery.status === 'APPROVED' && directRecovery.otpExpiresAt && (
+                            <p className="mt-1 text-[11px]">
+                              Valid until {formatDisplayDateTime(directRecovery.otpExpiresAt)}
+                              {directRecovery.otpRemainingSeconds !== undefined && ` · ${formatOtpRemaining(directRecovery.otpRemainingSeconds)} remaining`}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 pt-1">
                         <span className="flex items-center gap-1 text-slate-600 font-medium">
@@ -365,7 +437,8 @@ function MyReportsContent() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (

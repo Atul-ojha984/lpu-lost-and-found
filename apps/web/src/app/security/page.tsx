@@ -10,7 +10,8 @@ import {
   ArrowRight,
   CheckCircle2,
   RefreshCw,
-  PlusCircle
+  PlusCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { apiClient } from '@/lib/api-client';
@@ -73,13 +74,22 @@ export default function SecurityDeskOverview() {
       subtitle="Gate 1 Main Control Desk • Physical property intake, claim adjudication, and supervised handover."
       role="SECURITY_PERSONNEL"
       actionButton={
-        <Link
-          href="/report?type=FOUND"
-          className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3.5 py-1.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>Register Found Item</span>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/report?type=FOUND"
+            className="inline-flex items-center gap-1.5 rounded-xl lpu-btn-primary px-3.5 py-1.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Register Found Item</span>
+          </Link>
+          <Link
+            href="/security/custody?tab=direct"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3.5 py-1.5 text-xs font-bold text-emerald-800 shadow-xs hover:bg-emerald-50 transition-colors"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Direct Handover</span>
+          </Link>
+        </div>
       }
     >
       {/* Quick Stats Grid */}

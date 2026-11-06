@@ -46,19 +46,31 @@ export default function HomePage() {
   useEffect(() => {
     let isMounted = true;
     apiClient.getCurrentUser()
-      .then((user) => { if (isMounted) setCurrentUser(user); })
-      .catch(() => { if (isMounted) setCurrentUser(null); });
-
-    apiClient.getItems({ limit: 6, sortBy: 'createdAt', sortOrder: 'desc' })
-      .then((res) => {
-        if (isMounted) {
-          setRecentItems(res.items);
+      .then((user) => {
+        if (!isMounted) return;
+        setCurrentUser(user);
+        if (!user) {
           setIsLoadingItems(false);
+          return;
         }
+
+        apiClient.getItems({ limit: 6, sortBy: 'createdAt', sortOrder: 'desc' })
+          .then((res) => {
+            if (isMounted) {
+              setRecentItems(res.items);
+              setIsLoadingItems(false);
+            }
+          })
+          .catch((err) => {
+            if (isMounted) {
+              setItemsError(err instanceof Error ? err.message : 'Unable to connect to campus property registry.');
+              setIsLoadingItems(false);
+            }
+          });
       })
-      .catch((err) => {
+      .catch(() => {
         if (isMounted) {
-          setItemsError(err instanceof Error ? err.message : 'Unable to connect to campus property registry.');
+          setCurrentUser(null);
           setIsLoadingItems(false);
         }
       });
@@ -112,11 +124,11 @@ export default function HomePage() {
 
           {/* Subtitle */}
           <p className="mx-auto mt-5 max-w-2xl text-sm sm:text-base text-slate-600 leading-relaxed">
-            The dedicated, secure property recovery network for LPU. Report misplaced belongings, browse sanitized listings across campus zones, and recover property through verified security custody.
+            The dedicated, secure property recovery network for LPU. Report misplaced belongings, review listings available to signed-in campus members, and recover property through verified security custody.
           </p>
 
-          {/* Search Bar Form */}
-          <form
+          {currentUser ? (
+            <form
             onSubmit={handleSearchSubmit}
             className="mx-auto mt-8 max-w-2xl"
           >
@@ -139,10 +151,19 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-          </form>
+            </form>
+          ) : (
+            <Link
+              href="/login"
+              className="mx-auto mt-8 inline-flex items-center justify-center gap-2 rounded-xl lpu-btn-primary px-6 py-3 text-sm font-bold text-white shadow-xs hover:bg-[#E66F00] transition-colors"
+            >
+              <span>Sign in to search campus listings</span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
 
           {/* Category Shortcuts */}
-          <div className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-center gap-2 text-xs">
+          {currentUser && <div className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-center gap-2 text-xs">
             <span className="font-bold text-slate-500 mr-1">Popular categories:</span>
             {[
               'ELECTRONICS',
@@ -163,7 +184,7 @@ export default function HomePage() {
                 </button>
               );
             })}
-          </div>
+          </div>}
 
           {/* Direct Report Action CTAs */}
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -222,8 +243,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Recent Public Listings Section */}
-      <section className="py-12">
+      {/* Recent listings are available to signed-in campus members. */}
+      {currentUser && <section className="py-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-2">
             <div>
@@ -231,14 +252,14 @@ export default function HomePage() {
                 Recent Campus Property Listings
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Public sanitized reports logged across university blocks and custody desks.
+                Sanitized reports logged across university blocks and custody desks.
               </p>
             </div>
             <Link
               href="/board"
               className="inline-flex items-center gap-1.5 text-xs font-bold text-[#F58220] hover:text-[#E66F00] hover:underline"
             >
-              <span>Explore All Listings</span>
+              <span>Explore Campus Listings</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -290,7 +311,7 @@ export default function HomePage() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
       <Footer />
     </div>

@@ -14,7 +14,7 @@
   <a href="https://www.django-rest-framework.org/"><img src="https://img.shields.io/badge/Django_REST_Framework-3.15-red" alt="DRF 3.15"/></a>
   <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql" alt="PostgreSQL 16"/></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript" alt="TypeScript 5.6"/></a>
-  <a href="https://pytest.org/"><img src="https://img.shields.io/badge/Pytest-62%2F62_Passing-brightgreen?logo=pytest" alt="Pytest Passing"/></a>
+  <a href="https://pytest.org/"><img src="https://img.shields.io/badge/Pytest-automated-blue?logo=pytest" alt="Pytest automated tests"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/></a>
 </p>
 
@@ -38,7 +38,7 @@ The **LPU Lost & Found Property Recovery Platform** solves this by establishing 
 - **Explainable Multi-Factor Matching Engine:** Automatic cross-matching between newly reported found items and existing lost reports based on category, location proximity, timestamps, and brand attributes.
 - **Cryptographic Private Verification Vault:** Two-tier property privacy model encrypting high-risk identification details (serial numbers, device identifiers, engraving text) with Fernet (AES-128-CBC) symmetric encryption.
 - **In-Memory EXIF & GPS Metadata Scrubber:** Automatic removal of location metadata and camera hardware identifiers from uploaded property images via Pillow before persistence.
-- **Supervised Handover with Single-Use OTP:** Claim verification initiates a 15-minute expiring 6-digit OTP delivered exclusively to the verified claimant's dashboard. Physical item release is executed only upon security officer OTP verification.
+- **Supervised Handover with Single-Use OTP:** Claim and direct-recovery workflows use the configured OTP expiry and renewal policy; OTP verification and physical release are enforced by the Django backend.
 - **Immutable Forensic Audit Trail:** Automatic auditing of item state transitions, claim reviews, OTP verifications, and user role actions.
 - **Multi-Role Campus Dashboards:**
   - **Student / Staff:** File lost/found reports, track claim status, view potential matches, and retrieve handover OTPs.
@@ -95,7 +95,7 @@ lpu-lost-and-found/
 │   │   ├── audit/              # Forensic compliance audit trail
 │   │   └── core/               # Response envelopes, exceptions, and seed commands
 │   ├── config/                 # Django settings, routing, and WSGI/ASGI entrypoints
-│   ├── tests/                  # 54 Pytest automated test suites
+│   ├── tests/                  # Django API, permissions, and workflow tests
 │   ├── manage.py               # Django CLI entrypoint
 │   ├── requirements.txt        # Python dependencies
 │   ├── pytest.ini              # Pytest configuration
@@ -183,16 +183,9 @@ Visit `http://localhost:3000` to interact with the platform.
 
 ---
 
-## 6. Demo Accounts & Seed Personas
+## 6. Development Seed Data
 
-Running `python backend/manage.py seed_demo_data` pre-populates authenticated accounts matching the UI quick-fill logins:
-
-| Role | Email Address | Password | Campus ID | Scope & Permissions |
-| :--- | :--- | :--- | :--- | :--- |
-| **Student (Reporter)** | `aarav.sharma.12108@lpu.in` | `DemoStudent2026!` | `12108801` | Report items, view matches, manage claims, retrieve OTP |
-| **Student (Peer Claimant)**| `student2@lpu.co.in` | `Student@12345` | `12105678` | Independent claimant persona for competing claims |
-| **Security Officer** | `rajesh.verma.sec@lpu.in` | `DemoSecurity2026!` | `LPU-SEC-001` | Review claims, decrypt vault proof, verify OTP, log custody |
-| **System Administrator** | `sunita.admin@lpu.in` | `DemoAdmin2026!` | `LPU-ADM-001` | Campus recovery analytics, user governance, audit trail |
+For local development only, `python backend/manage.py seed_demo_data` creates demo accounts and sample recovery data. The command is blocked when `DJANGO_ENV=production`; it must not be used to provision real production users. Use the authorized administrator account-provisioning workflow or Django's controlled superuser setup for production. Demo credentials are intentionally not published in this README.
 
 ---
 
@@ -206,9 +199,10 @@ All primary commands can be executed from the workspace root:
 | `npm run dev:django` | Start Django REST Framework development server (`:8000`) |
 | `npm run typecheck:web`| Run TypeScript static type check across frontend |
 | `npm run lint` | Run ESLint across frontend components |
-| `npm run build:web` | Compile Next.js production build (19 App Router pages) |
+| `npm run build:web` | Compile the Next.js production build |
 | `npm run check:django` | Run Django system and model integrity checks |
-| `npm run test:django` | Run complete backend Pytest suite (54 tests) |
+| `npm run test:django` | Run the backend Pytest suite |
+| `npm run test` | Run frontend invariant checks and backend Pytest suite |
 | `npm run smoke:api` | Run 7-point live deployment API smoke check |
 | `npm run smoke:e2e` | Run 8-stage multi-actor end-to-end workflow check |
 
@@ -216,16 +210,7 @@ All primary commands can be executed from the workspace root:
 
 ## 8. Verification & Quality Assurance
 
-The codebase passes 100% of automated checks:
-
-- **Frontend TypeScript (`npm run typecheck:web`):** Code 0, 0 type errors.
-- **Frontend ESLint (`npm run lint`):** Code 0, 0 errors, 0 warnings.
-- **Frontend Production Build (`npm run build:web`):** Code 0, all 28 App Router routes compiled via Turbopack.
-- **Django System Check (`npm run check:django`):** Code 0, no issues identified.
-- **Backend Pytest Suite (`npm run test:django`):** Code 0, **62 passed in ~57s**.
-- **Authentication Smoke Tests (`npm run smoke:auth`):** Code 0, **13/13 passed** (Student, Security, Admin credentials).
-- **API Smoke Tests (`npm run smoke:api`):** Code 0, **7/7 passed**.
-- **End-to-End Workflow (`npm run smoke:e2e`):** Code 0, **8/8 stages passed**.
+Run the commands below against your current checkout; results depend on the installed environment. A local run on 2026-11-06 completed the Django system check, migration drift check, frontend invariant suite, TypeScript check, lint, and production build. Backend tests reported 145 passed and 1 skipped. ESLint reported no errors and one existing React effect warning in the login page. These local tests use SQLite and do not certify PostgreSQL or a live cloud deployment.
 
 For detailed test coverage documentation, see [`docs/testing-guide.md`](docs/testing-guide.md).
 
@@ -236,7 +221,7 @@ For detailed test coverage documentation, see [`docs/testing-guide.md`](docs/tes
 1. **Zero-Leakage Privacy Vault:** Sensitive identifying information is encrypted at rest using Fernet (AES-128-CBC with HMAC-SHA256) and never returned to unauthenticated or unauthorized users.
 2. **Metadata Scrubbing:** Uploaded item images are sanitized in-memory using Pillow to strip camera EXIF data and GPS coordinates.
 3. **Anti-Self-Claim Invariant:** Users cannot file claims against items they reported, preventing identity spoofing.
-4. **Single-Use Handover OTP:** Handovers require a cryptographically generated 6-digit OTP valid for 15 minutes, verified within an atomic database transaction.
+4. **Single-Use Handover OTP:** Handovers require a cryptographically generated OTP, enforce expiration/renewal, and reject reuse within the backend transaction workflow.
 5. **Strict RBAC & Ownership:** Custom DRF permission classes enforce separation between students, security officers, and administrators.
 
 ---
@@ -249,6 +234,7 @@ For detailed test coverage documentation, see [`docs/testing-guide.md`](docs/tes
 - [Local Setup & Runbook](docs/setup-guide.md)
 - [Testing & Quality Guide](docs/testing-guide.md)
 - [Production Deployment Guide](docs/deployment-guide.md)
+- [Current Deployment Readiness and Atlas Compatibility](DEPLOYMENT_GUIDE.md)
 - [Repository Cleanup Report](docs/cleanup-report.md)
 
 ---
@@ -256,7 +242,7 @@ For detailed test coverage documentation, see [`docs/testing-guide.md`](docs/tes
 ## 11. Known Limitations & Future Roadmap
 
 - **Facial Redaction:** Currently, images have GPS/EXIF metadata stripped; future iterations could introduce automated face-blurring for photos accidentally showing bystanders.
-- **Push Notifications:** Handover OTPs and status changes are currently surfaced via the real-time web dashboard; integrating WhatsApp Business API or SMS gateway (Twilio) for campus mobile alerts is planned.
+- **Push Notifications:** Handover OTPs and status changes are surfaced through the portal's periodic API refresh; no email/SMS provider is configured in the active Django service.
 - **Campus Card RFID Integration:** Future phases could support scanning student RFID identity cards directly at campus security desks during physical handovers.
 
 ---

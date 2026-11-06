@@ -10,6 +10,7 @@ import {
   X
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
+import { AdminInventoryControls } from '@/components/admin/AdminInventoryControls';
 import { apiClient } from '@/lib/api-client';
 
 interface AgeingItem {
@@ -246,6 +247,8 @@ export default function AdminItemsPage() {
       subtitle="Statutory retention oversight, ageing queues, and committee-approved disposal board."
       role="CAMPUS_ADMIN"
     >
+      <AdminInventoryControls />
+
       {/* Statutory Retention Rule Notice Banner */}
       <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-4 text-xs text-amber-900 shadow-xs">
         <div className="flex items-start gap-2.5">

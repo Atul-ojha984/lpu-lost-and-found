@@ -17,7 +17,7 @@ export default function SecurityProfilePage() {
     fullName: 'Rajesh Verma',
     badgeId: 'LPU-SEC-001',
     email: 'rajesh.verma.sec@lpu.in',
-    phone: '+91 98765 00001',
+    phone: '',
     assignedPost: 'Gate 1 Main Security Desk',
     shift: 'General Duty (08:00 – 17:00 IST)',
     stationExtension: 'Ext. 2018 (Control Room)',
@@ -34,7 +34,7 @@ export default function SecurityProfilePage() {
             fullName: u.fullName || prev.fullName,
             badgeId: u.registrationNumber || prev.badgeId,
             email: u.email || prev.email,
-            phone: u.phone || prev.phone,
+            phone: u.phone ?? '',
             assignedPost: u.securityPost || prev.assignedPost,
           }));
         }

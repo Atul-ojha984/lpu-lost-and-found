@@ -12,18 +12,21 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { apiClient } from '@/lib/api-client';
+import { normalizeIndianMobileInput } from '@/lib/indian-mobile';
 
 export default function StudentProfilePage() {
   const [profile, setProfile] = useState({
     fullName: 'Aarav Sharma',
     registrationNumber: '12108801',
     email: 'aarav.sharma.12108@lpu.in',
-    phone: '+91 98765 43210',
+    phone: '',
     notifyEmail: true,
     notifyOtp: true,
   });
   const [loading, setLoading] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     apiClient.getCurrentUser()
@@ -35,7 +38,7 @@ export default function StudentProfilePage() {
             fullName: u.fullName || prev.fullName,
             registrationNumber: u.registrationNumber || prev.registrationNumber,
             email: u.email || prev.email,
-            phone: u.phone || prev.phone,
+            phone: u.phone ?? '',
           }));
         }
       })
@@ -45,10 +48,29 @@ export default function StudentProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    const normalizedPhone = normalizeIndianMobileInput(profile.phone);
+    if (normalizedPhone === null) {
+      setProfileError('Enter a valid 10-digit Indian mobile number.');
+      setSavedSuccess(false);
+      return;
+    }
+
+    setSaving(true);
+    setProfileError('');
+    setSavedSuccess(false);
+    try {
+      const response = await apiClient.updateCurrentUserProfile(normalizedPhone);
+      const user = response?.user;
+      setProfile((current) => ({ ...current, phone: user?.phone ?? normalizedPhone }));
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (error: unknown) {
+      setProfileError(error instanceof Error ? error.message : 'Could not save the contact phone.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -97,7 +119,12 @@ export default function StudentProfilePage() {
         {savedSuccess && (
           <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Profile and contact preferences updated successfully.</span>
+            <span>Contact phone updated successfully.</span>
+          </div>
+        )}
+        {profileError && (
+          <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-800 text-xs font-semibold">
+            {profileError}
           </div>
         )}
 
@@ -165,6 +192,8 @@ export default function StudentProfilePage() {
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                   placeholder="+91 XXXXX XXXXX"
+                  inputMode="tel"
+                  maxLength={20}
                   className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
                 />
               </div>
@@ -195,11 +224,11 @@ export default function StudentProfilePage() {
           <div className="pt-4 flex justify-end">
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || saving}
               className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60"
             >
               <Save className="w-4 h-4" />
-              <span>{loading ? 'Loading Profile...' : 'Save Contact Preferences'}</span>
+              <span>{loading ? 'Loading Profile...' : saving ? 'Saving...' : 'Save Contact Phone'}</span>
             </button>
           </div>
         </form>

@@ -8,6 +8,22 @@ Accounts Serializers
 from django.conf import settings
 from rest_framework import serializers
 from .models import User, UserRole, UserType
+from .phone import INVALID_INDIAN_MOBILE_MESSAGE, normalize_indian_mobile_number
+
+
+class IndianMobileNumberField(serializers.CharField):
+    """Optional Indian mobile number normalized to E.164."""
+
+    default_error_messages = {
+        'invalid_mobile': INVALID_INDIAN_MOBILE_MESSAGE,
+    }
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        try:
+            return normalize_indian_mobile_number(value)
+        except ValueError:
+            self.fail('invalid_mobile')
 
 class UserSerializer(serializers.ModelSerializer):
     """Public safe representation of a university user."""
@@ -33,7 +49,22 @@ class UserSerializer(serializers.ModelSerializer):
             'isActive',
             'createdAt',
         ]
-        read_only_fields = ['_id', 'id', 'role', 'isActive', 'createdAt']
+        read_only_fields = ['_id', 'id', 'role', 'phone', 'isActive', 'createdAt']
+
+
+class UpdateCurrentUserProfileSerializer(serializers.Serializer):
+    """Allow a signed-in user to update only their own contact phone."""
+
+    phone = IndianMobileNumberField(max_length=20, required=True, allow_blank=True)
+
+    def to_internal_value(self, data):
+        unknown = set(data.keys()) - {'phone'} if hasattr(data, 'keys') else set()
+        if unknown:
+            raise serializers.ValidationError({
+                key: 'This profile endpoint only accepts a phone number update.'
+                for key in sorted(unknown)
+            })
+        return super().to_internal_value(data)
 
 class RegisterSerializer(serializers.Serializer):
     """Input serializer for new student/staff account registration."""
@@ -43,7 +74,7 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirmPassword = serializers.CharField(write_only=True, min_length=8)
     department = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
-    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    phone = IndianMobileNumberField(max_length=20, required=False, allow_blank=True, default='')
 
     def validate_email(self, value):
         from django.core.validators import validate_email as django_validate_email
@@ -104,7 +135,7 @@ class CreateAdminUserSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=8, trim_whitespace=False)
     department = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
     securityPost = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
-    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    phone = IndianMobileNumberField(max_length=20, required=False, allow_blank=True, default='')
     isActive = serializers.BooleanField(required=False, default=True)
 
     def validate_fullName(self, value):

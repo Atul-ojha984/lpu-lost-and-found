@@ -8,7 +8,7 @@ Locations App Views
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 from apps.accounts.permissions import IsCampusAdmin
 from .models import Location
@@ -19,12 +19,12 @@ from .serializers import (
 )
 
 class PublicLocationListAPIView(APIView):
-    """Public catalog of active campus zones and security desks."""
-    permission_classes = [AllowAny]
+    """Authenticated catalog of active campus zones and security desks."""
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=['Taxonomy'],
-        summary='Get Public Campus Locations',
+        summary='Get Campus Locations',
         responses={200: LocationSerializer(many=True)},
     )
     def get(self, request):

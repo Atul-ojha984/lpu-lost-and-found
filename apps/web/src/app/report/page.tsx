@@ -283,7 +283,7 @@ function ReportContent() {
                   href={`/items/${submittedItem.id}`}
                   className="rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors"
                 >
-                  View Public Listing
+                  View Report Details
                 </Link>
                 <Link
                   href="/dashboard/my-reports"
@@ -295,7 +295,7 @@ function ReportContent() {
                   href="/board"
                   className="rounded-lg border border-slate-300 px-5 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  Browse Campus Board
+                  Browse Campus Listings
                 </Link>
               </div>
             </div>
@@ -479,7 +479,7 @@ function ReportContent() {
 
                   <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 text-xs text-red-900">
                     <p className="text-[11px] leading-relaxed">
-                      <strong>Zero-Leak Privacy:</strong> Information entered here is encrypted using AES-256-GCM. It will <em>never</em> appear on public search boards and is accessible solely by university security officers adjudicating verified claims.
+                      <strong>Zero-Leak Privacy:</strong> Information entered here is encrypted using AES-256-GCM. It will <em>never</em> appear in campus search listings and is accessible solely by university security officers adjudicating verified claims.
                     </p>
                   </div>
 
@@ -604,10 +604,10 @@ function ReportContent() {
                 {/* Submit Button */}
                 <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
                   <Link
-                    href="/board"
+                    href={currentUser ? '/board' : '/login'}
                     className="text-xs font-medium text-slate-500 hover:text-slate-800"
                   >
-                    Cancel and Return
+                    {currentUser ? 'Cancel and Return to Listings' : 'Cancel and Sign In'}
                   </Link>
 
                   <button

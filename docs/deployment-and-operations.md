@@ -21,7 +21,7 @@ graph TD
 - **Frontend (`apps/web`)**: Deployed to **Vercel** with automatic preview deployments, static page prerendering, Turbopack optimizations, and strict security headers via `vercel.json`.
 - **Backend (`backend/`)**: Deployed as a containerized Python web service to **Render** (or AWS ECS/Fargate / DigitalOcean App Platform) using `backend/Dockerfile` or `backend/render.yaml`.
 - **Database**: **PostgreSQL 16** managed database cluster with TLS 1.3, connection pooling (`dj-database-url`), and automated continuous backups.
-- **Image Storage & Processing**: Multipart upload ingestion -> In-memory Pillow processing (EXIF & GPS metadata stripped, resized, converted to WebP) -> S3 / persistent media storage.
+- **Image Storage & Processing**: Multipart upload ingestion -> In-memory Pillow processing (EXIF & GPS metadata stripped, resized, converted to WebP) -> configured persistent media storage.
 
 ---
 
@@ -36,16 +36,24 @@ graph TD
 | `SECRET_KEY` | Yes | `openssl rand -hex 32` (>=50 chars) | Core cryptographic secret for Django session & token signatures |
 | `JWT_SIGNING_KEY` | Yes | `openssl rand -hex 32` (>=32 chars) | Cryptographic key for signing HS256 authentication tokens |
 | `DATABASE_URL` | Yes | `postgresql://<user>:<pwd>@<host>:5432/<dbname>` | PostgreSQL connection string with SSL |
-| `ALLOWED_HOSTS` | Yes | `.onrender.com,api-lostfound.lpu.in,localhost` | Comma-delimited list of valid HTTP Host header values |
-| `CORS_ALLOWED_ORIGINS`| Yes | `https://lpu-lost-found.vercel.app,https://lostfound.lpu.in` | Comma-delimited list of allowed browser origins |
-| `CSRF_TRUSTED_ORIGINS`| Yes | `https://lpu-lost-found.vercel.app,https://*.onrender.com` | Permitted cross-site POST origins for CSRF defense |
-| `FIELD_ENCRYPTION_KEY`| Yes | `openssl rand -hex 32` (exact 64 hex chars = 32 bytes) | AES-256-GCM symmetric key for private detail vaults |
+| `ALLOWED_HOSTS` | Yes | Actual Render hostname and configured backend custom domain | Comma-delimited list of valid HTTP Host header values |
+| `CORS_ALLOWED_ORIGINS`| Yes | Actual Vercel production origin(s) | Comma-delimited list of allowed browser origins |
+| `CSRF_TRUSTED_ORIGINS`| Yes | Actual HTTPS frontend origin(s) | Permitted cross-site POST origins for CSRF defense |
+| `FIELD_ENCRYPTION_KEY`| Yes | Render generated base64 256-bit value or `openssl rand -hex 32` | Stable AES-256-GCM key for private detail vaults; changing it makes existing ciphertext unreadable |
+| `MEDIA_ROOT` | Yes on production | `/var/data/media` on Render | Durable location for uploaded item photographs |
+| `PRIVATE_EVIDENCE_ROOT` | Yes on production | `/var/data/private_evidence` on Render | Durable location for claim evidence, downloaded only through the authenticated API |
 | `SECURE_SSL_REDIRECT` | Yes | `True` | Forces all HTTP traffic to HTTPS via 301 redirect |
 | `SESSION_COOKIE_SECURE`| Yes | `True` | Requires HTTPS before transmitting session cookies |
 | `CSRF_COOKIE_SECURE` | Yes | `True` | Requires HTTPS before transmitting CSRF cookies |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | HTTP Strict Transport Security (HSTS) duration (1 year) |
 
-### 2.2 Frontend (`apps/web/.env.production` / Vercel Environment Variables)
+### 2.2 Persistent Upload Storage
+
+The Render Blueprint attaches a persistent disk at `/var/data` and points item media and private evidence to separate directories on that disk. Django-generated static files remain in `STATIC_ROOT` and are served by WhiteNoise. Sanitized item photographs remain available under `/media/`; private evidence is stored separately and downloaded only through its authenticated endpoint. Other hosting platforms must provide an equivalent durable volume or replace the filesystem storage with managed object storage before production use; a container's writable layer is ephemeral.
+
+Render persistent disks add infrastructure cost and disable zero-downtime deploys for the attached service. Before enabling this mount on an existing deployment, back up and copy the current `media/` and `private_evidence/` contents into `/var/data/media` and `/var/data/private_evidence`. This change does not move historical files automatically. Back up the disk as part of the operational runbook.
+
+### 2.3 Frontend (`apps/web/.env.production` / Vercel Environment Variables)
 
 | Variable | Required | Default / Example | Purpose |
 | :--- | :---: | :--- | :--- |

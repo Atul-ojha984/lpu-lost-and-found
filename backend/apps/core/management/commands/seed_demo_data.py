@@ -6,7 +6,8 @@ Management Command: Seed Initial Taxonomy, Demo Accounts & Sample Records
 """
 
 from datetime import datetime, timezone, timedelta
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.accounts.models import User, UserRole
@@ -46,6 +47,11 @@ class Command(BaseCommand):
     help = 'Seeds initial taxonomy, demo accounts and recovery records for LPU Lost & Found.'
 
     def handle(self, *args, **options):
+        if settings.IS_PRODUCTION:
+            raise CommandError(
+                'Demo data seeding is disabled in production. Use the authorized account provisioning workflow.'
+            )
+
         self.stdout.write('Starting LPU Lost & Found initial database seed...')
 
         with transaction.atomic():

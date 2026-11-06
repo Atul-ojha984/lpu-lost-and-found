@@ -8,11 +8,13 @@ import {
   Edit,
   X,
   UserX,
-  UserPlus
+  UserPlus,
+  Trash2,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/navigation/DashboardLayout';
 import { apiClient } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/constants';
+import { normalizeIndianMobileInput } from '@/lib/indian-mobile';
 import { UserRole, UserType } from '@/types';
 
 interface CampusUser {
@@ -65,10 +67,14 @@ export default function AdminUsersPage() {
   const [editUserType, setEditUserType] = useState<UserType>('UNSPECIFIED');
   const [editSecurityPost, setEditSecurityPost] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState('');
+  const [listFeedback, setListFeedback] = useState('');
 
   async function loadUsers() {
     setLoading(true);
@@ -123,11 +129,20 @@ export default function AdminUsersPage() {
     };
   }, [roleFilter, search]);
 
+  useEffect(() => {
+    let active = true;
+    apiClient.getCurrentUser().then((user) => {
+      if (active) setCurrentUserId(String(user?.id || user?._id || ''));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
   function openEditModal(user: CampusUser) {
     setSelectedUser(user);
     setEditUserType(user.userType || 'UNSPECIFIED');
     setEditSecurityPost(user.securityPost || '');
     setEditDepartment(user.department || '');
+    setEditPhone(user.phone || '');
     setEditIsActive(user.isActive);
     setErrorMsg('');
     setSuccessMsg('');
@@ -136,6 +151,13 @@ export default function AdminUsersPage() {
   async function handleSaveUser(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedUser) return;
+
+    const phoneChanged = editPhone.trim() !== (selectedUser.phone || '').trim();
+    const normalizedPhone = phoneChanged ? normalizeIndianMobileInput(editPhone) : undefined;
+    if (phoneChanged && normalizedPhone === null) {
+      setErrorMsg('Enter a valid 10-digit Indian mobile number.');
+      return;
+    }
 
     setSaving(true);
     setErrorMsg('');
@@ -146,6 +168,7 @@ export default function AdminUsersPage() {
         userType: editUserType,
         securityPost: editSecurityPost.trim() || undefined,
         department: editDepartment.trim() || undefined,
+        phone: normalizedPhone ?? undefined,
         isActive: editIsActive,
       });
 
@@ -164,6 +187,11 @@ export default function AdminUsersPage() {
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
+    const normalizedPhone = normalizeIndianMobileInput(newUser.phone);
+    if (normalizedPhone === null) {
+      setCreateError('Enter a valid 10-digit Indian mobile number.');
+      return;
+    }
     setCreating(true);
     setCreateError('');
 
@@ -175,7 +203,7 @@ export default function AdminUsersPage() {
         email: newUser.email.trim().toLowerCase(),
         department: newUser.department.trim(),
         securityPost: newUser.securityPost.trim(),
-        phone: newUser.phone.trim(),
+        phone: normalizedPhone,
       });
       setIsCreateModalOpen(false);
       setNewUser(EMPTY_NEW_USER);
@@ -184,6 +212,29 @@ export default function AdminUsersPage() {
       setCreateError(err instanceof Error ? err.message : 'Failed to create campus account.');
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDeleteUser(user: CampusUser) {
+    if (user._id === currentUserId) {
+      setListFeedback('You cannot delete the account currently signed in.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${user.fullName} (${user.registrationNumber})? Accounts linked to reports, claims, custody, handovers, audit, or notifications will be deactivated so their history is preserved. This also revokes their existing sessions.`
+    );
+    if (!confirmed) return;
+
+    setDeletingUserId(user._id);
+    setListFeedback('');
+    try {
+      const result = await apiClient.deleteAdminUser(user._id);
+      setListFeedback(result.message || (result.deactivated ? 'Account deactivated; history preserved.' : 'Account deleted.'));
+      await loadUsers();
+    } catch (err: unknown) {
+      setListFeedback(err instanceof Error ? err.message : 'Could not delete this account.');
+    } finally {
+      setDeletingUserId('');
     }
   }
 
@@ -274,6 +325,8 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      {listFeedback && <div role="status" className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700">{listFeedback}</div>}
+
       {/* Users Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
         <table className="w-full text-left text-xs">
@@ -346,14 +399,26 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(user)}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-                      >
-                        <Edit className="h-3 w-3" />
-                        <span>Manage</span>
-                      </button>
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(user)}
+                          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        >
+                          <Edit className="h-3 w-3" />
+                          <span>Manage</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteUser(user)}
+                          disabled={user._id === currentUserId || deletingUserId === user._id}
+                          title={user._id === currentUserId ? 'You cannot delete the signed-in account' : 'Delete or deactivate account'}
+                          className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-700 shadow-xs hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>{deletingUserId === user._id ? 'Processing' : 'Delete'}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -468,9 +533,12 @@ export default function AdminUsersPage() {
                 <div>
                   <label className="mb-1 block font-semibold text-slate-700">Phone</label>
                   <input
+                    type="tel"
                     value={newUser.phone}
                     onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
                     maxLength={20}
+                    inputMode="tel"
+                    placeholder="10-digit or +91 number"
                     className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
                   />
                 </div>
@@ -580,6 +648,19 @@ export default function AdminUsersPage() {
                   value={editDepartment}
                   onChange={(e) => setEditDepartment(e.target.value)}
                   placeholder="e.g. Division of Student Welfare or School of Computer Science"
+                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  maxLength={20}
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="10-digit or +91 number"
                   className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
                 />
               </div>

@@ -1,1 +1,0 @@
-# Disposal app package

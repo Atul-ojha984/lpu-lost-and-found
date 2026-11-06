@@ -23,7 +23,7 @@ from apps.matching.views import (
 )
 
 urlpatterns = [
-    # Public search board with dynamic multi-filtering and pagination
+    # Authenticated search board with dynamic multi-filtering and pagination
     path('', ItemPublicBoardAPIView.as_view(), name='item-list'),
     
     # Authenticated user filed reports

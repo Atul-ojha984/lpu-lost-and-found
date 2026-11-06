@@ -28,9 +28,8 @@ python-dotenv>=1.0.1
 # Image Processing
 Pillow>=10.4.0
 
-# Testing
-pytest>=8.3.2
-pytest-django>=4.9.0
+# Indian phone number metadata validation (Google libphonenumber port)
+phonenumbers>=9.0.42,<10.0
 
 # Production Server
 gunicorn>=23.0.0; sys_platform != 'win32'

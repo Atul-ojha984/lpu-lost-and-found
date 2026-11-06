@@ -6,14 +6,18 @@ Authentication Views & JWT Handlers
 """
 
 from django.conf import settings
+from django.middleware.csrf import get_token
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from .serializers import LoginSerializer, UserSerializer
+from .models import User
+from .serializers import LoginSerializer, UpdateCurrentUserProfileSerializer, UserSerializer
 
 def set_auth_cookie(response, token_str: str):
     """Sets secure HttpOnly session cookie matching Express configuration."""
@@ -72,6 +76,7 @@ class LoginAPIView(APIView):
         refresh['role'] = user.role
         refresh['email'] = user.email
         refresh['registration_number'] = user.registration_number
+        refresh['authVersion'] = user.auth_token_version
 
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
@@ -88,6 +93,7 @@ class LoginAPIView(APIView):
             status=status.HTTP_200_OK
         )
         set_auth_cookie(res, access_token)
+        get_token(request)
         return res
 
 class LogoutAPIView(APIView):
@@ -105,6 +111,29 @@ class LogoutAPIView(APIView):
         res.delete_cookie('lpu_session_token')
         return res
 
+
+class VersionedTokenRefreshAPIView(TokenRefreshView):
+    """Reject refresh tokens issued before an account's session revocation."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        raw_token = request.data.get('refresh') or request.data.get('refreshToken')
+        try:
+            token = RefreshToken(raw_token)
+            user_id = token.get('userId') or token.get('user_id')
+            if not user_id:
+                raise TokenError('Token has no user identifier.')
+            user = User.objects.get(pk=user_id)
+            token_version = int(token.get('authVersion', 0))
+        except (TokenError, User.DoesNotExist, TypeError, ValueError):
+            return Response({'detail': 'Refresh token is invalid or has been revoked.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not user.is_active or token_version != user.auth_token_version:
+            return Response({'detail': 'Refresh token is invalid or has been revoked.'}, status=status.HTTP_401_UNAUTHORIZED)
+        return super().post(request, *args, **kwargs)
+
 class CurrentUserAPIView(APIView):
     """Session profile inspection endpoint returning authenticated user details."""
     permission_classes = [IsAuthenticated]
@@ -117,3 +146,16 @@ class CurrentUserAPIView(APIView):
     def get(self, request):
         user_data = UserSerializer(request.user).data
         return Response({'user': user_data}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=['Authentication'],
+        summary='Update the authenticated user phone number',
+        request=UpdateCurrentUserProfileSerializer,
+        responses={200: UserSerializer},
+    )
+    def patch(self, request):
+        serializer = UpdateCurrentUserProfileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        request.user.phone = serializer.validated_data['phone']
+        request.user.save(update_fields=['phone', 'updated_at'])
+        return Response({'user': UserSerializer(request.user).data}, status=status.HTTP_200_OK)

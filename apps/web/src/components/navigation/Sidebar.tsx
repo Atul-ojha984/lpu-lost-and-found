@@ -89,7 +89,7 @@ interface NavItem {
   // 1. Student / Campus-user navigation items
   const studentNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/board', label: 'Public Board', icon: Search },
+    { href: '/board', label: 'Campus Listings', icon: Search },
     { href: '/report?type=LOST', label: 'Report Lost Item', icon: FilePlus2 },
     { href: '/report?type=FOUND', label: 'Report Found Item', icon: Package },
     { href: '/dashboard/my-reports', label: 'My Reports', icon: FileText },
@@ -240,7 +240,7 @@ interface NavItem {
           className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 hover:bg-[#3A4B5E] hover:text-white transition-colors"
         >
           <Search className="h-3.5 w-3.5 text-[#F58220]" />
-          <span>Public Board Search</span>
+          <span>Search Campus Listings</span>
         </Link>
 
         <button

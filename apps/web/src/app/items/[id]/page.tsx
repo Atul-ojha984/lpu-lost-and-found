@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   MapPin, 
   Calendar, 
@@ -32,6 +32,7 @@ interface ItemDetailPageProps {
 }
 
 export default function ItemDetailPage({ params }: ItemDetailPageProps) {
+  const router = useRouter();
   const resolvedParams = use(params);
   const itemId = resolvedParams.id;
   const searchParams = useSearchParams();
@@ -81,38 +82,37 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
     let isCancelled = false;
 
     async function loadItem() {
+      let redirecting = false;
       try {
+        const user = await apiClient.getCurrentUser();
+        if (isCancelled) return;
+        if (!user) {
+          redirecting = true;
+          router.replace('/login');
+          return;
+        }
+        setCurrentUser(user);
+
         const fetchedItem = await apiClient.getItemById(itemId);
         if (!isCancelled) {
           setItem(fetchedItem);
         }
 
-        // Check current user session
-        try {
-          const user = await apiClient.getCurrentUser();
-          if (!isCancelled && user) {
-            setCurrentUser(user);
-            if (shouldAutoClaim) {
-              if (fetchedItem.itemType === 'FOUND' && fetchedItem.status !== 'HANDED_OVER') {
-                setIsClaimModalOpen(true);
-                loadChallengesForItem(itemId);
-              } else {
-                setClaimError('This item is not eligible for ownership claims.');
-              }
-            }
-          } else if (!isCancelled && shouldAutoClaim) {
-            setAuthRequiredPrompt(true);
-          }
-        } catch {
-          if (!isCancelled) {
-            setCurrentUser(null);
-            if (shouldAutoClaim) {
-              setAuthRequiredPrompt(true);
-            }
+        if (shouldAutoClaim) {
+          if (fetchedItem.itemType === 'FOUND' && fetchedItem.status !== 'HANDED_OVER') {
+            setIsClaimModalOpen(true);
+            loadChallengesForItem(itemId);
+          } else {
+            setClaimError('This item is not eligible for ownership claims.');
           }
         }
       } catch (err) {
         if (!isCancelled) {
+          if (err instanceof ApiClientError && err.statusCode === 401) {
+            redirecting = true;
+            router.replace('/login');
+            return;
+          }
           if (err instanceof ApiClientError) {
             setError(err.message);
           } else {
@@ -120,7 +120,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
           }
         }
       } finally {
-        if (!isCancelled) {
+        if (!isCancelled && !redirecting) {
           setIsLoading(false);
         }
       }
@@ -133,7 +133,7 @@ export default function ItemDetailPage({ params }: ItemDetailPageProps) {
     return () => {
       isCancelled = true;
     };
-  }, [itemId, reloadKey, shouldAutoClaim]);
+  }, [itemId, reloadKey, router, shouldAutoClaim]);
 
   const handleClaimClick = async () => {
     if (!currentUser) {

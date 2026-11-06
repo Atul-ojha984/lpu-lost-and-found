@@ -1,4 +1,1 @@
-"""Analytics models placeholder for Phase 1 foundation."""
-from django.db import models
-
-# Analytics models will be implemented in subsequent phases.
+"""Analytics metrics are derived from the existing domain models."""

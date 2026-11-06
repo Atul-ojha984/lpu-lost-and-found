@@ -4,11 +4,11 @@
  * End-to-End User Workflow & Security Smoke Test
  *
  * Exercises the complete multi-actor lifecycle:
- * 1. Register new student persona
- * 2. Authenticate and retrieve session
+ * 1. Verify public registration is disabled and Admin creates student personas
+ * 2. Authenticate separate reporter and claimant accounts
  * 3. File a FOUND item report with private verification vault
- * 4. Verify presence on public board and test search/filter queries
- * 5. Verify zero-privacy leakage on public endpoints
+ * 4. Verify presence in authenticated search and test filter queries
+ * 5. Verify privacy boundaries on authenticated endpoints
  * 6. Claim item as peer student user
  * 7. Security review, challenge inspection, and claim approval
  * 8. Supervised physical handover via single-use cryptographic OTP
@@ -21,8 +21,28 @@ if (!rawUrl.endsWith('/api/v1')) {
   rawUrl = `${rawUrl}/api/v1`;
 }
 const BASE_URL = rawUrl;
+let adminToken = '';
+const createdUserIds = [];
+
+async function deactivateCreatedUsers() {
+  if (!adminToken) return;
+  for (const userId of createdUserIds) {
+    const response = await fetch(`${BASE_URL}/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await response.json().catch(() => null);
+    if (response.status !== 200 || !(data?.data?.deleted || data?.data?.deactivated)) {
+      throw new Error(`Test-account cleanup failed with HTTP ${response.status}.`);
+    }
+  }
+}
 
 async function runE2EWorkflow() {
+  const apiHost = new URL(BASE_URL).hostname;
+  if (!['localhost', '127.0.0.1', '::1'].includes(apiHost) && process.env.ALLOW_E2E_DATA_MUTATION !== 'true') {
+    throw new Error('Refusing to create E2E data on a non-local API without ALLOW_E2E_DATA_MUTATION=true.');
+  }
   console.log(`\n================================================================`);
   console.log(`🚀 Starting Comprehensive LPU E2E Multi-Actor Workflow Smoke Test`);
   console.log(`🎯 API Target: ${BASE_URL}`);
@@ -31,28 +51,83 @@ async function runE2EWorkflow() {
   const timestamp = Date.now();
   const testStudentEmail = `smoke.student.${timestamp}@lpu.in`;
   const testStudentReg = `REG-${timestamp.toString().slice(-6)}`;
+  const testClaimantEmail = `smoke.claimant.${timestamp}@lpu.in`;
+  const testClaimantReg = `CLM-${timestamp.toString().slice(-6)}`;
   const testPassword = 'Student@12345';
 
-  // 1. REGISTER
-  console.log('1️⃣ Registering new student account...');
-  const regRes = await fetch(`${BASE_URL}/auth/register`, {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to create E2E accounts against a production environment.');
+  }
+
+  const publicRegistration = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fullName: 'Unauthorized E2E User',
+      registrationNumber: testStudentReg,
+      email: testStudentEmail,
+      password: testPassword,
+      confirmPassword: testPassword,
+    }),
+  });
+  if (publicRegistration.status !== 403) {
+    throw new Error(`Public registration should return HTTP 403; got ${publicRegistration.status}`);
+  }
+
+  const adminLogin = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      emailOrRegNo: process.env.E2E_ADMIN_ID || 'LPU-ADM-001',
+      password: process.env.E2E_ADMIN_PASSWORD || 'DemoAdmin2026!',
+    }),
+  });
+  const adminData = await adminLogin.json();
+  if (adminLogin.status !== 200 || adminData.data?.user?.role !== 'CAMPUS_ADMIN') {
+    throw new Error(`Administrator login failed with HTTP ${adminLogin.status}`);
+  }
+  adminToken = adminData.data.token;
+
+  // 1. ADMIN-CONTROLLED ACCOUNT CREATION
+  console.log('1️⃣ Admin creates student accounts...');
+  const regRes = await fetch(`${BASE_URL}/admin/users/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({
       fullName: 'Smoke Test Candidate',
       registrationNumber: testStudentReg,
       email: testStudentEmail,
       password: testPassword,
-      confirmPassword: testPassword,
+      userType: 'STUDENT',
       department: 'School of Computer Science & Engineering',
+      isActive: true,
     }),
   });
   const regData = await regRes.json();
   if (regRes.status !== 201 || !regData.success) {
-    throw new Error(`Registration failed: ${JSON.stringify(regData)}`);
+    throw new Error(`Admin account creation failed with HTTP ${regRes.status}`);
   }
-  const studentToken = regData.data.token;
-  const studentUserId = regData.data.user.id || regData.data.user._id;
+  const studentUserId = regData.data.id || regData.data._id;
+  createdUserIds.push(studentUserId);
+  const claimantCreateRes = await fetch(`${BASE_URL}/admin/users/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      fullName: 'Smoke Test Claimant',
+      registrationNumber: testClaimantReg,
+      email: testClaimantEmail,
+      password: testPassword,
+      userType: 'STUDENT',
+      department: 'School of Computer Science & Engineering',
+      isActive: true,
+    }),
+  });
+  const claimantCreateData = await claimantCreateRes.json();
+  if (claimantCreateRes.status !== 201 || !claimantCreateData.success) {
+    throw new Error(`Admin claimant account creation failed with HTTP ${claimantCreateRes.status}`);
+  }
+  const claimantUserId = claimantCreateData.data.id || claimantCreateData.data._id;
+  createdUserIds.push(claimantUserId);
   console.log(`   ✅ Registered student: ${testStudentEmail} (ID: ${studentUserId})`);
 
   // 2. LOGIN
@@ -67,16 +142,17 @@ async function runE2EWorkflow() {
   });
   const loginData = await loginRes.json();
   if (loginRes.status !== 200 || !loginData.success) {
-    throw new Error(`Login failed: ${JSON.stringify(loginData)}`);
+    throw new Error(`Login failed with HTTP ${loginRes.status}`);
   }
+  const studentToken = loginData.data.token;
   console.log(`   ✅ Login authenticated. Role: ${loginData.data.user.role}`);
 
   // Fetch category & location IDs
-  const catRes = await fetch(`${BASE_URL}/categories`);
+  const catRes = await fetch(`${BASE_URL}/categories`, { headers: { Authorization: `Bearer ${studentToken}` } });
   const catData = await catRes.json();
   const categoryId = catData.data.find(c => c.code === 'ELECTRONICS')?._id || catData.data[0]._id;
 
-  const locRes = await fetch(`${BASE_URL}/locations`);
+  const locRes = await fetch(`${BASE_URL}/locations`, { headers: { Authorization: `Bearer ${studentToken}` } });
   const locData = await locRes.json();
   const locationId = locData.data.find(l => l.code === 'BLOCK_30_38')?._id || locData.data[0]._id;
 
@@ -107,18 +183,20 @@ async function runE2EWorkflow() {
   });
   const reportData = await reportRes.json();
   if (reportRes.status !== 201 || !reportData.success) {
-    throw new Error(`Report submission failed: ${JSON.stringify(reportData)}`);
+    throw new Error(`Report submission failed with HTTP ${reportRes.status}`);
   }
   const itemId = reportData.data.id || reportData.data._id;
   const itemRef = reportData.data.referenceNumber;
   console.log(`   ✅ Created FOUND item: "${reportData.data.title}" [Ref: ${itemRef}, ID: ${itemId}]`);
 
-  // 4. PUBLIC SEARCH BOARD & PRIVACY AUDIT
-  console.log('\n4️⃣ Verifying public search board & auditing for private detail leaks...');
-  const searchRes = await fetch(`${BASE_URL}/items?search=Calculator&limit=10`);
+  // 4. AUTHENTICATED SEARCH BOARD & PRIVACY AUDIT
+  console.log('\n4️⃣ Verifying authenticated search & auditing for private detail leaks...');
+  const searchRes = await fetch(`${BASE_URL}/items?search=Calculator&limit=10`, {
+    headers: { Authorization: `Bearer ${studentToken}` },
+  });
   const searchData = await searchRes.json();
   if (searchRes.status !== 200 || !searchData.success) {
-    throw new Error(`Public search failed: ${JSON.stringify(searchData)}`);
+    throw new Error(`Authenticated item search failed with HTTP ${searchRes.status}`);
   }
 
   const items = searchData.data.items || searchData.data;
@@ -126,7 +204,7 @@ async function runE2EWorkflow() {
   if (!foundInBoard) {
     throw new Error(`Item ${itemId} not found on public board`);
   }
-  console.log(`   ✅ Verified item appears on public search board.`);
+  console.log(`   ✅ Verified item appears in authenticated search.`);
 
   // Audit public payload: verify zero private leakage
   const serializedStr = JSON.stringify(foundInBoard);
@@ -141,17 +219,19 @@ async function runE2EWorkflow() {
   console.log(`   🔒 Privacy Audit Passed: Zero private vault details or challenge answers exposed.`);
 
   // 5. CLAIM BY PEER STUDENT
-  console.log('\n5️⃣ Submitting ownership claim as peer student (student2@lpu.co.in)...');
+  console.log('\n5️⃣ Submitting ownership claim as peer student (a separate student account)...');
   const student2Login = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ emailOrRegNo: 'student2@lpu.co.in', password: 'Student@12345' }),
+    body: JSON.stringify({ emailOrRegNo: testClaimantReg, password: testPassword }),
   });
   const s2Data = await student2Login.json();
   const s2Token = s2Data.data.token;
 
   // Fetch verification challenges for item
-  const chalRes = await fetch(`${BASE_URL}/items/${itemId}/challenges`);
+  const chalRes = await fetch(`${BASE_URL}/items/${itemId}/challenges`, {
+    headers: { Authorization: `Bearer ${s2Token}` },
+  });
   const chalData = await chalRes.json();
   const challengeId = chalData.data?.[0]?.id;
 
@@ -176,7 +256,7 @@ async function runE2EWorkflow() {
   });
   const claimData = await claimRes.json();
   if (claimRes.status !== 201 || !claimData.success) {
-    throw new Error(`Claim submission failed: ${JSON.stringify(claimData)}`);
+    throw new Error(`Claim submission failed with HTTP ${claimRes.status}`);
   }
   const claimId = claimData.data.id || claimData.data._id;
   console.log(`   ✅ Claim registered [ID: ${claimId}, Status: ${claimData.data.claimStatus}]`);
@@ -186,7 +266,10 @@ async function runE2EWorkflow() {
   const secLogin = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ emailOrRegNo: 'security@lpu.co.in', password: 'Security@12345' }),
+    body: JSON.stringify({
+      emailOrRegNo: process.env.E2E_SECURITY_ID || 'LPU-SEC-001',
+      password: process.env.E2E_SECURITY_PASSWORD || 'DemoSecurity2026!',
+    }),
   });
   const secData = await secLogin.json();
   const secToken = secData.data.token;
@@ -198,9 +281,9 @@ async function runE2EWorkflow() {
   });
   const vaultData = await vaultRes.json();
   if (vaultRes.status !== 200 || !vaultData.success) {
-    throw new Error(`Security private vault access failed: ${JSON.stringify(vaultData)}`);
+    throw new Error(`Security private vault access failed with HTTP ${vaultRes.status}`);
   }
-  console.log(`   🔍 Security inspected private vault (Decrypted answer: "${vaultData.data.decryptedContent}")`);
+  console.log('   🔍 Security inspected the private vault; decrypted values are not logged.');
 
   // Approve claim
   const approveRes = await fetch(`${BASE_URL}/claims/${claimId}/review`, {
@@ -216,7 +299,7 @@ async function runE2EWorkflow() {
   });
   const approveData = await approveRes.json();
   if (approveRes.status !== 200 || !approveData.success) {
-    throw new Error(`Claim review failed: ${JSON.stringify(approveData)}`);
+    throw new Error(`Claim review failed with HTTP ${approveRes.status}`);
   }
   const reviewedClaim = approveData.data;
   console.log(`   ✅ Claim approved! Status: ${reviewedClaim.claimStatus}`);
@@ -230,9 +313,9 @@ async function runE2EWorkflow() {
   const myApprovedClaim = (myClaimsData.data || []).find(c => String(c.id || c._id) === String(claimId));
   const handoverOtp = myApprovedClaim?.handoverOtp;
   if (!handoverOtp || handoverOtp.length !== 6) {
-    throw new Error(`Claimant did not receive 6-digit handover OTP: ${JSON.stringify(myApprovedClaim)}`);
+    throw new Error('Claimant did not receive a valid 6-digit handover OTP.');
   }
-  console.log(`   🔑 Claimant received single-use Handover OTP: [${handoverOtp}]`);
+  console.log('   🔑 Claimant received a single-use handover OTP (value redacted).');
 
   // 8. COMPLETE SUPERVISED HANDOVER
   console.log('\n8️⃣ Security Officer verifying OTP and executing physical custody handover...');
@@ -247,13 +330,13 @@ async function runE2EWorkflow() {
       otp: handoverOtp,
       physicalDeskLocation: 'Block 34 Central Security Desk',
       idCardPresentedType: 'CAMPUS_ID',
-      idCardNumber: 'LPU-12105678',
+      idCardNumber: testClaimantReg,
       acknowledgementNotes: 'Physical calculator handed over after identity card verification.',
     }),
   });
   const handoverData = await handoverRes.json();
   if (handoverRes.status !== 200 || !handoverData.success) {
-    throw new Error(`Handover failed: ${JSON.stringify(handoverData)}`);
+    throw new Error(`Handover failed with HTTP ${handoverRes.status}`);
   }
   const receipt = handoverData.data;
   console.log(`   🎉 Supervised handover complete! Handover ID: ${receipt.handoverId}`);
@@ -268,6 +351,73 @@ async function runE2EWorkflow() {
   console.log(`   📦 Item Status Verified: ${currentStatus}`);
   if (currentStatus !== 'HANDED_OVER') {
     throw new Error(`Expected item status HANDED_OVER, but got ${currentStatus}`);
+  }
+
+  const completedClaimsRes = await fetch(`${BASE_URL}/claims/my-claims`, {
+    headers: { Authorization: `Bearer ${s2Token}` },
+  });
+  const completedClaimsData = await completedClaimsRes.json();
+  if (completedClaimsRes.status !== 200 || (completedClaimsData.data || []).some(c => String(c.id || c._id) === String(claimId))) {
+    throw new Error('Completed claim remained in My Claims after handover.');
+  }
+
+  const recoveryHistoryRes = await fetch(`${BASE_URL}/handovers/my-recovery-history`, {
+    headers: { Authorization: `Bearer ${s2Token}` },
+  });
+  const recoveryHistoryData = await recoveryHistoryRes.json();
+  const recovered = (recoveryHistoryData.data || []).find(entry => String(entry.claimId) === String(claimId));
+  if (recoveryHistoryRes.status !== 200 || !recovered) {
+    throw new Error('Completed claim did not appear in the claimant Recovery History.');
+  }
+
+  const pendingHandoversRes = await fetch(`${BASE_URL}/handovers/pending`, {
+    headers: { Authorization: `Bearer ${secToken}` },
+  });
+  const pendingHandoversData = await pendingHandoversRes.json();
+  const pendingHandovers = pendingHandoversData.data || [];
+  if (pendingHandoversRes.status !== 200) {
+    throw new Error(`Security pending-handover lookup failed with HTTP ${pendingHandoversRes.status}`);
+  }
+  if (pendingHandovers.some(entry => String(entry.claim?.id || entry.claimId) === String(claimId))) {
+    throw new Error('Completed claim remained in the Pending Handover queue.');
+  }
+
+  const slipRes = await fetch(`${BASE_URL}/handovers/${receipt.handoverId}/slip`, {
+    headers: { Authorization: `Bearer ${secToken}` },
+  });
+  const slipData = await slipRes.json();
+  if (slipRes.status !== 200 || String(slipData.data?.claimId) !== String(claimId)) {
+    throw new Error(`Completed handover slip was unavailable (HTTP ${slipRes.status}).`);
+  }
+  if (JSON.stringify(slipData).includes(handoverOtp)) {
+    throw new Error('Handover slip exposed an OTP value.');
+  }
+
+  const evidenceRes = await fetch(`${BASE_URL}/claims/${claimId}/evidence`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${s2Token}` },
+  });
+  const evidenceData = await evidenceRes.json();
+  if (evidenceRes.status !== 409 || evidenceData.error?.code !== 'RECOVERY_COMPLETED') {
+    throw new Error(`Evidence upload was not blocked after recovery (HTTP ${evidenceRes.status}).`);
+  }
+
+  const duplicateHandoverRes = await fetch(`${BASE_URL}/handovers/verify-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secToken}`,
+    },
+    body: JSON.stringify({
+      claimId,
+      otp: handoverOtp,
+      physicalDeskLocation: 'Block 34 Central Security Desk',
+      idCardPresentedType: 'CAMPUS_ID',
+      idCardNumber: testClaimantReg,
+    }),
+  });
+  if (![400, 409].includes(duplicateHandoverRes.status)) {
+    throw new Error(`Duplicate handover was not rejected (HTTP ${duplicateHandoverRes.status}).`);
   }
 
   // Verify item cannot be claimed again
@@ -288,11 +438,16 @@ async function runE2EWorkflow() {
   console.log(`   🛡️ Re-claim guard verified: Attempted claim on handed-over item rejected with HTTP ${duplicateClaim.status}`);
 
   console.log(`\n================================================================`);
-  console.log(`🏁 All 8 E2E Workflow Steps Passed Successfully!`);
+  console.log(`🏁 All E2E Workflow Checks Passed Successfully!`);
   console.log(`================================================================\n`);
 }
 
-runE2EWorkflow().catch((err) => {
+runE2EWorkflow().then(deactivateCreatedUsers).catch(async (err) => {
   console.error('\n❌ E2E Workflow Error:', err.message);
+  try {
+    await deactivateCreatedUsers();
+  } catch {
+    console.error('E2E test accounts could not be safely deactivated.');
+  }
   process.exit(1);
 });

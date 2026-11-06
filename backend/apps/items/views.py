@@ -6,6 +6,7 @@ Items App Views: Categories, Public Board, Reporting & Ingestion
 """
 
 from datetime import datetime, timezone, timedelta
+import logging
 import uuid
 from django.db import transaction
 from django.db.models import Q
@@ -13,7 +14,7 @@ from django.utils import timezone as django_timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
@@ -50,17 +51,19 @@ from .services import (
     process_and_store_image,
 )
 
+logger = logging.getLogger(__name__)
+
 # -----------------------------------------------------------------------------
 # Categories
 # -----------------------------------------------------------------------------
 
 class PublicCategoryListAPIView(APIView):
-    """Public catalog of active property categories."""
-    permission_classes = [AllowAny]
+    """Authenticated catalog of active property categories."""
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=['Taxonomy'],
-        summary='Get Public Categories',
+        summary='Get Item Categories',
         responses={200: ItemCategorySerializer(many=True)},
     )
     def get(self, request):
@@ -124,20 +127,20 @@ class AdminCategoryDetailAPIView(APIView):
         return Response(ItemCategorySerializer(updated).data, status=status.HTTP_200_OK)
 
 # -----------------------------------------------------------------------------
-# Public Board & Item Search
+# Authenticated Board & Item Search
 # -----------------------------------------------------------------------------
 
 class ItemPublicBoardAPIView(APIView):
     """
-    Public Property Recovery Board
+    Authenticated Property Recovery Board
     Supports dynamic multi-filtering, search, safe server-side sorting, and pagination.
     Strictly redacts sensitive fields and private vault data.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=['Items'],
-        summary='Search Public Lost & Found Board',
+        summary='Search Lost & Found Board',
         parameters=[
             OpenApiParameter('itemType', str, description='Filter by LOST or FOUND'),
             OpenApiParameter('category', str, description='Category code or UUID'),
@@ -265,8 +268,8 @@ class DailyLostReportLimitAPIView(APIView):
         )
 
 class ItemDetailAPIView(APIView):
-    """Retrieve sanitized public or owner item detail by ID or reference number."""
-    permission_classes = [AllowAny]
+    """Retrieve sanitized item detail by ID or reference number for signed-in users."""
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=['Items'],
@@ -344,6 +347,19 @@ class ItemDetailAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        if item.status == ItemStatus.HANDED_OVER:
+            return Response(
+                {
+                    'success': False,
+                    'statusCode': status.HTTP_409_CONFLICT,
+                    'error': {
+                        'code': 'RECOVERY_COMPLETED',
+                        'message': 'Completed recovery records are read-only and can no longer be edited.',
+                    },
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         serializer = UpdateReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
@@ -357,7 +373,23 @@ class ItemDetailAPIView(APIView):
         if 'primaryImageUrl' in vd: item.primary_image_url = vd['primaryImageUrl'].strip()
         if 'additionalImages' in vd: item.additional_images = vd['additionalImages']
 
-        item.save()
+        with transaction.atomic():
+            item.save()
+            AuditEntry.objects.create(
+                actor=request.user,
+                actor_role=request.user.role,
+                action=AuditAction.ITEM_REPORT_UPDATE,
+                target_entity='Item',
+                target_id=str(item.id),
+                ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                metadata={
+                    'itemId': str(item.id),
+                    'itemType': item.item_type,
+                    'referenceNumber': item.reference_number,
+                    'changedFields': sorted(vd.keys()),
+                },
+            )
         return Response(PublicItemSerializer(item, context={'request': request}).data, status=status.HTTP_200_OK)
 
 class CreateItemReportAPIView(APIView):
@@ -710,19 +742,20 @@ class ImageUploadAPIView(APIView):
             return Response(processed, status=status.HTTP_201_CREATED)
         except ValidationError:
             raise
-        except (IOError, OSError) as e:
+        except (IOError, OSError) as error:
+            logger.error('Item image storage unavailable (%s)', type(error).__name__)
             return Response(
                 {
                     'success': False,
                     'statusCode': status.HTTP_503_SERVICE_UNAVAILABLE,
-                    'error': {'code': 'STORAGE_UNAVAILABLE', 'message': f'Media storage unavailable: {e}'},
+                    'error': {'code': 'STORAGE_UNAVAILABLE', 'message': 'Media storage unavailable. Please try again later.'},
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 class ItemChallengesAPIView(APIView):
-    """Retrieve public challenge questions for an item without answers."""
-    permission_classes = [AllowAny]
+    """Retrieve item challenge questions for an authenticated claimant."""
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=['Items'],

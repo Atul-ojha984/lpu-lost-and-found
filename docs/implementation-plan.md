@@ -142,7 +142,7 @@ All configuration is strictly governed by environment variables validated on sta
 NODE_ENV=development                 # 'development' | 'production' | 'test'
 PORT=5000
 API_PREFIX=/api/v1
-CORS_ORIGIN=http://localhost:3000     # Production: https://lpu-lost-found.vercel.app
+CORS_ORIGIN=http://localhost:3000     # Production: set the actual Vercel origin after deployment
 
 # Database
 MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/lpu_lost_found?retryWrites=true&w=majority

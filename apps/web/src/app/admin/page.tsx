@@ -34,6 +34,7 @@ interface AuditItem {
   targetEntity: string;
   targetId?: string;
   actorRole: string;
+  actorName?: string;
   timestamp: string;
   metadata?: Record<string, unknown>;
 }
@@ -312,8 +313,8 @@ export default function AdminOverviewPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div>
-            <h3 className="text-sm font-bold text-[#283442]">Recent Statutory Audit Entries</h3>
-            <p className="text-xs text-slate-500">Live cryptographic state transitions across campus security posts.</p>
+            <h3 className="text-sm font-bold text-[#283442]">Recent System Activity</h3>
+            <p className="text-xs text-slate-500">Recent activity across student, staff, security, and administrative workflows.</p>
           </div>
           <Link
             href="/admin/audit"
@@ -336,6 +337,7 @@ export default function AdminOverviewPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-slate-500 text-[11px]">
+                  {log.actorName && <span>{log.actorName}</span>}
                   <span>Role: <strong>{log.actorRole}</strong></span>
                   <span className="font-mono text-slate-400">{new Date(log.timestamp).toLocaleString('en-IN')}</span>
                 </div>

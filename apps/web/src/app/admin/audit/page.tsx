@@ -13,6 +13,7 @@ import { apiClient } from '@/lib/api-client';
 interface AuditLogEntry {
   _id: string;
   action: string;
+  actorName?: string;
   actor?: {
     _id: string;
     fullName: string;
@@ -34,6 +35,10 @@ export default function AdminAuditPage() {
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
+  const [actorFilter, setActorFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [targetIdFilter, setTargetIdFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
@@ -51,6 +56,10 @@ export default function AdminAuditPage() {
         const res = await apiClient.getAdminAuditLogs({
           action: actionFilter !== 'ALL' ? actionFilter : undefined,
           targetEntity: entityFilter !== 'ALL' ? entityFilter : undefined,
+          actorSearch: actorFilter || undefined,
+          actorRole: roleFilter || undefined,
+          targetId: targetIdFilter || undefined,
+          actionStatus: statusFilter || undefined,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
           page,
@@ -85,7 +94,7 @@ export default function AdminAuditPage() {
     return () => {
       isSubscribed = false;
     };
-  }, [actionFilter, entityFilter, startDate, endDate, page, refreshTrigger]);
+  }, [actionFilter, entityFilter, actorFilter, roleFilter, targetIdFilter, statusFilter, startDate, endDate, page, refreshTrigger]);
 
   return (
     <DashboardLayout
@@ -111,7 +120,7 @@ export default function AdminAuditPage() {
       </div>
 
       {/* Filter Toolbar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className="block text-[11px] font-semibold text-slate-600 mb-1">
             Filter by Action
@@ -125,13 +134,28 @@ export default function AdminAuditPage() {
             className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-800 focus:border-red-600 focus:outline-none"
           >
             <option value="">All Audit Actions</option>
-            <option value="ITEM_DISPOSE">ITEM_DISPOSE (Disposal Approvals)</option>
+            <option value="USER_REGISTER">USER_REGISTER (Account Created)</option>
+            <option value="USER_LOGIN">USER_LOGIN (Sign In)</option>
+            <option value="USER_LOGOUT">USER_LOGOUT (Sign Out)</option>
+            <option value="ITEM_REPORT_LOST">ITEM_REPORT_LOST (Lost Report)</option>
+            <option value="ITEM_REPORT_FOUND">ITEM_REPORT_FOUND (Found Report)</option>
+            <option value="ITEM_REPORT_UPDATE">ITEM_REPORT_UPDATE (Report Updated)</option>
+            <option value="ITEM_REPORT_WITHDRAW">ITEM_REPORT_WITHDRAW (Report Withdrawn)</option>
+            <option value="ITEM_REPORT_EXPIRE">ITEM_REPORT_EXPIRE (Report Expired)</option>
+            <option value="CLAIM_SUBMIT">CLAIM_SUBMIT (Claim or Evidence Submitted)</option>
+            <option value="CLAIM_CHALLENGE_VERIFY">CLAIM_CHALLENGE_VERIFY (Ownership Check)</option>
             <option value="ROLE_UPDATE">ROLE_UPDATE (Privilege Changes)</option>
             <option value="CLAIM_REVIEW">CLAIM_REVIEW (Claim Approvals/Rejections)</option>
+            <option value="HANDOVER_OTP_GENERATE">HANDOVER_OTP_GENERATE (OTP Issued)</option>
+            <option value="HANDOVER_OTP_FAILED">HANDOVER_OTP_FAILED (OTP Attempt Failed)</option>
             <option value="HANDOVER_EXECUTE">HANDOVER_EXECUTE (OTP Releases)</option>
+            <option value="HANDOVER_SLIP_ACCESS">HANDOVER_SLIP_ACCESS (Handover Slip)</option>
             <option value="CUSTODY_TRANSFER">CUSTODY_TRANSFER (Locker Moves)</option>
+            <option value="CUSTODY_INTAKE">CUSTODY_INTAKE (Security Intake)</option>
+            <option value="ITEM_DISPOSE">ITEM_DISPOSE (Disposal Approvals)</option>
             <option value="CATEGORY_MANAGE">CATEGORY_MANAGE (Retention Settings)</option>
             <option value="LOCATION_MANAGE">LOCATION_MANAGE (Campus Locations)</option>
+            <option value="CONFIG_UPDATE">CONFIG_UPDATE (System Settings)</option>
             <option value="PRIVATE_VAULT_VIEW">PRIVATE_VAULT_VIEW (Officer Audits)</option>
           </select>
         </div>
@@ -153,8 +177,66 @@ export default function AdminAuditPage() {
             <option value="User">User</option>
             <option value="Claim">Claim</option>
             <option value="Handover">Handover</option>
+            <option value="DirectRecovery">DirectRecovery</option>
             <option value="ItemCategory">ItemCategory</option>
             <option value="Location">Location</option>
+            <option value="Platform">Platform</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 mb-1">User / Actor</label>
+          <input
+            type="search"
+            value={actorFilter}
+            onChange={(e) => { setActorFilter(e.target.value); setPage(1); }}
+            placeholder="Name, email, registration, or ID"
+            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-800 focus:border-red-600 focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Role</label>
+          <select
+            value={roleFilter}
+            onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-800 focus:border-red-600 focus:outline-none"
+          >
+            <option value="">All Roles</option>
+            <option value="STUDENT_STAFF">Student / Staff</option>
+            <option value="SECURITY_PERSONNEL">Security</option>
+            <option value="CAMPUS_ADMIN">Campus Admin</option>
+            <option value="SYSTEM_ADMIN">System Admin</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Target Record ID</label>
+          <input
+            type="search"
+            value={targetIdFilter}
+            onChange={(e) => { setTargetIdFilter(e.target.value); setPage(1); }}
+            placeholder="Record identifier"
+            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-800 focus:border-red-600 focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Action Status</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-800 focus:border-red-600 focus:outline-none"
+          >
+            <option value="">All Outcomes</option>
+            <option value="SUCCESS">Success</option>
+            <option value="FAILED">Failed</option>
+            <option value="BLOCKED">Blocked</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="APPROVED">Approved</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="WITHDRAWN">Withdrawn</option>
+            <option value="EXPIRED">Expired</option>
           </select>
         </div>
 
@@ -234,7 +316,7 @@ export default function AdminAuditPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="font-semibold text-slate-800 block">
-                      {log.actor?.fullName || log.actorRole}
+                      {log.actorName || log.actor?.fullName || log.actorRole}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
                       {log.actor?.registrationNumber || log.actorRole}

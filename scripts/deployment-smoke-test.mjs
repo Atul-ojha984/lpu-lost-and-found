@@ -39,14 +39,36 @@ const tests = [
       typeof data.data.database.connected === 'boolean',
   },
   {
-    name: '3. Public Item Search Board (Sanitized)',
+    name: '3. Guest item search is denied',
     path: '/api/v1/items?limit=5',
     method: 'GET',
+    expectedStatus: 401,
+    validate: (data) => data && data.success === false,
+  },
+  {
+    name: '4. Seeded student login',
+    path: '/api/v1/auth/login/',
+    method: 'POST',
+    body: {
+      emailOrRegNo: process.env.SMOKE_STUDENT_ID || '12108801',
+      password: process.env.SMOKE_STUDENT_PASSWORD || 'DemoStudent2026!',
+    },
+    expectedStatus: 200,
+    validate: (data) => {
+      if (!data?.success || data.data?.user?.role !== 'STUDENT_STAFF' || !data.data?.token) return false;
+      studentToken = data.data.token;
+      return true;
+    },
+  },
+  {
+    name: '5. Authenticated Item Search Board (Sanitized)',
+    path: '/api/v1/items?limit=5',
+    method: 'GET',
+    authenticated: true,
     expectedStatus: 200,
     validate: (data) => {
       if (!data || !data.success) return false;
       const items = data.data?.items || data.data || [];
-      // Verify privacy guarantee: zero private detail leakage
       for (const item of items) {
         if (item.passwordHash || item.privateVault || item.encryptedDetails || item.expectedAnswer) {
           throw new Error('Privacy Leak: sensitive field found in public item representation');
@@ -56,34 +78,38 @@ const tests = [
     },
   },
   {
-    name: '4. Campus Item Categories',
+    name: '6. Campus Item Categories (authenticated)',
     path: '/api/v1/categories',
     method: 'GET',
+    authenticated: true,
     expectedStatus: 200,
     validate: (data) => data && data.success && Array.isArray(data.data) && data.data.length > 0,
   },
   {
-    name: '5. Campus Locations',
+    name: '7. Campus Locations (authenticated)',
     path: '/api/v1/locations',
     method: 'GET',
+    authenticated: true,
     expectedStatus: 200,
     validate: (data) => data && data.success && Array.isArray(data.data) && data.data.length > 0,
   },
   {
-    name: '6. Unauthenticated Guard on Security Claims Queue (Must return 401)',
+    name: '8. Unauthenticated Guard on Security Claims Queue (Must return 401)',
     path: '/api/v1/claims/pending',
     method: 'GET',
     expectedStatus: 401,
     validate: (data) => data && data.success === false,
   },
   {
-    name: '7. Unauthenticated Guard on Administrative Analytics (Must return 401)',
+    name: '9. Unauthenticated Guard on Administrative Analytics (Must return 401)',
     path: '/api/v1/admin/analytics',
     method: 'GET',
     expectedStatus: 401,
     validate: (data) => data && data.success === false,
   },
 ];
+
+let studentToken = '';
 
 async function runSmokeTests() {
   console.log(`\n================================================================`);
@@ -103,7 +129,9 @@ async function runSmokeTests() {
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'LPU-SmokeTest-Runner/1.0',
+          ...(t.authenticated && studentToken ? { Authorization: `Bearer ${studentToken}` } : {}),
         },
+        ...(t.body ? { body: JSON.stringify(t.body) } : {}),
       });
 
       const elapsed = Date.now() - start;
@@ -112,7 +140,7 @@ async function runSmokeTests() {
       if (res.status !== t.expectedStatus) {
         console.error(`❌ FAIL: ${t.name}`);
         console.error(`   Expected Status: ${t.expectedStatus}, Received: ${res.status} (${elapsed}ms)`);
-        console.error(`   Body:`, JSON.stringify(json, null, 2));
+        console.error(`   Error code: ${json?.error?.code || 'UNAVAILABLE'}`);
         failed++;
         continue;
       }
@@ -120,7 +148,7 @@ async function runSmokeTests() {
       if (t.validate && !t.validate(json)) {
         console.error(`❌ FAIL: ${t.name}`);
         console.error(`   Validation predicate failed (${elapsed}ms)`);
-        console.error(`   Body:`, JSON.stringify(json, null, 2));
+        console.error(`   Error code: ${json?.error?.code || 'UNAVAILABLE'}`);
         failed++;
         continue;
       }

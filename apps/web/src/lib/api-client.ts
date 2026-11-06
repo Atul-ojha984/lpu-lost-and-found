@@ -1,8 +1,11 @@
 import { PublicItem, ItemType, ItemCategory, LPUCampusZone, ItemStatus, ClaimStatus } from '@/types';
 
-// Environment-based API URL configuration (Django REST Framework v1)
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// Environment-based API URL configuration (Django REST Framework v1). Localhost
+// is only a development default; production builds must supply the Vercel env.
+const developmentApiUrl = process.env.NODE_ENV === 'development'
+  ? 'http://localhost:8000/api/v1'
+  : '';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.trim() || developmentApiUrl;
 
 export class ApiClientError extends Error {
   public statusCode: number;
@@ -71,6 +74,148 @@ export interface SecurityReviewReport {
     registrationNumber: string;
     userType: string;
   };
+}
+
+export interface DirectRecoveryReport extends SecurityReviewReport {
+  verificationQuestions: Array<{ id: string; questionText: string; hint?: string }>;
+  verificationAvailable: { privateDetails: boolean; reportPhotos: boolean; questions: boolean };
+}
+
+export interface DirectRecoveryRecord {
+  id: string;
+  directRecoveryId: string;
+  recoveryReference: string;
+  itemId: string;
+  item: PublicItem;
+  recipient: { id: string; fullName: string; registrationNumber: string; department?: string; phone?: string };
+  status: string;
+  intakeOfficer: { id: string; fullName: string; registrationNumber: string };
+  physicalDeskLocation: string;
+  createdAt: string;
+  reviewedBy?: { id: string; fullName: string; registrationNumber: string } | null;
+  reviewedAt?: string | null;
+  verificationMethods?: string[];
+  verificationNotes?: string;
+  verificationQuestions?: Array<{ id: string; questionText: string; hint?: string }>;
+  verificationAvailable?: { privateDetails: boolean; reportPhotos: boolean; questions: boolean };
+  otpExpiresAt?: string | null;
+  otpGeneratedAt?: string | null;
+  otpRemainingSeconds?: number;
+  otpStatus?: 'PENDING_APPROVAL' | 'NOT_ISSUED' | 'ACTIVE' | 'EXPIRED' | 'RENEWED' | 'USED';
+  otpRenewed?: boolean;
+  handoverStatus?: string;
+  handoverOtp?: string | null;
+  completedAt?: string | null;
+  completedBy?: { id: string; fullName: string; registrationNumber: string } | null;
+}
+
+export interface DirectRecoveryHandoverReceipt {
+  handoverId: string;
+  directRecoveryId: string;
+  referenceNumber: string;
+  itemTitle: string;
+  recipientName: string;
+  recipientRegNo: string;
+  officerId: string;
+  physicalDeskLocation: string;
+  idCardPresentedType: string;
+  idCardNumberMasked: string;
+  completedAt: string;
+}
+
+export interface AdminInventoryItem {
+  id: string;
+  _id?: string;
+  referenceNumber: string;
+  title: string;
+  status: string;
+  primaryImageUrl?: string;
+  currentCustodyDesk?: string;
+  lockerStorageReference?: string;
+  updatedAt?: string;
+  category?: { id?: string; name?: string; code?: string };
+}
+
+export interface AdminInventoryLocker {
+  id: string;
+  lockerNumber: string;
+  location: string;
+  is_active: boolean;
+  currentItemId: string | null;
+  currentItemTitle: string | null;
+  currentItem: AdminInventoryItem | null;
+  occupied: boolean;
+  updatedAt: string;
+  hasCustodyHistory: boolean;
+  canDelete: boolean;
+  deleteBlockedReason: string;
+}
+
+export interface AdminInventoryUpdate {
+  id: string;
+  action: string;
+  itemReference?: string;
+  itemTitle?: string;
+  previousLockerReference?: string;
+  lockerReference?: string;
+  officerName?: string;
+  handledBy?: { fullName?: string; registrationNumber?: string };
+  timestamp: string;
+  toLocation?: string;
+}
+
+export interface AdminInventorySnapshot {
+  items: AdminInventoryItem[];
+  lockers: AdminInventoryLocker[];
+  recentUpdates: AdminInventoryUpdate[];
+}
+
+export interface CustodyLockerRecord {
+  id: string;
+  lockerNumber: string;
+  location: string;
+  locationId: string;
+  locationCode: string;
+  locationActive: boolean;
+  is_active: boolean;
+  currentItemId: string | null;
+  currentItemTitle: string | null;
+  updatedAt: string;
+  updatedBy: { id: string; fullName: string; role: string } | null;
+  occupied: boolean;
+}
+
+export interface CustodyLocationRecord {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { id: string; fullName: string; role: string } | null;
+  updatedBy: { id: string; fullName: string; role: string } | null;
+  lockers: CustodyLockerRecord[];
+  lockersTotal: number;
+  lockersOccupied: number;
+  itemsStored: number;
+}
+
+export interface PortalNotification {
+  id: string;
+  eventType: string;
+  title: string;
+  message: string;
+  targetPath: string;
+  createdAt: string;
+  readAt: string | null;
+  isRead: boolean;
+}
+
+export interface NotificationsResponse {
+  items: PortalNotification[];
+  unreadCount: number;
+  nextCursor: string;
 }
 
 export interface UpdateReportPayload {
@@ -145,6 +290,15 @@ export function getAccessToken(): string | null {
     return legacy;
   }
   return null;
+}
+
+function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('csrftoken='));
+  return cookie ? decodeURIComponent(cookie.slice('csrftoken='.length)) : null;
 }
 
 export function getRefreshToken(): string | null {
@@ -230,6 +384,14 @@ async function apiFetch<T>(
   endpoint: string,
   options: ApiFetchOptions = {}
 ): Promise<T> {
+  if (!API_BASE_URL && !/^https?:\/\//i.test(endpoint)) {
+    throw new ApiClientError(
+      'The backend API URL is not configured. Set NEXT_PUBLIC_API_URL for this deployment.',
+      0,
+      'API_URL_NOT_CONFIGURED'
+    );
+  }
+
   const url = endpoint.startsWith('http')
     ? endpoint
     : `${API_BASE_URL.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
@@ -258,6 +420,13 @@ async function apiFetch<T>(
     }
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  const unsafeMethod = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method);
+  if (!isAuthRoute && !options.skipAuth && unsafeMethod && !headers['Authorization']) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -269,7 +438,7 @@ async function apiFetch<T>(
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const errorMsg = isOffline
       ? 'Network offline. Please check your internet connection.'
-      : 'Authentication service unreachable (http://localhost:8000). Please ensure the Django backend server is running.';
+      : 'The backend API is unreachable. Check the network and the configured API URL.';
     throw new ApiClientError(errorMsg, 0, 'NETWORK_ERROR', netErr);
   }
 
@@ -344,7 +513,28 @@ async function apiFetch<T>(
   const data = isJson ? await response.json() : null;
 
   if (!response.ok) {
-    const message = data?.error?.message || data?.message || data?.detail || `HTTP error ${response.status}`;
+    const explicitMessage = data?.error?.message || data?.message || data?.detail;
+    const errorDetails = data?.error?.details || data?.details;
+    const detailMessages = Array.isArray(errorDetails)
+      ? errorDetails.flatMap((entry: { field?: unknown; message?: unknown }) => {
+        if (typeof entry?.message !== 'string') return [];
+        const field = typeof entry.field === 'string'
+          ? `${entry.field.replace(/([A-Z])/g, ' $1').replace(/^./, (letter: string) => letter.toUpperCase())}: `
+          : '';
+        return [`${field}${entry.message}`];
+      })
+      : [];
+    const fieldMessages = data && typeof data === 'object'
+      ? Object.entries(data)
+        .filter(([field]) => !['error', 'message', 'detail', 'code', 'status'].includes(field))
+        .flatMap(([field, value]) => {
+          const messages = Array.isArray(value) ? value : [value];
+          return messages
+            .filter((entry): entry is string => typeof entry === 'string')
+            .map((entry) => `${field.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase())}: ${entry}`);
+        })
+      : [];
+    const message = detailMessages.join(' ') || fieldMessages.join(' ') || explicitMessage || `HTTP error ${response.status}`;
     const code = data?.error?.code || data?.code || 'UNKNOWN_ERROR';
     const details = data?.error?.details || data?.details;
     throw new ApiClientError(message, response.status, code, details);
@@ -354,8 +544,23 @@ async function apiFetch<T>(
 }
 
 export const apiClient = {
+  async getNotifications(cursor?: string): Promise<NotificationsResponse> {
+    const query = new URLSearchParams();
+    if (cursor) query.set('cursor', cursor);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`notifications/${suffix}`);
+  },
+
+  async markNotificationRead(notificationId: string): Promise<{ id: string; readAt: string; unreadCount: number }> {
+    return apiFetch(`notifications/${notificationId}/read/`, { method: 'POST' });
+  },
+
+  async markAllNotificationsRead(): Promise<{ unreadCount: number }> {
+    return apiFetch('notifications/read-all/', { method: 'POST' });
+  },
+
   /**
-   * Fetch public items with filtering and server-side pagination
+   * Fetch signed-in item listings with filtering and server-side pagination
    */
   async getItems(params: QueryItemsParams = {}): Promise<PaginatedResult<PublicItem>> {
     const query = new URLSearchParams();
@@ -678,6 +883,14 @@ export const apiClient = {
     return res?.user !== undefined ? res.user : res;
   },
 
+  /** Update only the authenticated user's contact phone number. */
+  async updateCurrentUserProfile(phone: string): Promise<{ user?: { phone?: string } }> {
+    return apiFetch<{ user?: { phone?: string } }>('auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ phone }),
+    });
+  },
+
   /**
    * Custody: Retrieve items in security custody inventory
    */
@@ -718,9 +931,57 @@ export const apiClient = {
   /**
    * Custody: Transfer or check-in an item in the physical custody ledger
    */
+  async getLockers(): Promise<CustodyLockerRecord[]> {
+    return apiFetch('custody/lockers');
+  },
+
+  async createLocker(payload: { lockerNumber: string; custodyLocationId?: string; location?: string }): Promise<CustodyLockerRecord> {
+    return apiFetch('custody/lockers', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  async updateLocker(lockerId: string, payload: { lockerNumber?: string; custodyLocationId?: string; is_active?: boolean }): Promise<CustodyLockerRecord> {
+    return apiFetch(`custody/lockers/${lockerId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+
+  async deleteLocker(lockerId: string): Promise<{ deleted: boolean; archived?: boolean; lockerId: string }> {
+    return apiFetch(`custody/lockers/${lockerId}`, { method: 'DELETE' });
+  },
+
+  async getCustodyLocations(includeInactive = false): Promise<CustodyLocationRecord[]> {
+    return apiFetch(`custody/locations?includeInactive=${includeInactive}`);
+  },
+
+  async createCustodyLocation(payload: { code: string; name: string; description?: string; isActive?: boolean }): Promise<CustodyLocationRecord> {
+    return apiFetch('custody/locations', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  async updateCustodyLocation(
+    id: string,
+    payload: { code?: string; name?: string; description?: string; isActive?: boolean },
+  ): Promise<CustodyLocationRecord> {
+    return apiFetch(`custody/locations/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+
+  async deleteCustodyLocation(id: string): Promise<{ deleted: boolean; archived?: boolean; locationId: string }> {
+    return apiFetch(`custody/locations/${id}`, { method: 'DELETE' });
+  },
+
+  async getAdminInventory(): Promise<AdminInventorySnapshot> {
+    return apiFetch('admin/inventory');
+  },
+
+  async assignLocker(payload: { itemId: string; lockerId: string | null; reason?: string }): Promise<unknown> {
+    return apiFetch('custody/assign-locker', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  /**
+   * Custody: Transfer or check-in an item in the physical custody ledger
+   */
   async transferCustody(payload: {
     itemId: string;
-    toLocation: string;
+    toLocation?: string;
+    custodyLocationId?: string;
+    lockerId?: string;
     lockerReference?: string;
     action?: string;
     remarks?: string;
@@ -756,6 +1017,91 @@ export const apiClient = {
     return apiFetch(endpoint);
   },
 
+  /** Return redacted, authorized print data for a completed handover only. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getHandoverSlip(handoverId: string): Promise<any> {
+    return apiFetch(`handovers/${handoverId}/slip`);
+  },
+
+  /** Search existing LOST reports that can be linked to direct security intake. */
+  async getEligibleDirectLostReports(search?: string): Promise<DirectRecoveryReport[]> {
+    const params = new URLSearchParams();
+    if (search?.trim()) params.set('search', search.trim());
+    const query = params.toString();
+    return apiFetch(`handovers/direct-reports${query ? `?${query}` : ''}`);
+  },
+
+  /** Retrieve active direct recovery records for authorized security staff. */
+  async getDirectRecoveries(search?: string): Promise<DirectRecoveryRecord[]> {
+    const params = new URLSearchParams();
+    if (search?.trim()) params.set('search', search.trim());
+    const query = params.toString();
+    return apiFetch(`handovers/direct-recoveries${query ? `?${query}` : ''}`);
+  },
+
+  /** Retrieve completed direct recoveries so security can print saved receipts. */
+  async getDirectRecoveryHistory(): Promise<DirectRecoveryRecord[]> {
+    return apiFetch('handovers/direct-recoveries/history');
+  },
+
+  /** Record physical intake against a reporter's existing lost report. */
+  async createDirectRecoveryIntake(payload: {
+    reportId: string;
+    physicalDeskLocation: string;
+    custodyLocationId?: string;
+    physicalItemReceived: boolean;
+    intakeNotes?: string;
+  }): Promise<DirectRecoveryRecord> {
+    return apiFetch('handovers/direct-recoveries', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Independently verify or reject a direct recovery before any OTP is issued. */
+  async reviewDirectRecovery(directRecoveryId: string, payload: {
+    action: 'APPROVE' | 'REJECT';
+    verificationNotes?: string;
+    rejectionReason?: string;
+    studentIdVerified?: boolean;
+    privateDetailsMatched?: boolean;
+    reportPhotoMatched?: boolean;
+    verificationAnswers?: Array<{ challengeId: string; answer: string }>;
+  }): Promise<DirectRecoveryRecord> {
+    return apiFetch(`handovers/direct-recoveries/${directRecoveryId}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Verify the owner OTP and record actual physical direct handover. */
+  async completeDirectRecovery(directRecoveryId: string, payload: {
+    otp: string;
+    physicalDeskLocation: string;
+    custodyLocationId?: string;
+    idCardPresentedType: string;
+    idCardNumber: string;
+    idCardInspected: boolean;
+    recipientSignatureUrl?: string;
+    acknowledgementNotes?: string;
+    proofEvidenceUrl?: string;
+  }): Promise<DirectRecoveryHandoverReceipt> {
+    return apiFetch(`handovers/direct-recoveries/${directRecoveryId}/verify-otp`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Student/staff view of their own direct recovery status and active OTP. */
+  async getMyDirectRecoveries(): Promise<DirectRecoveryRecord[]> {
+    return apiFetch('handovers/direct-recoveries/my');
+  },
+
+  /** Fetch print-only data for a completed direct recovery. */
+  async getDirectRecoverySlip(directRecoveryId: string): Promise<Record<string, unknown>> {
+    return apiFetch(`handovers/direct-recoveries/${directRecoveryId}/slip`);
+  },
+
   /**
    * Handover: Authenticate 6-digit OTP and complete physical property release
    */
@@ -763,6 +1109,7 @@ export const apiClient = {
     claimId: string;
     otp: string;
     physicalDeskLocation: string;
+    custodyLocationId?: string;
     idCardPresentedType: string;
     idCardNumber: string;
     recipientSignatureUrl?: string;
@@ -948,6 +1295,11 @@ export const apiClient = {
     });
   },
 
+  /** Admin Users: delete an unreferenced account or deactivate one with history. */
+  async deleteAdminUser(userId: string): Promise<{ deleted: boolean; deactivated: boolean; message: string }> {
+    return apiFetch(`admin/users/${userId}`, { method: 'DELETE' });
+  },
+
   /**
    * Admin Categories: List categories
    */
@@ -1048,7 +1400,11 @@ export const apiClient = {
   async getAdminAuditLogs(filters?: {
     action?: string;
     actorId?: string;
+    actorSearch?: string;
+    actorRole?: string;
     targetEntity?: string;
+    targetId?: string;
+    actionStatus?: string;
     startDate?: string;
     endDate?: string;
     page?: number;
@@ -1058,7 +1414,11 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (filters?.action) params.set('action', filters.action);
     if (filters?.actorId) params.set('actorId', filters.actorId);
+    if (filters?.actorSearch) params.set('actor', filters.actorSearch);
+    if (filters?.actorRole) params.set('actorRole', filters.actorRole);
     if (filters?.targetEntity) params.set('targetEntity', filters.targetEntity);
+    if (filters?.targetId) params.set('targetId', filters.targetId);
+    if (filters?.actionStatus) params.set('actionStatus', filters.actionStatus);
     if (filters?.startDate) params.set('startDate', filters.startDate);
     if (filters?.endDate) params.set('endDate', filters.endDate);
     if (filters?.page) params.set('page', filters.page.toString());

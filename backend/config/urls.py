@@ -6,9 +6,10 @@ Root URL Configuration
 """
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve as serve_media
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -40,7 +41,7 @@ urlpatterns = [
     path('api/v1/health', HealthCheckAPIView.as_view(), name='health-no-slash'),
     path('api/v1/auth/', include('apps.accounts.urls')),
 
-    # Public Taxonomy Endpoints
+    # Authenticated taxonomy endpoints
     path('api/v1/categories/', PublicCategoryListAPIView.as_view(), name='public-categories-slash'),
     path('api/v1/categories', PublicCategoryListAPIView.as_view(), name='public-categories'),
     path('api/v1/locations/', include('apps.locations.urls')),
@@ -54,13 +55,21 @@ urlpatterns = [
     path('api/v1/claims', ClaimCreateAPIView.as_view(), name='claims-no-slash'),
     path('api/v1/custody/', include('apps.custody.urls')),
     path('api/v1/handovers/', include('apps.handovers.urls')),
+    path('api/v1/notifications/', include('apps.audit.urls_notifications')),
 
     # Privileged Security & Administration Workflows
     path('api/v1/security/', include('apps.audit.urls_security')),
     path('api/v1/admin/', include('apps.analytics.urls_admin')),
 ]
 
-# Serve media files in local development
+# Item photographs are public listing assets with EXIF metadata removed. Keep
+# this stable URL available in production; private evidence uses its separate,
+# authenticated download endpoint and is never served from MEDIA_ROOT.
+urlpatterns += [
+    re_path(r'^media/(?P<path>.+)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
+]
+
+# WhiteNoise handles collected static assets in production; Django serves them
+# only for local development.
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

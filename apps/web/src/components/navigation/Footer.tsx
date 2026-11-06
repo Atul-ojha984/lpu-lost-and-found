@@ -36,11 +36,6 @@ export const Footer: React.FC = () => {
             </h4>
             <ul className="space-y-2 text-xs text-slate-300">
               <li>
-                <Link href="/board" className="hover:text-[#F58220] transition-colors">
-                  Public Search Board
-                </Link>
-              </li>
-              <li>
                 <Link href="/report?type=LOST" className="hover:text-[#F58220] transition-colors">
                   Report Lost Property
                 </Link>

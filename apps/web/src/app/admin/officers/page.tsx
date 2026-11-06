@@ -43,7 +43,7 @@ export default function AdminOfficersPage() {
             name: u.fullName || 'Security Officer',
             badgeId: u.registrationNumber || `LPU-SEC-${idx + 1}`,
             email: u.email || 'officer@lpu.in',
-            phone: u.phone || '+91 98765 00000',
+            phone: u.phone || 'Not provided',
             assignedDesk: u.securityPost || 'Main Security Control Post',
             shift: 'Active Roster (Day / Rotating)',
             custodyCount: 0,

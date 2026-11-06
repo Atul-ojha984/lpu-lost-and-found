@@ -18,7 +18,7 @@ from apps.core.crypto import encrypt_field
 from apps.audit.models import AuditEntry, AuditAction
 from apps.items.models import Item, ItemStatus, ItemType
 from apps.verification.models import VerificationChallenge
-from apps.handovers.models import Handover
+from apps.handovers.models import DirectRecovery, DirectRecoveryStatus, Handover
 from .models import Claim, ClaimChallengeAnswer, ClaimStatus
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,12 @@ def submit_claim(user, item_id: str, statement: str, challenge_answers: list = N
 
         if item.status in (ItemStatus.HANDED_OVER, ItemStatus.DISPOSED, ItemStatus.EXPIRED):
             raise ValidationError(f"This item is in status '{item.status}' and is not eligible for new claims.")
+
+        if DirectRecovery.objects.filter(
+            item=item,
+            status__in=[DirectRecoveryStatus.INTAKE_RECORDED, DirectRecoveryStatus.APPROVED],
+        ).exists():
+            raise ValidationError('This report is already in a direct security recovery workflow and cannot receive a separate ownership claim.')
 
         if item.reported_by_id == user.id and item.item_type == ItemType.FOUND:
             raise ValidationError("You are listed as the finder of this property. You cannot submit an ownership claim against it.")
@@ -168,7 +174,25 @@ def answer_challenge(claim_id: str, user, challenge_id: str, answer_text: str, r
 
         claim.save(update_fields=['verification_attempts_count', 'claim_status'])
 
-    remaining_attempts = max(0, max_attempts - claim.verification_attempts_count)
+        remaining_attempts = max(0, max_attempts - claim.verification_attempts_count)
+        AuditEntry.objects.create(
+            actor=user,
+            actor_role=user.role,
+            action=AuditAction.CLAIM_CHALLENGE_VERIFY,
+            target_entity='Claim',
+            target_id=str(claim.id),
+            ip_address=req_ip,
+            user_agent=user_agent,
+            metadata={
+                'challengeId': str(challenge.id),
+                'itemId': str(claim.item_id),
+                'isCorrect': is_match,
+                'attemptNumber': claim.verification_attempts_count,
+                'remainingAttempts': remaining_attempts,
+                'status': claim.claim_status,
+            },
+        )
+
     return {
         'success': True,
         'isCorrect': is_match,

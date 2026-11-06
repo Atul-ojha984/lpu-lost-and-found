@@ -155,7 +155,7 @@ class TestAuthenticationSuite:
             {'role': UserRole.SYSTEM_ADMIN, 'userType': UserType.SYSTEM_ADMIN},
             format='json',
         )
-        assert role_update.status_code == 405
+        assert role_update.status_code == 400
         user.refresh_from_db()
         assert user.role == UserRole.STUDENT_STAFF
         assert user.user_type == UserType.STAFF
@@ -184,6 +184,44 @@ class TestAuthenticationSuite:
         data = res.json()['data']
         assert data['user']['registrationNumber'] == 'STF9999'
         assert data['user']['fullName'] == 'Dr. Cookie Test'
+
+    def test_cookie_authenticated_unsafe_request_requires_csrf(self):
+        """Cookie JWT requests require CSRF validation while safe reads remain available."""
+        User.objects.create_user(
+            email='csrf.staff@lpu.in',
+            registration_number='STFCSRF1',
+            full_name='Dr. CSRF Test',
+            password='StaffPassword@1',
+            role=UserRole.STUDENT_STAFF,
+        )
+        client = APIClient(enforce_csrf_checks=True)
+        login_res = client.post(
+            '/api/v1/auth/login/',
+            {'emailOrRegNo': 'STFCSRF1', 'password': 'StaffPassword@1'},
+            format='json',
+        )
+        assert login_res.status_code == 200
+        csrf_cookie = login_res.cookies.get('csrftoken')
+        assert csrf_cookie is not None
+
+        client.cookies['lpu_session_token'] = login_res.json()['data']['token']
+        client.cookies['csrftoken'] = csrf_cookie.value
+        assert client.get('/api/v1/auth/me/').status_code == 200
+
+        rejected = client.patch(
+            '/api/v1/auth/me/',
+            {'phone': '+919876543210'},
+            format='json',
+        )
+        assert rejected.status_code == 403
+
+        accepted = client.patch(
+            '/api/v1/auth/me/',
+            {'phone': '+919876543210'},
+            format='json',
+            HTTP_X_CSRFTOKEN=csrf_cookie.value,
+        )
+        assert accepted.status_code == 200
 
     def test_logout_clears_cookie(self):
         """Logout endpoint responds with 200 and expired cookie directive."""

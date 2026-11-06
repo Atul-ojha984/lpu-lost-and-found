@@ -6,7 +6,7 @@ Audit App Serializers
 """
 
 from rest_framework import serializers
-from .models import AuditEntry
+from .models import AuditEntry, sanitize_audit_metadata
 from apps.accounts.models import User
 
 class AuditActorBriefSerializer(serializers.ModelSerializer):
@@ -24,6 +24,8 @@ class AuditEntrySerializer(serializers.ModelSerializer):
     """Sanitized compliance audit log serializer."""
     _id = serializers.CharField(source='id', read_only=True)
     actor = AuditActorBriefSerializer(read_only=True)
+    actorName = serializers.CharField(source='actor_name', read_only=True)
+    description = serializers.CharField(read_only=True)
     actorRole = serializers.CharField(source='actor_role', read_only=True)
     targetEntity = serializers.CharField(source='target_entity', read_only=True)
     targetId = serializers.CharField(source='target_id', read_only=True)
@@ -36,6 +38,8 @@ class AuditEntrySerializer(serializers.ModelSerializer):
             '_id',
             'id',
             'actor',
+            'actorName',
+            'description',
             'actorRole',
             'action',
             'targetEntity',
@@ -48,21 +52,5 @@ class AuditEntrySerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Redaction guarantee: strip secrets, hashes, OTPs, raw expected answers
-        metadata = dict(instance.metadata or {})
-        sensitive_keys = [
-            'password',
-            'passwordHash',
-            'otp',
-            'otpSecret',
-            'otp_hash',
-            'expectedAnswer',
-            'expected_answer_hash',
-            'privateIdentifyingDetails',
-            'token',
-        ]
-        for key in sensitive_keys:
-            if key in metadata:
-                metadata[key] = '[REDACTED]'
-        data['metadata'] = metadata
+        data['metadata'] = sanitize_audit_metadata(instance.metadata or {})
         return data

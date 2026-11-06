@@ -94,7 +94,7 @@ def test_health_check_database_unreachable_safe_degradation(api_client):
         assert data['data']['database']['state'] == 'FAILED'
 
 @pytest.mark.django_db
-def test_image_upload_unavailable_external_storage_safe_error(api_client, test_data):
+def test_image_upload_unavailable_external_storage_safe_error(api_client, test_data, caplog):
     """Verify image upload returns 503 STORAGE_UNAVAILABLE cleanly if disk/cloud storage fails."""
     api_client.force_authenticate(user=test_data['student1'])
     from django.core.files.uploadedfile import SimpleUploadedFile
@@ -107,6 +107,8 @@ def test_image_upload_unavailable_external_storage_safe_error(api_client, test_d
         assert data['success'] is False
         assert data['error']['code'] == 'STORAGE_UNAVAILABLE'
         assert 'storage unavailable' in data['error']['message'].lower()
+        assert 'S3/NFS volume unreachable' not in data['error']['message']
+        assert 'S3/NFS volume unreachable' not in caplog.text
 
 # -----------------------------------------------------------------------------
 # 2. State Machine: Duplicate Handover & Invalid State Transitions
@@ -180,6 +182,7 @@ def test_duplicate_handover_and_invalid_state_transition(api_client, test_data):
 @pytest.mark.django_db
 def test_private_data_redaction_and_unauthorized_access(api_client, test_data):
     """Verify zero private data leakage to public or unauthorized actors."""
+    api_client.force_authenticate(user=test_data['student1'])
     now = datetime.now(timezone.utc)
     item = Item.objects.create(
         reference_number='LPU-2026-F99882',
@@ -208,7 +211,7 @@ def test_private_data_redaction_and_unauthorized_access(api_client, test_data):
     challenge.set_answer('Python')
     challenge.save()
 
-    # Public unauthenticated user views item
+    # Signed-in users can view item details without receiving private vault data.
     res_pub = api_client.get(f'/api/v1/items/{item.id}')
     assert res_pub.status_code == 200
     pub_data = res_pub.json()['data']
@@ -216,7 +219,7 @@ def test_private_data_redaction_and_unauthorized_access(api_client, test_data):
     assert 'encryptedCiphertext' not in str(pub_data)
     assert 'C02XYZ123456' not in str(pub_data)
 
-    # Public challenges endpoint exposes question and hint, but never the answer
+    # The authenticated challenges endpoint exposes questions and hints, never answers.
     res_chal = api_client.get(f'/api/v1/items/{item.id}/challenges')
     assert res_chal.status_code == 200
     chal_data = res_chal.json()['data']
@@ -248,6 +251,7 @@ def test_private_data_redaction_and_unauthorized_access(api_client, test_data):
 @pytest.mark.django_db
 def test_pagination_filters_ordering_and_search_fictional_data(api_client, test_data):
     """Test realistic search board behavior with 12 fictional items."""
+    api_client.force_authenticate(user=test_data['student1'])
     now = datetime.now(timezone.utc)
     items_to_create = [
         ('Dell XPS 15 Laptop', ItemType.LOST, test_data['cat_elec'], test_data['loc_block34'], now - timedelta(days=1)),

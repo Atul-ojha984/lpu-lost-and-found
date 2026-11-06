@@ -12,6 +12,7 @@ from django.contrib.auth.models import (
     PermissionsMixin,
     BaseUserManager,
 )
+from django.utils.crypto import salted_hmac
 
 class UserRole(models.TextChoices):
     STUDENT_STAFF = 'STUDENT_STAFF', 'Student / Staff'
@@ -99,6 +100,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    auth_token_version = models.PositiveIntegerField(default=0)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -120,3 +122,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.full_name} ({self.registration_number}) - {self.role}"
+
+    def get_session_auth_hash(self):
+        """Invalidate Django sessions after an administrator revokes this account."""
+        base_hash = super().get_session_auth_hash()
+        if not self.auth_token_version:
+            return base_hash
+        return salted_hmac(
+            'accounts.User.session_auth_version',
+            f'{base_hash}:{self.auth_token_version}',
+        ).hexdigest()

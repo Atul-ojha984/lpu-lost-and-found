@@ -91,7 +91,9 @@ class PublicItemSerializer(serializers.ModelSerializer):
     primaryImageUrl = serializers.CharField(source='primary_image_url', allow_blank=True)
     additionalImages = serializers.JSONField(source='additional_images')
     currentCustodyDesk = serializers.CharField(source='current_custody_desk', allow_blank=True)
+    lockerStorageReference = serializers.CharField(source='locker_storage_reference', allow_blank=True, read_only=True)
     createdAt = serializers.DateTimeField(source='created_at')
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     
     category = serializers.SerializerMethodField()
     location = serializers.SerializerMethodField()
@@ -118,7 +120,9 @@ class PublicItemSerializer(serializers.ModelSerializer):
             'status',
             'reportedByRole',
             'currentCustodyDesk',
+            'lockerStorageReference',
             'createdAt',
+            'updatedAt',
             'isOwner',
         ]
 

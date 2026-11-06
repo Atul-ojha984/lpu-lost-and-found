@@ -9,14 +9,27 @@ Uses 12-byte IV and 16-byte authentication tag.
 
 import os
 import binascii
+import base64
+import re
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
 
 def get_encryption_key() -> bytes:
-    key_hex = getattr(settings, 'FIELD_ENCRYPTION_KEY', None) or os.getenv('FIELD_ENCRYPTION_KEY')
-    if not key_hex or len(key_hex) != 64:
-        raise ValueError("FIELD_ENCRYPTION_KEY must be a 64-character hexadecimal string (32 bytes).")
-    return binascii.unhexlify(key_hex)
+    configured_key = getattr(settings, 'FIELD_ENCRYPTION_KEY', None) or os.getenv('FIELD_ENCRYPTION_KEY')
+    if not configured_key:
+        raise ValueError('FIELD_ENCRYPTION_KEY must encode exactly 32 bytes.')
+
+    if re.fullmatch(r'[0-9a-fA-F]{64}', configured_key):
+        return binascii.unhexlify(configured_key)
+
+    try:
+        decoded_key = base64.b64decode(configured_key.encode('ascii'), altchars=b'-_', validate=True)
+    except (ValueError, UnicodeEncodeError, binascii.Error) as exc:
+        raise ValueError('FIELD_ENCRYPTION_KEY must be a 32-byte hexadecimal or base64-encoded key.') from exc
+
+    if len(decoded_key) != 32:
+        raise ValueError('FIELD_ENCRYPTION_KEY must encode exactly 32 bytes.')
+    return decoded_key
 
 def encrypt_field(plaintext: str) -> dict:
     """

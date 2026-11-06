@@ -15,7 +15,6 @@ import {
   Key, 
   Briefcase, 
   ShieldCheck, 
-  Search,
   HelpCircle,
   X
 } from 'lucide-react';
@@ -101,7 +100,7 @@ export default function LoginPage() {
       if (err instanceof ApiClientError) {
         if (err.errorCode === 'NETWORK_ERROR' || err.statusCode === 0) {
           setError(
-            'Cannot reach the authentication service at http://localhost:8000. Please ensure the Django backend server is running.'
+            'The authentication service is unreachable. Check the network and the configured backend URL.'
           );
         } else if (err.statusCode >= 500) {
           setError(
@@ -416,20 +415,9 @@ export default function LoginPage() {
           </form>
 
 
-          {/* Public Board & Registration Links */}
+          {/* Account access information */}
           <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-2 text-center text-xs text-slate-500">
-            <div>
-              <span>Need an account? Contact an authorized campus administrator.</span>
-            </div>
-            <div>
-              <Link
-                href="/board"
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-[#356DE8] hover:underline"
-              >
-                <Search className="w-3 h-3" />
-                <span>Browse public lost &amp; found board without logging in</span>
-              </Link>
-            </div>
+            <span>Need an account? Contact an authorized campus administrator.</span>
           </div>
         </div>
 

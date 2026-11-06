@@ -9,6 +9,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
+from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
+from datetime import datetime, time
+from uuid import UUID
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
 from apps.accounts.models import UserRole
@@ -16,8 +20,75 @@ from apps.accounts.permissions import IsSecurityOrAdmin, IsCampusAdmin
 from apps.claims.models import Claim, ClaimStatus
 from apps.items.models import Item, ItemStatus
 from apps.items.serializers import SecurityReportQueueSerializer
-from .models import AuditEntry
+from .models import AuditAction, AuditEntry
 from .serializers import AuditEntrySerializer
+
+
+SECURITY_OPERATIONAL_ACTIONS = (
+    AuditAction.ITEM_REPORT_LOST,
+    AuditAction.ITEM_REPORT_FOUND,
+    AuditAction.ITEM_REPORT_UPDATE,
+    AuditAction.ITEM_REPORT_WITHDRAW,
+    AuditAction.ITEM_REPORT_EXPIRE,
+    AuditAction.PRIVATE_VAULT_VIEW,
+    AuditAction.CLAIM_SUBMIT,
+    AuditAction.CLAIM_REVIEW,
+    AuditAction.CLAIM_CHALLENGE_VERIFY,
+    AuditAction.HANDOVER_OTP_GENERATE,
+    AuditAction.HANDOVER_OTP_FAILED,
+    AuditAction.HANDOVER_EXECUTE,
+    AuditAction.HANDOVER_SLIP_ACCESS,
+    AuditAction.CUSTODY_TRANSFER,
+    AuditAction.CUSTODY_INTAKE,
+)
+SECURITY_OPERATIONAL_ROLES = (UserRole.STUDENT_STAFF, UserRole.SECURITY_PERSONNEL)
+
+
+def _security_operational_audits():
+    """Return only workflow events and actors appropriate to security duties."""
+    return AuditEntry.objects.filter(
+        action__in=SECURITY_OPERATIONAL_ACTIONS,
+        actor_role__in=SECURITY_OPERATIONAL_ROLES,
+    )
+
+
+def _parse_audit_boundary(value, is_end=False):
+    """Accept ISO date or datetime values in the current timezone."""
+    value = (value or '').strip()
+    if not value:
+        return None
+    parsed_date = parse_date(value) if len(value) == 10 else None
+    if parsed_date is not None:
+        parsed = datetime.combine(parsed_date, time.max if is_end else time.min)
+    else:
+        parsed = parse_datetime(value)
+        if parsed is None:
+            raise ValueError('Use an ISO date or datetime for audit date filters.')
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+
+def _filter_action_status(queryset, value):
+    normalized = value.strip().upper()
+    if not normalized:
+        return queryset
+    status_query = Q()
+    for key in ('status', 'actionStatus', 'result', 'outcome', 'action'):
+        status_query |= Q(**{f'metadata__{key}__iexact': normalized})
+    if normalized in ('SUCCESS', 'SUCCEEDED', 'COMPLETED', 'APPROVED', 'VERIFIED'):
+        status_query |= Q(metadata__success=True) | Q(metadata__isCorrect=True)
+        if normalized in ('APPROVED', 'VERIFIED'):
+            status_query |= Q(metadata__action__iexact='APPROVE') | Q(metadata__action__iexact='APPROVE_DIRECT_RECOVERY')
+        if normalized == 'COMPLETED':
+            status_query |= Q(action=AuditAction.HANDOVER_EXECUTE)
+    elif normalized in ('FAILED', 'FAILURE', 'REJECTED', 'DENIED', 'BLOCKED'):
+        status_query |= Q(metadata__success=False) | Q(metadata__isCorrect=False)
+        if normalized in ('FAILED', 'FAILURE'):
+            status_query |= Q(action=AuditAction.HANDOVER_OTP_FAILED)
+        if normalized == 'REJECTED':
+            status_query |= Q(metadata__action__iexact='REJECT') | Q(metadata__action__iexact='REJECT_DIRECT_RECOVERY')
+    return queryset.filter(status_query)
 
 
 class SecuritySubmittedReportsAPIView(APIView):
@@ -128,7 +199,7 @@ class SecurityDashboardStatsAPIView(APIView):
             status=ItemStatus.HANDED_OVER,
         ).count()
 
-        recent_audit_events = AuditEntry.objects.select_related('actor').order_by('-timestamp', '-id')[:25]
+        recent_audit_events = _security_operational_audits().select_related('actor').order_by('-timestamp', '-id')[:25]
         serialized_events = AuditEntrySerializer(recent_audit_events, many=True).data
 
         payload = {
@@ -151,7 +222,8 @@ class SecurityDashboardStatsAPIView(APIView):
 
 class SecurityAuditTrailAPIView(APIView):
     """
-    Full paginated audit trail for campus compliance and security investigations.
+    Paginated operational audit history required for security desk duties.
+    Administrative account and role activity is available only through the admin API.
     """
     permission_classes = [IsSecurityOrAdmin]
 
@@ -168,7 +240,7 @@ class SecurityAuditTrailAPIView(APIView):
         responses={200: AuditEntrySerializer(many=True)},
     )
     def get(self, request):
-        queryset = AuditEntry.objects.select_related('actor')
+        queryset = _security_operational_audits().select_related('actor')
 
         action = request.query_params.get('action')
         if action and action.strip():
@@ -230,6 +302,10 @@ class AdminAuditLogsAPIView(APIView):
             OpenApiParameter('action', str, description='Filter by audit action'),
             OpenApiParameter('targetEntity', str, description='Target entity name (Item, Claim, User)'),
             OpenApiParameter('actorId', str, description='Actor UUID'),
+            OpenApiParameter('actor', str, description='Actor name, email, registration number, or UUID'),
+            OpenApiParameter('actorRole', str, description='Role of the acting user'),
+            OpenApiParameter('targetId', str, description='Target record identifier'),
+            OpenApiParameter('actionStatus', str, description='Outcome recorded with the audit event'),
             OpenApiParameter('startDate', str, description='ISO 8601 start timestamp'),
             OpenApiParameter('endDate', str, description='ISO 8601 end timestamp'),
             OpenApiParameter('page', int, description='Page number (default 1)'),
@@ -252,13 +328,42 @@ class AdminAuditLogsAPIView(APIView):
         if actor_id and actor_id.strip():
             queryset = queryset.filter(actor_id=actor_id.strip())
 
-        start_date = request.query_params.get('startDate')
-        if start_date and start_date.strip():
-            queryset = queryset.filter(timestamp__gte=start_date.strip())
+        actor_search = request.query_params.get('actor')
+        if actor_search and actor_search.strip():
+            term = actor_search.strip()
+            actor_query = (
+                Q(actor_name__icontains=term) |
+                Q(actor__full_name__icontains=term) |
+                Q(actor__email__icontains=term) |
+                Q(actor__registration_number__icontains=term)
+            )
+            try:
+                actor_query |= Q(actor_id=UUID(term))
+            except (ValueError, TypeError, AttributeError):
+                pass
+            queryset = queryset.filter(actor_query)
 
-        end_date = request.query_params.get('endDate')
-        if end_date and end_date.strip():
-            queryset = queryset.filter(timestamp__lte=end_date.strip())
+        actor_role = request.query_params.get('actorRole')
+        if actor_role and actor_role.strip():
+            queryset = queryset.filter(actor_role=actor_role.strip())
+
+        target_id = request.query_params.get('targetId')
+        if target_id and target_id.strip():
+            queryset = queryset.filter(target_id=target_id.strip())
+
+        action_status = request.query_params.get('actionStatus')
+        if action_status and action_status.strip():
+            queryset = _filter_action_status(queryset, action_status)
+
+        try:
+            start_date = _parse_audit_boundary(request.query_params.get('startDate'))
+            end_date = _parse_audit_boundary(request.query_params.get('endDate'), is_end=True)
+        except ValueError as exc:
+            return Response({'message': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if start_date:
+            queryset = queryset.filter(timestamp__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(timestamp__lte=end_date)
 
         # Safe stable sorting
         queryset = queryset.order_by('-timestamp', '-id')

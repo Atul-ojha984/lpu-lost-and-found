@@ -49,21 +49,18 @@ test('Logo asset exists and is placed in public assets directory', () => {
 // -----------------------------------------------------------------------------
 // 2. CSS Design Tokens & Color Palette
 // -----------------------------------------------------------------------------
-test('Global CSS defines all brand color tokens and eliminates orange theme', () => {
+test('Global CSS defines the established navy, orange, blue, and surface tokens', () => {
   const cssPath = resolve(rootDir, 'apps/web/src/app/globals.css');
   assert.ok(existsSync(cssPath), 'globals.css must exist');
   const css = readFileSync(cssPath, 'utf8');
 
   // Verify brand tokens
-  assert.ok(css.includes('--primary-navy: #192B4A;'), 'Must define primary-navy');
-  assert.ok(css.includes('--secondary-navy: #22395D;'), 'Must define secondary-navy');
-  assert.ok(css.includes('--primary-teal: #20B5AD;'), 'Must define primary-teal');
+  assert.ok(css.includes('--primary-navy: #283442;'), 'Must define the established primary navy');
+  assert.ok(css.includes('--secondary-navy: #3A4B5E;'), 'Must define the established secondary navy');
+  assert.ok(css.includes('--primary-teal: #F58220;'), 'Must define the established orange primary action color');
+  assert.ok(css.includes('--primary-teal-hover: #E66F00;'), 'Must define the established orange hover color');
   assert.ok(css.includes('--royal-blue: #356DE8;'), 'Must define royal-blue');
-  assert.ok(css.includes('--page-bg: #F5F8FC;'), 'Must define page-bg');
-
-  // Verify orange is eliminated from primary tokens
-  assert.ok(!css.includes('#F58220'), 'Old orange hex #F58220 must not exist in globals.css');
-  assert.ok(!css.includes('#E07315'), 'Old orange hover hex #E07315 must not exist in globals.css');
+  assert.ok(css.includes('--page-bg: #F5F5F5;'), 'Must define the established page background');
 });
 
 // -----------------------------------------------------------------------------
@@ -110,7 +107,7 @@ test('Handover OTP validator enforces 6-digit numeric constraints', () => {
 // -----------------------------------------------------------------------------
 // 5. Zero-Leakage Privacy Invariants
 // -----------------------------------------------------------------------------
-test('Public item cards and board do not expose private verification vault fields', () => {
+test('Item cards and board do not expose private verification vault fields', () => {
   const itemCardPath = resolve(rootDir, 'apps/web/src/components/items/ItemCard.tsx');
   const cardContent = readFileSync(itemCardPath, 'utf8');
 
@@ -132,6 +129,35 @@ test('Sidebar component maintains role-based route separation', () => {
   assert.ok(content.includes('/admin'), 'Must have admin dashboard link');
   assert.ok(content.includes('/security/handovers'), 'Must have security handovers link');
   assert.ok(content.includes('/admin/audit'), 'Must have admin audit link');
+});
+
+test('Admin and Security custody interfaces share persisted locations and refresh automatically', () => {
+  const adminPage = readFileSync(resolve(rootDir, 'apps/web/src/app/admin/locations/page.tsx'), 'utf8');
+  const securityPage = readFileSync(resolve(rootDir, 'apps/web/src/app/security/custody/page.tsx'), 'utf8');
+  const directRecovery = readFileSync(resolve(rootDir, 'apps/web/src/components/security/DirectRecoveryPanel.tsx'), 'utf8');
+  const apiClient = readFileSync(resolve(rootDir, 'apps/web/src/lib/api-client.ts'), 'utf8');
+
+  assert.ok(adminPage.includes('apiClient.getCustodyLocations(true)'), 'Admin must load the persisted custody locations and lockers');
+  assert.ok(adminPage.includes('window.setInterval') && adminPage.includes('5000'), 'Admin list must refresh on the shared five-second polling cycle');
+  assert.ok(securityPage.includes('apiClient.getCustodyLocations()'), 'Security must read the same active custody records');
+  assert.ok(securityPage.includes('window.setInterval') && securityPage.includes('5000'), 'Security state must refresh without a page reload');
+  assert.ok(securityPage.includes('locationActive') && securityPage.includes('custodyLocationId'), 'Security assignments must use active backend locations and lockers');
+  assert.ok(directRecovery.includes('custodyLocations') && directRecovery.includes('custodyLocationId'), 'Direct intake and handover must use the same configured locations');
+  assert.ok(directRecovery.includes('idCardInspected,') && apiClient.includes('idCardInspected: boolean'), 'Direct handover must submit the physical ID inspection confirmation');
+  assert.ok(apiClient.includes('handovers/direct-recoveries/${directRecoveryId}/verify-otp'), 'Final confirmation must use the direct recovery handover endpoint');
+  assert.ok(apiClient.includes('data?.error?.details') && apiClient.includes('detailMessages.join(\' \')'), 'API client must display field-specific backend validation errors');
+  assert.ok(directRecovery.includes('Promise.allSettled') && directRecovery.includes("'Direct recovery queue'"), 'Direct tab loading must identify which initial request fails');
+  assert.ok(!securityPage.includes('Gate 1 Main Control Desk'), 'Security destination choices must not remain hardcoded');
+});
+
+test('Production API configuration never falls back to localhost', () => {
+  const apiClient = readFileSync(resolve(rootDir, 'apps/web/src/lib/api-client.ts'), 'utf8');
+  const webEnv = readFileSync(resolve(rootDir, 'apps/web/.env.example'), 'utf8');
+
+  assert.ok(apiClient.includes("process.env.NODE_ENV === 'development'"), 'Local API default must be development-only');
+  assert.ok(apiClient.includes("'API_URL_NOT_CONFIGURED'"), 'Missing production API configuration must fail clearly');
+  assert.ok(webEnv.includes('NEXT_PUBLIC_API_URL='), 'Vercel must configure the existing API base URL variable');
+  assert.ok(!webEnv.includes('lpu-lost-found-api'), 'The environment template must not invent a production host');
 });
 
 // -----------------------------------------------------------------------------

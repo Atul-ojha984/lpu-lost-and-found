@@ -18,8 +18,9 @@ import { apiClient } from '@/lib/api-client';
 interface RecoveryEvent {
   id: string;
   handoverId: string;
-  claimId: string;
+  claimId: string | null;
   claimReference: string;
+  recoveryType?: string;
   claimStatement: string;
   claimSubmittedAt: string;
   itemId: string;
@@ -56,6 +57,7 @@ export default function StudentRecoveryHistoryPage() {
           handoverId: record.handoverId,
           claimId: record.claimId,
           claimReference: record.claimReference,
+          recoveryType: record.recoveryType,
           claimStatement: record.claimStatement,
           claimSubmittedAt: record.claimSubmittedAt,
           itemId: record.itemId,
@@ -247,9 +249,9 @@ export default function StudentRecoveryHistoryPage() {
                     </summary>
                     <div className="mt-3 w-full max-w-lg rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-xs text-slate-600 sm:absolute sm:right-5 sm:z-10 sm:shadow-lg">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-slate-800">Claim:</span>
-                        <span className="font-mono">{item.claimReference}</span>
-                        <span className="text-slate-400">({item.claimId})</span>
+                        <span className="font-semibold text-slate-800">{item.recoveryType === 'DIRECT_REPORT' ? 'Recovery:' : 'Claim:'}</span>
+                        <span className="font-mono">{item.recoveryType === 'DIRECT_REPORT' ? 'Direct recovery from lost report' : item.claimReference}</span>
+                        {item.claimId && <span className="text-slate-400">({item.claimId})</span>}
                       </div>
                       <p className="mt-2"><strong className="text-slate-700">Category:</strong> {item.category}</p>
                       <p className="mt-1"><strong className="text-slate-700">Description:</strong> {item.publicDescription}</p>

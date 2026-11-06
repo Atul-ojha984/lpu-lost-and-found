@@ -31,8 +31,9 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000 \
     DJANGO_ENV=production
 
-# Collect static files into staticfiles/
-RUN python manage.py collectstatic --noinput || true
+# Collect static files with local-only settings. Runtime production settings remain
+# fail-closed and are supplied by the deployment environment.
+RUN DJANGO_ENV=development DEBUG=True python manage.py collectstatic --noinput
 
 # Run as non-privileged security user
 RUN addgroup --system --gid 1001 django && \

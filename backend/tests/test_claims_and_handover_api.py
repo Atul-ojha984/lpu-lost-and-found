@@ -18,7 +18,9 @@ from apps.locations.models import Location
 from apps.verification.models import VerificationChallenge
 from apps.claims.models import Claim, ClaimStatus, ClaimChallengeAnswer
 from apps.handovers.models import Handover
-from apps.custody.models import CustodyRecord, CustodyAction
+from apps.handovers.models import DirectRecovery, DirectRecoveryStatus
+from apps.custody.models import CustodyRecord, CustodyAction, CustodyLocation, Locker
+from apps.verification.models import PrivateDetail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.audit.models import AuditEntry, AuditAction
 from django.utils import timezone as django_timezone
@@ -275,6 +277,30 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     """Approving one claim resolves competing claims and issues 6-digit handover OTP."""
     caplog.set_level(logging.INFO)
     item = workflow_setup['found_item']
+    claimant = workflow_setup['claimant1']
+    claimant.department = 'School of Computer Science and Engineering'
+    claimant.phone = '9876543210'
+    claimant.save(update_fields=['department', 'phone'])
+    custody_location = CustodyLocation.objects.create(
+        code='CENTRAL-SECURITY',
+        name='Central Security Office',
+    )
+    locker = Locker.objects.create(
+        locker_number='VAULT-17',
+        location='Central Security Office',
+        custody_location=custody_location,
+        current_item=item,
+    )
+    item.locker_storage_reference = locker.locker_number
+    item.save(update_fields=['locker_storage_reference'])
+    handover_officer = User.objects.create_user(
+        email='officer.handover@lpu.in',
+        registration_number='SEC9003',
+        full_name='Officer Handover Singh',
+        password='Password123!',
+        role=UserRole.SECURITY_PERSONNEL,
+        security_post='Central Gate 1 Desk',
+    )
     claim1 = Claim.objects.create(
         item=item,
         claimant=workflow_setup['claimant1'],
@@ -323,6 +349,11 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     assert 'handover_otp_generated' in caplog.text
     assert issued_otp not in caplog.text
 
+    # The slip endpoint rejects an approved claim until physical handover is saved.
+    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    premature_slip = api_client.get(f'/api/v1/handovers/{handover.id}/slip/')
+    assert premature_slip.status_code == status.HTTP_409_CONFLICT
+
     # Claimants receive the same current OTP through the existing My Claims API.
     api_client.force_authenticate(user=claim1.claimant)
     claimant_claims = api_client.get('/api/v1/claims/my-claims/')
@@ -333,7 +364,7 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     assert api_client.get('/api/v1/handovers/my-recovery-history/').data == []
 
     # Security's existing pending-handover feed references the same claim and expiry.
-    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    api_client.force_authenticate(user=handover_officer)
     pending_handovers = api_client.get('/api/v1/handovers/pending/')
     assert pending_handovers.status_code == status.HTTP_200_OK
     pending_record = next(h for h in pending_handovers.data if h['claim']['id'] == str(claim1.id))
@@ -342,7 +373,7 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
 
     api_client.force_authenticate(user=None)
     api_client.credentials(
-        HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(workflow_setup['security_officer'])}"
+        HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(handover_officer)}"
     )
 
     # An OTP without the required in-person release confirmation is not enough
@@ -359,7 +390,7 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     active_before_release = api_client.get('/api/v1/claims/my-claims/')
     assert str(claim1.id) in {record['id'] for record in active_before_release.data}
     assert api_client.get('/api/v1/handovers/my-recovery-history/').data == []
-    api_client.force_authenticate(user=workflow_setup['security_officer'])
+    api_client.force_authenticate(user=handover_officer)
 
     # The OTP created by approval can complete the supervised handover and
     # append its custody record through the existing endpoint.
@@ -383,12 +414,59 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     assert item.status == ItemStatus.HANDED_OVER
     assert handover.is_completed is True
     assert handover.completed_at is not None
+    assert AuditEntry.objects.filter(
+        action=AuditAction.HANDOVER_EXECUTE,
+        target_id=str(handover.id),
+        actor=handover_officer,
+    ).exists()
     custody_record = CustodyRecord.objects.get(item=item, action=CustodyAction.HANDED_OVER)
-    assert custody_record.handled_by_id == workflow_setup['security_officer'].id
+    assert custody_record.handled_by_id == handover_officer.id
     assert custody_record.from_location == 'Central Security Desk'
     assert custody_record.to_location == 'CLAIMANT_HANDOVER_COMPLETE'
+    assert custody_record.previous_locker_reference == locker.locker_number
+    assert custody_record.locker_reference == ''
+    locker.refresh_from_db()
+    item.refresh_from_db()
+    assert locker.current_item_id is None
+    assert item.locker_storage_reference == ''
     assert 'handover_otp_verification_result result=accepted' in caplog.text
     assert issued_otp not in caplog.text
+
+    # The completed slip uses persisted handover, approval, and pre-release
+    # locker history, and is available only to the owner or privileged staff.
+    api_client.force_authenticate(user=claim1.claimant)
+    slip_res = api_client.get(f'/api/v1/handovers/{handover.id}/slip/')
+    assert slip_res.status_code == status.HTTP_200_OK
+    assert AuditEntry.objects.filter(
+        action=AuditAction.HANDOVER_SLIP_ACCESS,
+        target_id=str(handover.id),
+        actor=claim1.claimant,
+    ).exists()
+    assert slip_res.data['handoverReference'] == f'HND-{str(handover.id).upper()}'
+    assert slip_res.data['student']['fullName'] == claim1.claimant.full_name
+    assert slip_res.data['student']['registrationNumber'] == claim1.claimant.registration_number
+    assert slip_res.data['student']['department'] == claimant.department
+    assert slip_res.data['student']['mobile'] == claimant.phone
+    assert slip_res.data['item']['title'] == item.title
+    assert slip_res.data['item']['reportReference'] == item.reference_number
+    assert slip_res.data['claimId'] == str(claim1.id)
+    assert slip_res.data['approval']['officerName'] == workflow_setup['security_officer'].full_name
+    assert slip_res.data['handoverOfficer']['fullName'] == handover_officer.full_name
+    assert slip_res.data['lockerNumber'] == locker.locker_number
+    assert 'otp' not in str(slip_res.data).lower()
+
+    api_client.force_authenticate(user=workflow_setup['claimant2'])
+    unauthorized_slip = api_client.get(f'/api/v1/handovers/{handover.id}/slip/')
+    assert unauthorized_slip.status_code == status.HTTP_404_NOT_FOUND
+
+    api_client.force_authenticate(user=None)
+    api_client.credentials()
+    unauthenticated_slip = api_client.get(f'/api/v1/handovers/{handover.id}/slip/')
+    assert unauthenticated_slip.status_code == status.HTTP_401_UNAUTHORIZED
+
+    api_client.force_authenticate(user=workflow_setup['campus_admin'])
+    admin_slip = api_client.get(f'/api/v1/handovers/{handover.id}/slip/')
+    assert admin_slip.status_code == status.HTTP_200_OK
 
     # Completed records leave both active security portals and remain in the
     # dedicated completed handover history filter.
@@ -415,7 +493,7 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
     assert recovered_record['claimReference'] == f'CLM-{str(claim1.id)[:8].upper()}'
     assert recovered_record['recoveryDate'] == handover.completed_at
     assert recovered_record['custodyDesk'] == 'Central Security Desk'
-    assert recovered_record['handoverOfficer'] == workflow_setup['security_officer'].full_name
+    assert recovered_record['handoverOfficer'] == handover_officer.full_name
     # Re-reading after a simulated page refresh returns the same database receipt.
     assert api_client.get('/api/v1/handovers/my-recovery-history/').data == recovery_history.data
 
@@ -456,6 +534,547 @@ def test_claim_approval_and_competing_claim_resolution(api_client, workflow_setu
         action=AuditAction.HANDOVER_OTP_GENERATE,
         target_id=str(handover.id),
     ).count() == 1
+
+
+@pytest.mark.django_db
+def test_handover_slip_without_locker_shows_not_assigned(api_client, workflow_setup):
+    """A valid completed handover without a locker never invents an allocation."""
+    claim = Claim.objects.create(
+        item=workflow_setup['found_item'],
+        claimant=workflow_setup['claimant1'],
+        statement='Ownership details verified at the security desk.',
+        claim_status=ClaimStatus.UNDER_REVIEW,
+    )
+    officer = workflow_setup['security_officer']
+    api_client.force_authenticate(user=officer)
+    approved = api_client.patch(
+        f'/api/v1/claims/{claim.id}/review/',
+        {'action': 'APPROVE', 'reviewNotes': 'Ownership evidence checked in person.'},
+        format='json',
+    )
+    assert approved.status_code == status.HTTP_200_OK
+    handover = Handover.objects.get(claim=claim)
+
+    completed = api_client.post(
+        '/api/v1/handovers/verify-otp/',
+        {
+            'claimId': str(claim.id),
+            'otp': approved.data['handoverOtp'],
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': workflow_setup['claimant1'].registration_number,
+        },
+        format='json',
+    )
+    assert completed.status_code == status.HTTP_200_OK
+
+    slip = api_client.get(f'/api/v1/handovers/{handover.id}/slip/')
+    assert slip.status_code == status.HTTP_200_OK
+    assert slip.data['lockerNumber'] == 'Not assigned'
+
+
+@pytest.mark.django_db
+def test_direct_recovery_from_lost_report_without_claim(api_client, workflow_setup, caplog):
+    """A report owner can recover through a distinct, verified no-claim flow."""
+    reporter = workflow_setup['claimant1']
+    item = Item.objects.create(
+        reference_number='LPU-L-20261019-DR01',
+        item_type=ItemType.LOST,
+        title='Blue university laptop',
+        public_description='Blue laptop with a damaged right corner.',
+        category=workflow_setup['found_item'].category,
+        location=workflow_setup['found_item'].location,
+        specific_location='Block 25 Library',
+        event_date=django_timezone.now() - timedelta(days=1),
+        status=ItemStatus.REPORTED,
+        reported_by=reporter,
+        retention_expires_at=django_timezone.now() + timedelta(days=90),
+    )
+    vault = PrivateDetail(item=item, fields_summary=['privateIdentifyingDetails'])
+    vault.set_secret_payload({'privateDetails': 'Blue sleeve, asset sticker LPU-8843.'})
+    vault.save()
+    challenge = VerificationChallenge(item=item, question_text='What is the asset sticker number?')
+    challenge.set_answer('LPU-8843')
+    challenge.save()
+
+    reviewer = User.objects.create_user(
+        email='officer.direct-review@lpu.in',
+        registration_number='SEC9100',
+        full_name='Officer Independent Reviewer',
+        password='Password123!',
+        role=UserRole.SECURITY_PERSONNEL,
+        security_post='Central Security Office',
+    )
+    intake_officer = workflow_setup['security_officer']
+
+    api_client.force_authenticate(user=intake_officer)
+    eligible = api_client.get('/api/v1/handovers/direct-reports', {'search': item.reference_number})
+    assert eligible.status_code == status.HTTP_200_OK
+    assert [entry['id'] for entry in eligible.data] == [str(item.id)]
+    assert eligible.data[0]['reporter']['registrationNumber'] == reporter.registration_number
+    assert eligible.data[0]['verificationAvailable']['privateDetails'] is True
+
+    api_client.force_authenticate(user=reporter)
+    denied_student_queue = api_client.get('/api/v1/handovers/direct-recoveries/')
+    assert denied_student_queue.status_code == status.HTTP_403_FORBIDDEN
+    api_client.force_authenticate(user=intake_officer)
+
+    intake = api_client.post(
+        '/api/v1/handovers/direct-recoveries/',
+        {
+            'reportId': str(item.id),
+            'physicalDeskLocation': 'Central Security Desk',
+            'physicalItemReceived': True,
+            'intakeNotes': 'Laptop physically received from the owner and sealed at the desk.',
+        },
+        format='json',
+    )
+    assert intake.status_code == status.HTTP_201_CREATED
+    direct_id = intake.data['directRecoveryId']
+    record = DirectRecovery.objects.get(pk=direct_id)
+    item.refresh_from_db()
+    assert item.item_type == ItemType.LOST
+    assert item.status == ItemStatus.IN_CUSTODY
+    assert record.recipient_id == reporter.id
+    assert record.intake_officer_id == intake_officer.id
+    assert record.intake_custody_record.action in (CustodyAction.INITIAL_INTAKE, CustodyAction.TRANSFERRED_DESK)
+    assert Claim.objects.filter(item=item).count() == 0
+    assert Handover.objects.filter(item=item).count() == 0
+
+    claim_while_direct = api_client.post(
+        '/api/v1/claims/',
+        {'itemId': str(item.id), 'statement': 'A separate claim must not race the direct workflow.'},
+        format='json',
+    )
+    assert claim_while_direct.status_code == status.HTTP_400_BAD_REQUEST
+    assert Claim.objects.filter(item=item).count() == 0
+
+    self_review = api_client.patch(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/review/',
+        {'action': 'APPROVE', 'studentIdVerified': True, 'verificationNotes': 'Identity and ownership checks were completed.'},
+        format='json',
+    )
+    assert self_review.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'At least one independent ownership source' in self_review.data['message']
+
+    api_client.force_authenticate(user=reviewer)
+    shared_intake_queue = api_client.get('/api/v1/handovers/direct-recoveries/')
+    shared_intake = next(entry for entry in shared_intake_queue.data if entry['directRecoveryId'] == direct_id)
+    assert shared_intake['status'] == DirectRecoveryStatus.INTAKE_RECORDED
+    assert shared_intake['intakeOfficer']['id'] == str(intake_officer.id)
+    wrong_answer = api_client.patch(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/review/',
+        {
+            'action': 'APPROVE',
+            'studentIdVerified': True,
+            'verificationAnswers': [{'challengeId': str(challenge.id), 'answer': 'Wrong asset number'}],
+            'verificationNotes': 'ID was inspected and the ownership answer was checked in person.',
+        },
+        format='json',
+    )
+    assert wrong_answer.status_code == status.HTTP_400_BAD_REQUEST
+    record.refresh_from_db()
+    assert record.status == DirectRecoveryStatus.INTAKE_RECORDED
+    assert not record.otp_hash
+    assert record.verification_attempts_count == 1
+
+    uninspected_vault = api_client.patch(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/review/',
+        {
+            'action': 'APPROVE',
+            'studentIdVerified': True,
+            'privateDetailsMatched': True,
+            'verificationNotes': 'ID was inspected and the private detail was matched in person.',
+        },
+        format='json',
+    )
+    assert uninspected_vault.status_code == status.HTTP_400_BAD_REQUEST
+
+    vault_view = api_client.post(f'/api/v1/items/{item.id}/private-vault/view/', {}, format='json')
+    assert vault_view.status_code == status.HTTP_200_OK
+    approved = api_client.patch(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/review/',
+        {
+            'action': 'APPROVE',
+            'studentIdVerified': True,
+            'privateDetailsMatched': True,
+            'verificationNotes': 'University ID verified; private asset sticker matched against the item.',
+        },
+        format='json',
+    )
+    assert approved.status_code == status.HTTP_200_OK
+    assert 'handoverOtp' not in approved.data
+    record.refresh_from_db()
+    item.refresh_from_db()
+    assert record.status == DirectRecoveryStatus.APPROVED
+    assert record.reviewed_by_id == reviewer.id
+    assert record.verification_methods == ['PRIVATE_DETAILS']
+    assert record.otp_generated_at is not None and django_timezone.is_aware(record.otp_generated_at)
+    assert record.otp_expires_at == record.otp_generated_at + timedelta(hours=48)
+    assert item.status == ItemStatus.READY_FOR_HANDOVER
+
+    api_client.force_authenticate(user=reporter)
+    my_direct = api_client.get('/api/v1/handovers/direct-recoveries/my/')
+    assert my_direct.status_code == status.HTTP_200_OK
+    student_record = next(entry for entry in my_direct.data if entry['directRecoveryId'] == direct_id)
+    assert student_record['handoverOtp'] == record.get_otp()
+    assert student_record['status'] == DirectRecoveryStatus.APPROVED
+    assert student_record['otpStatus'] == 'ACTIVE'
+    assert student_record['otpGeneratedAt'] == record.otp_generated_at
+    assert student_record['otpRemainingSeconds'] > 0
+
+    # A different student never receives this recovery's OTP.
+    api_client.force_authenticate(user=workflow_setup['claimant2'])
+    other_student_recoveries = api_client.get('/api/v1/handovers/direct-recoveries/my/')
+    assert all(entry['directRecoveryId'] != direct_id for entry in other_student_recoveries.data)
+
+    # Expired OTP verification does not silently renew or change the recovery.
+    original_otp = student_record['handoverOtp']
+    expired_at = django_timezone.now() - timedelta(seconds=1)
+    record.otp_generated_at = expired_at - timedelta(hours=48)
+    record.otp_expires_at = expired_at
+    record.save(update_fields=['otp_generated_at', 'otp_expires_at', 'updated_at'])
+    api_client.force_authenticate(user=reviewer)
+    expired_attempt = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': original_otp,
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': True,
+        },
+        format='json',
+    )
+    assert expired_attempt.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'expired' in expired_attempt.data['message'].lower()
+    record.refresh_from_db()
+    assert record.otp_expires_at == expired_at
+    assert record.status == DirectRecoveryStatus.APPROVED
+
+    # Accessing the recipient's portal renews an expired pending OTP once.
+    api_client.force_authenticate(user=reporter)
+    renewed_response = api_client.get('/api/v1/handovers/direct-recoveries/my/')
+    student_record = next(entry for entry in renewed_response.data if entry['directRecoveryId'] == direct_id)
+    record.refresh_from_db()
+    renewed_otp = student_record['handoverOtp']
+    assert renewed_otp and renewed_otp != original_otp
+    assert student_record['otpStatus'] == 'RENEWED'
+    assert student_record['otpRenewed'] is True
+    assert record.verify_otp(renewed_otp)
+    assert not record.verify_otp(original_otp)
+    assert record.otp_generated_at > expired_at
+    assert record.otp_expires_at == record.otp_generated_at + timedelta(hours=48)
+    assert django_timezone.is_aware(record.otp_generated_at)
+
+    # Repeated portal reads are idempotent and return the same active code.
+    stable_generated_at = record.otp_generated_at
+    repeated = api_client.get('/api/v1/handovers/direct-recoveries/my/')
+    repeated_student_record = next(entry for entry in repeated.data if entry['directRecoveryId'] == direct_id)
+    record.refresh_from_db()
+    assert repeated_student_record['handoverOtp'] == renewed_otp
+    assert repeated_student_record['otpStatus'] == 'ACTIVE'
+    assert repeated_student_record['otpRenewed'] is False
+    assert record.otp_generated_at == stable_generated_at
+    assert renewed_otp not in caplog.text
+    assert original_otp not in caplog.text
+
+    custody_location = CustodyLocation.objects.create(
+        code='CENTRAL-SECURITY',
+        name='Central Security Office',
+    )
+    locker = Locker.objects.create(
+        locker_number='DIRECT-LOCKER-04',
+        location='Central Security Office',
+        custody_location=custody_location,
+        current_item=item,
+    )
+    item.locker_storage_reference = locker.locker_number
+    item.save(update_fields=['locker_storage_reference'])
+
+    # A different authorized Security Officer can see and process the shared queue.
+    api_client.force_authenticate(user=reviewer)
+    security_queue = api_client.get('/api/v1/handovers/direct-recoveries')
+    queued = next(entry for entry in security_queue.data if entry['directRecoveryId'] == direct_id)
+    assert queued['status'] == DirectRecoveryStatus.APPROVED
+    assert queued['intakeOfficer']['id'] == str(intake_officer.id)
+    assert 'handoverOtp' not in queued
+
+    missing_physical_check = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': renewed_otp,
+            'physicalDeskLocation': custody_location.name,
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+        },
+        format='json',
+    )
+    assert missing_physical_check.status_code == status.HTTP_400_BAD_REQUEST
+    assert any(
+        detail['field'] == 'idCardInspected'
+        for detail in missing_physical_check.data['error']['details']
+    )
+
+    unchecked_id = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': renewed_otp,
+            'physicalDeskLocation': custody_location.name,
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': False,
+        },
+        format='json',
+    )
+    assert unchecked_id.status_code == status.HTTP_400_BAD_REQUEST
+    assert any(
+        detail['field'] == 'idCardInspected'
+        for detail in unchecked_id.data['error']['details']
+    )
+    record.refresh_from_db()
+    assert record.otp_attempts_count == 0
+
+    invalid_otp = '000000' if renewed_otp != '000000' else '000001'
+    invalid_attempt = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': invalid_otp,
+            'physicalDeskLocation': custody_location.name,
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': True,
+        },
+        format='json',
+    )
+    assert invalid_attempt.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'invalid' in invalid_attempt.data['message'].lower()
+    record.refresh_from_db()
+    assert record.otp_attempts_count == 1
+    assert record.verify_otp(renewed_otp)
+
+    api_client.force_authenticate(user=reporter)
+    unauthorized_attempt = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': renewed_otp,
+            'physicalDeskLocation': custody_location.name,
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': True,
+        },
+        format='json',
+    )
+    assert unauthorized_attempt.status_code == status.HTTP_403_FORBIDDEN
+    api_client.force_authenticate(user=reviewer)
+
+    wrong_id = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': renewed_otp,
+            'physicalDeskLocation': custody_location.name,
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': 'WRONG-STUDENT-ID',
+            'idCardInspected': True,
+        },
+        format='json',
+    )
+    assert wrong_id.status_code == status.HTTP_403_FORBIDDEN
+
+    completed = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp',
+        {
+            'otp': renewed_otp,
+            'physicalDeskLocation': custody_location.name,
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': True,
+            'acknowledgementNotes': 'Original report owner received the verified property.',
+        },
+        format='json',
+    )
+    assert completed.status_code == status.HTTP_200_OK
+    assert completed.data['directRecoveryId'] == direct_id
+    record.refresh_from_db()
+    item.refresh_from_db()
+    locker.refresh_from_db()
+    assert record.status == DirectRecoveryStatus.COMPLETED
+    assert record.intake_officer_id == intake_officer.id
+    assert record.completed_by_id == reviewer.id
+    completed_generated_at = record.otp_generated_at
+    assert item.status == ItemStatus.HANDED_OVER
+    assert item.locker_storage_reference == ''
+    assert locker.current_item_id is None
+    assert CustodyRecord.objects.filter(item=item, action=CustodyAction.HANDED_OVER).count() == 1
+    handover_audit = AuditEntry.objects.get(
+        action=AuditAction.HANDOVER_EXECUTE,
+        target_entity='DirectRecovery',
+        target_id=direct_id,
+        actor=reviewer,
+    )
+    assert handover_audit.metadata['physicalIdInspected'] is True
+
+    slip = api_client.get(f'/api/v1/handovers/direct-recoveries/{direct_id}/slip/')
+    assert slip.status_code == status.HTTP_200_OK
+    assert AuditEntry.objects.filter(
+        action=AuditAction.HANDOVER_SLIP_ACCESS,
+        target_entity='DirectRecovery',
+        target_id=direct_id,
+        actor=reviewer,
+    ).exists()
+    assert slip.data['item']['reportId'] == str(item.id)
+    assert slip.data['claimId'] is None
+    assert slip.data['approval']['officerName'] == reviewer.full_name
+    assert slip.data['handoverOfficer']['fullName'] == reviewer.full_name
+    assert slip.data['lockerNumber'] == locker.locker_number
+    assert 'otp' not in str(slip.data).lower()
+
+    api_client.force_authenticate(user=reporter)
+    post_completion_otp = api_client.get('/api/v1/handovers/direct-recoveries/my/')
+    completed_record = next(entry for entry in post_completion_otp.data if entry['directRecoveryId'] == direct_id)
+    assert completed_record['handoverOtp'] is None
+    assert completed_record['otpStatus'] == 'USED'
+    record.refresh_from_db()
+    assert record.otp_generated_at == completed_generated_at
+    recovery_history = api_client.get('/api/v1/handovers/my-recovery-history/')
+    direct_history = next(entry for entry in recovery_history.data if entry.get('directRecoveryId') == direct_id)
+    assert direct_history['recoveryType'] == 'DIRECT_REPORT'
+    assert direct_history['claimId'] is None
+    assert direct_history['status'] == 'COMPLETED'
+
+    api_client.force_authenticate(user=intake_officer)
+    remaining_active = api_client.get('/api/v1/handovers/direct-recoveries/')
+    assert all(entry['directRecoveryId'] != direct_id for entry in remaining_active.data)
+    completed_history = api_client.get('/api/v1/handovers/direct-recoveries/history')
+    assert any(entry['directRecoveryId'] == direct_id for entry in completed_history.data)
+    duplicate = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': renewed_otp,
+            'physicalDeskLocation': 'Central Security Desk',
+            'custodyLocationId': str(custody_location.id),
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': True,
+        },
+        format='json',
+    )
+    assert duplicate.status_code == status.HTTP_409_CONFLICT
+    assert CustodyRecord.objects.filter(item=item, action=CustodyAction.HANDED_OVER).count() == 1
+
+    api_client.force_authenticate(user=reporter)
+    read_only_report = api_client.patch(
+        f'/api/v1/items/{item.id}/',
+        {'publicDescription': 'Changed after successful recovery.'},
+        format='json',
+    )
+    assert read_only_report.status_code == status.HTTP_409_CONFLICT
+    api_client.force_authenticate(user=intake_officer)
+    active_inventory = api_client.get('/api/v1/custody/inventory/')
+    assert active_inventory.status_code == status.HTTP_200_OK
+    assert str(item.id) not in {entry['id'] for entry in active_inventory.data}
+
+    api_client.force_authenticate(user=workflow_setup['claimant2'])
+    other_history = api_client.get('/api/v1/handovers/my-recovery-history/')
+    assert all(entry.get('directRecoveryId') != direct_id for entry in other_history.data)
+    unauthorized_slip = api_client.get(f'/api/v1/handovers/direct-recoveries/{direct_id}/slip/')
+    assert unauthorized_slip.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_intake_officer_can_approve_and_complete_own_direct_intake(api_client, workflow_setup):
+    reporter = workflow_setup['claimant1']
+    officer = workflow_setup['security_officer']
+    item = Item.objects.create(
+        reference_number='LPU-L-20261019-DR02',
+        item_type=ItemType.LOST,
+        title='Red student backpack',
+        public_description='Red backpack with a stitched white campus emblem.',
+        category=workflow_setup['found_item'].category,
+        location=workflow_setup['found_item'].location,
+        specific_location='Science building foyer',
+        event_date=django_timezone.now() - timedelta(days=1),
+        primary_image_url='/media/red-backpack.webp',
+        reported_by=reporter,
+        retention_expires_at=django_timezone.now() + timedelta(days=90),
+    )
+
+    api_client.force_authenticate(user=officer)
+    intake = api_client.post(
+        '/api/v1/handovers/direct-recoveries/',
+        {
+            'reportId': str(item.id),
+            'physicalDeskLocation': 'Central Security Desk',
+            'physicalItemReceived': True,
+            'intakeNotes': 'Received the backpack from the student and secured it at the desk.',
+        },
+        format='json',
+    )
+    assert intake.status_code == status.HTTP_201_CREATED
+    direct_id = intake.data['directRecoveryId']
+    record = DirectRecovery.objects.get(pk=direct_id)
+
+    api_client.force_authenticate(user=reporter)
+    claimant_approval = api_client.patch(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/review/',
+        {
+            'action': 'APPROVE',
+            'studentIdVerified': True,
+            'reportPhotoMatched': True,
+            'verificationNotes': 'Student ID matched and the saved report photo was checked in person.',
+        },
+        format='json',
+    )
+    assert claimant_approval.status_code == status.HTTP_403_FORBIDDEN
+
+    api_client.force_authenticate(user=officer)
+    approval = api_client.patch(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/review/',
+        {
+            'action': 'APPROVE',
+            'studentIdVerified': True,
+            'reportPhotoMatched': True,
+            'verificationNotes': 'Student ID matched and the saved report photo was checked in person.',
+        },
+        format='json',
+    )
+    assert approval.status_code == status.HTTP_200_OK
+    assert 'handoverOtp' not in approval.data
+    record.refresh_from_db()
+    assert record.status == DirectRecoveryStatus.APPROVED
+    assert record.intake_officer_id == officer.id
+    assert record.reviewed_by_id == officer.id
+    assert record.otp_expires_at == record.otp_generated_at + timedelta(hours=48)
+
+    api_client.force_authenticate(user=reporter)
+    recipient_view = api_client.get('/api/v1/handovers/direct-recoveries/my/')
+    recipient_record = next(entry for entry in recipient_view.data if entry['directRecoveryId'] == direct_id)
+    assert recipient_record['handoverOtp'] == record.get_otp()
+
+    api_client.force_authenticate(user=officer)
+    completed = api_client.post(
+        f'/api/v1/handovers/direct-recoveries/{direct_id}/verify-otp/',
+        {
+            'otp': recipient_record['handoverOtp'],
+            'physicalDeskLocation': 'Central Security Desk',
+            'idCardPresentedType': 'LPU_STUDENT_ID',
+            'idCardNumber': reporter.registration_number,
+            'idCardInspected': True,
+            'acknowledgementNotes': 'Item returned to its verified report owner.',
+        },
+        format='json',
+    )
+    assert completed.status_code == status.HTTP_200_OK
+    record.refresh_from_db()
+    assert record.status == DirectRecoveryStatus.COMPLETED
+    assert record.intake_officer_id == record.reviewed_by_id == record.completed_by_id == officer.id
+
 
 @pytest.mark.django_db
 def test_supervised_handover_and_duplicate_prevention(api_client, workflow_setup):
@@ -503,6 +1122,11 @@ def test_supervised_handover_and_duplicate_prevention(api_client, workflow_setup
 
     handover.refresh_from_db()
     assert handover.otp_attempts_count == 1
+    assert AuditEntry.objects.filter(
+        action=AuditAction.HANDOVER_OTP_FAILED,
+        target_id=str(handover.id),
+        metadata__status='FAILED',
+    ).exists()
     api_client.force_authenticate(user=claimant)
     active_claims = api_client.get('/api/v1/claims/my-claims/')
     assert str(claim.id) in {record['id'] for record in active_claims.data}

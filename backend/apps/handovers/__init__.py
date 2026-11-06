@@ -1,1 +1,0 @@
-# Handovers app package

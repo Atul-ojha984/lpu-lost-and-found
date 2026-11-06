@@ -22,7 +22,7 @@ from apps.locations.models import Location
 from apps.verification.models import PrivateDetail, VerificationChallenge
 from apps.audit.models import AuditEntry, AuditAction
 from apps.claims.models import Claim, ClaimStatus
-from apps.custody.models import CustodyRecord, CustodyAction
+from apps.custody.models import CustodyRecord, CustodyAction, CustodyLocation, Locker
 from apps.handovers.models import Handover
 from apps.matching.models import MatchSuggestion, MatchStatus
 
@@ -460,8 +460,9 @@ def test_withdrawn_report_disappears_from_existing_match_results(api_client, tes
     )
 
 @pytest.mark.django_db
-def test_public_board_filtering_and_search(api_client, test_setup):
-    """Verify multi-filtering and keyword search on the public board."""
+def test_authenticated_board_filtering_and_search(api_client, test_setup):
+    """Verify signed-in users can filter and search the campus listings."""
+    api_client.force_authenticate(user=test_setup['student1'])
     # 1. Filter by itemType
     res = api_client.get('/api/v1/items/', {'itemType': 'LOST'})
     assert res.status_code == status.HTTP_200_OK
@@ -495,8 +496,9 @@ def test_public_board_filtering_and_search(api_client, test_setup):
     assert len(res.data['items']) == 1
 
 @pytest.mark.django_db
-def test_public_board_sorting_and_pagination(api_client, test_setup):
-    """Verify safe server-side ordering, stable tie-breakers, and pagination limit capping."""
+def test_authenticated_board_sorting_and_pagination(api_client, test_setup):
+    """Verify authenticated listing sort, stable tie-breakers, and pagination limits."""
+    api_client.force_authenticate(user=test_setup['student1'])
     # 1. Sort by title ascending
     res = api_client.get('/api/v1/items/', {'sortBy': 'title', 'sortOrder': 'asc'})
     assert res.status_code == status.HTTP_200_OK
@@ -528,8 +530,9 @@ def test_public_board_sorting_and_pagination(api_client, test_setup):
     assert res.data['pagination']['limit'] == 100
 
 @pytest.mark.django_db
-def test_public_board_privacy_redaction(api_client, test_setup):
-    """Ensure public endpoints never expose private vault data or challenge answers."""
+def test_authenticated_item_detail_privacy_redaction(api_client, test_setup):
+    """Ensure listing endpoints never expose private vault data or challenge answers."""
+    api_client.force_authenticate(user=test_setup['student1'])
     # Create private detail and verification challenge for item3
     vault = PrivateDetail(item=test_setup['item3'])
     vault.set_secret_payload({'secret': 'TEST_SECRET'})
@@ -558,6 +561,31 @@ def test_public_board_privacy_redaction(api_client, test_setup):
     assert 'privateIdentifyingDetails' not in data
     assert 'expectedAnswer' not in data
     assert 'hashed_answer' not in data
+
+
+@pytest.mark.django_db
+def test_listing_search_filters_details_and_matching_require_authentication(api_client, test_setup):
+    item_id = test_setup['item3'].id
+    protected_endpoints = [
+        '/api/v1/items/',
+        f'/api/v1/items/{item_id}/',
+        f'/api/v1/items/{item_id}/challenges/',
+        '/api/v1/categories/',
+        '/api/v1/locations/',
+    ]
+
+    for endpoint in [*protected_endpoints, f'/api/v1/items/{item_id}/matches/']:
+        response = api_client.get(endpoint)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, endpoint
+
+    api_client.force_authenticate(user=test_setup['student1'])
+    for endpoint in protected_endpoints:
+        response = api_client.get(endpoint)
+        assert response.status_code == status.HTTP_200_OK, endpoint
+
+    api_client.force_authenticate(user=test_setup['student2'])
+    matches = api_client.get(f'/api/v1/items/{item_id}/matches/')
+    assert matches.status_code == status.HTTP_200_OK
 
 @pytest.mark.django_db
 def test_create_report_with_private_vault_and_challenges(api_client, test_setup):
@@ -1001,6 +1029,328 @@ def test_security_report_queue_requires_security_and_excludes_inactive_states(
     assert str(archived.id) not in visible_ids
     assert str(expired.id) not in visible_ids
     assert str(claim_review.id) not in visible_ids
+
+
+@pytest.mark.django_db
+def test_security_locker_inventory_single_occupancy_and_history(api_client, test_setup):
+    officer = test_setup['security_officer']
+    item = test_setup['item1']
+    second_item = test_setup['item2']
+    item.status = ItemStatus.IN_CUSTODY
+    item.current_custody_desk = 'Main Security Vault'
+    item.save(update_fields=['status', 'current_custody_desk'])
+    second_item.status = ItemStatus.IN_CUSTODY
+    second_item.save(update_fields=['status'])
+
+    admin = test_setup['campus_admin']
+    api_client.force_authenticate(user=admin)
+    locker_a = api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'LOCKER-B12',
+        'location': 'Main Security Vault',
+    }, format='json')
+    locker_b = api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'LOCKER-B13',
+        'location': 'Main Security Vault',
+    }, format='json')
+    empty_locker = api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'LOCKER-EMPTY',
+        'location': 'Main Security Vault',
+    }, format='json')
+    assert locker_a.status_code == status.HTTP_201_CREATED
+    assert locker_b.status_code == status.HTTP_201_CREATED
+    assert empty_locker.status_code == status.HTTP_201_CREATED
+
+    admin_snapshot = api_client.get('/api/v1/admin/inventory/')
+    assert admin_snapshot.status_code == status.HTTP_200_OK
+    assert {row['lockerNumber'] for row in admin_snapshot.data['lockers']} >= {
+        'LOCKER-B12', 'LOCKER-B13', 'LOCKER-EMPTY'
+    }
+
+    api_client.force_authenticate(user=officer)
+    assert api_client.get('/api/v1/custody/lockers/').status_code == status.HTTP_200_OK
+    assert api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'OFFICER-LOCKER', 'location': 'Unauthorized config change',
+    }, format='json').status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.patch(
+        f"/api/v1/custody/lockers/{locker_a.data['id']}/", {'is_active': False}, format='json'
+    ).status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.delete(f"/api/v1/custody/lockers/{locker_a.data['id']}/").status_code == status.HTTP_403_FORBIDDEN
+
+    inventory = api_client.get('/api/v1/custody/inventory/', {'search': str(item.id)})
+    assert inventory.status_code == status.HTTP_200_OK
+    assert any(row['id'] == str(item.id) and 'primaryImageUrl' in row for row in inventory.data)
+
+    assigned = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(item.id),
+        'lockerId': locker_a.data['id'],
+        'reason': 'Initial safe storage',
+    }, format='json')
+    assert assigned.status_code == status.HTTP_201_CREATED
+    assert assigned.data['previousLockerReference'] == ''
+    assert assigned.data['lockerReference'] == 'LOCKER-B12'
+    still_occupied = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(second_item.id),
+        'lockerId': locker_a.data['id'],
+    }, format='json')
+    assert still_occupied.status_code == status.HTTP_409_CONFLICT
+    assert 'occupied' in still_occupied.data['message'].lower()
+
+    api_client.force_authenticate(user=admin)
+    occupied_locker_edit = api_client.patch(
+        f"/api/v1/custody/lockers/{locker_a.data['id']}/",
+        {'is_active': False},
+        format='json',
+    )
+    assert occupied_locker_edit.status_code == status.HTTP_200_OK
+    assert occupied_locker_edit.data['is_active'] is False
+    assert api_client.delete(f"/api/v1/custody/lockers/{locker_a.data['id']}/").status_code == status.HTTP_409_CONFLICT
+
+    api_client.force_authenticate(user=officer)
+    inactive_locker = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(second_item.id),
+        'lockerId': locker_a.data['id'],
+    }, format='json')
+    assert inactive_locker.status_code == status.HTTP_409_CONFLICT
+    assert 'inactive' in inactive_locker.data['message'].lower()
+
+    moved = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(item.id),
+        'lockerId': locker_b.data['id'],
+        'reason': 'Locker maintenance',
+    }, format='json')
+    assert moved.status_code == status.HTTP_201_CREATED
+    assert moved.data['previousLockerReference'] == 'LOCKER-B12'
+    assert moved.data['lockerReference'] == 'LOCKER-B13'
+    assert Locker.objects.get(pk=locker_a.data['id']).current_item_id is None
+    assert Locker.objects.get(pk=locker_b.data['id']).current_item_id == item.id
+
+    api_client.force_authenticate(user=admin)
+    enabled_again = api_client.patch(
+        f"/api/v1/custody/lockers/{locker_a.data['id']}/", {'is_active': True}, format='json'
+    )
+    assert enabled_again.status_code == status.HTTP_200_OK
+    assert enabled_again.data['is_active'] is True
+
+    assert AuditEntry.objects.filter(
+        action=AuditAction.CUSTODY_TRANSFER,
+        target_entity='LockerAllocation',
+        metadata__itemId=str(item.id),
+        actor=test_setup['security_officer'],
+    ).exists()
+    locker_status = {row['lockerNumber']: row for row in api_client.get('/api/v1/custody/lockers/').data}
+    assert locker_status['LOCKER-B12']['occupied'] is False
+    assert locker_status['LOCKER-B13']['currentItemId'] == str(item.id)
+
+    # Admin reads a fresh persisted snapshot after Security movements; the latest
+    # actor and timestamp are included without requiring an Admin-side mutation.
+    api_client.force_authenticate(user=admin)
+    refreshed_snapshot = api_client.get('/api/v1/admin/inventory/')
+    assert refreshed_snapshot.status_code == status.HTTP_200_OK
+    refreshed_lockers = {row['lockerNumber']: row for row in refreshed_snapshot.data['lockers']}
+    assert refreshed_lockers['LOCKER-B12']['occupied'] is False
+    assert refreshed_lockers['LOCKER-B13']['currentItemId'] == str(item.id)
+    latest_update = refreshed_snapshot.data['recentUpdates'][0]
+    assert latest_update['officerName'] == officer.full_name
+    assert latest_update['timestamp']
+    archived_locker = api_client.delete(f"/api/v1/custody/lockers/{locker_a.data['id']}/")
+    assert archived_locker.status_code == status.HTTP_200_OK
+    assert archived_locker.data['archived'] is True
+    assert Locker.objects.get(pk=locker_a.data['id']).is_active is False
+    assert AuditEntry.objects.filter(
+        actor=admin, target_entity='Locker', target_id=locker_a.data['id'], metadata__event='LOCKER_ARCHIVED'
+    ).exists()
+    assert api_client.delete(f"/api/v1/custody/lockers/{locker_b.data['id']}/").status_code == status.HTTP_409_CONFLICT
+    deleted_empty = api_client.delete(f"/api/v1/custody/lockers/{empty_locker.data['id']}/")
+    assert deleted_empty.status_code == status.HTTP_200_OK
+    assert AuditEntry.objects.filter(
+        actor=admin, target_entity='Locker', target_id=empty_locker.data['id'], metadata__event='LOCKER_DELETED'
+    ).exists()
+
+    history = api_client.get(f'/api/v1/custody/items/{item.id}/history/')
+    assert history.status_code == status.HTTP_200_OK
+    locker_moves = [record for record in history.data if record['action'] == CustodyAction.STORED_IN_LOCKER]
+    assert len(locker_moves) == 2
+    assert {
+        (record['previousLockerReference'], record['lockerReference']) for record in locker_moves
+    } == {('', 'LOCKER-B12'), ('LOCKER-B12', 'LOCKER-B13')}
+
+    api_client.force_authenticate(user=test_setup['student1'])
+    denied = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(item.id), 'lockerId': locker_a.data['id'],
+    }, format='json')
+    assert denied.status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'STUDENT-LOCKER', 'location': 'Unauthorized',
+    }, format='json').status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.get('/api/v1/admin/inventory/').status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_admin_custody_location_changes_are_visible_to_security_and_enforced(api_client, test_setup):
+    admin = test_setup['campus_admin']
+    officer = test_setup['security_officer']
+    student = test_setup['student1']
+
+    api_client.force_authenticate(user=admin)
+    created_location = api_client.post('/api/v1/custody/locations/', {
+        'code': 'SECURITY-NORTH',
+        'name': 'North Security Office',
+        'description': 'North campus custody room',
+    }, format='json')
+    assert created_location.status_code == status.HTTP_201_CREATED
+    location_id = created_location.data['id']
+    assert created_location.data['createdBy']['id'] == str(admin.id)
+    assert created_location.data['updatedBy']['id'] == str(admin.id)
+
+    api_client.force_authenticate(user=officer)
+    security_locations = api_client.get('/api/v1/custody/locations/')
+    assert security_locations.status_code == status.HTTP_200_OK
+    assert any(row['id'] == location_id for row in security_locations.data)
+    assert api_client.post('/api/v1/custody/locations/', {
+        'code': 'SECURITY-UNAUTHORIZED', 'name': 'Unauthorized Location',
+    }, format='json').status_code == status.HTTP_403_FORBIDDEN
+
+    api_client.force_authenticate(user=admin)
+    created_locker = api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'NORTH-LOCKER-01', 'custodyLocationId': location_id,
+    }, format='json')
+    assert created_locker.status_code == status.HTTP_201_CREATED
+    locker_id = created_locker.data['id']
+    assert created_locker.data['locationId'] == location_id
+    duplicate = api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'north-locker-01', 'custodyLocationId': location_id,
+    }, format='json')
+    assert duplicate.status_code == status.HTTP_400_BAD_REQUEST
+    edited_locker = api_client.patch(f'/api/v1/custody/lockers/{locker_id}/', {
+        'lockerNumber': 'NORTH-LOCKER-02',
+    }, format='json')
+    assert edited_locker.status_code == status.HTTP_200_OK
+    assert edited_locker.data['lockerNumber'] == 'NORTH-LOCKER-02'
+    assert edited_locker.data['updatedBy']['id'] == str(admin.id)
+
+    api_client.force_authenticate(user=officer)
+    security_lockers = api_client.get('/api/v1/custody/lockers/')
+    assert security_lockers.status_code == status.HTTP_200_OK
+    assert any(row['id'] == locker_id and row['locationId'] == location_id for row in security_lockers.data)
+    assert api_client.patch(f'/api/v1/custody/lockers/{locker_id}/', {'is_active': False}, format='json').status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.delete(f'/api/v1/custody/lockers/{locker_id}/').status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.patch(f'/api/v1/custody/locations/{location_id}/', {'name': 'Officer Rename'}, format='json').status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.delete(f'/api/v1/custody/locations/{location_id}/').status_code == status.HTTP_403_FORBIDDEN
+
+    api_client.force_authenticate(user=student)
+    assert api_client.get('/api/v1/custody/locations/').status_code == status.HTTP_403_FORBIDDEN
+    assert api_client.get('/api/v1/custody/lockers/').status_code == status.HTTP_403_FORBIDDEN
+
+    api_client.force_authenticate(user=admin)
+    renamed = api_client.patch(f'/api/v1/custody/locations/{location_id}/', {
+        'name': 'North Campus Security Office',
+        'description': 'Updated storage room details',
+    }, format='json')
+    assert renamed.status_code == status.HTTP_200_OK
+    assert renamed.data['name'] == 'North Campus Security Office'
+    assert renamed.data['updatedBy']['id'] == str(admin.id)
+    locker = Locker.objects.get(pk=locker_id)
+    assert locker.location == 'North Campus Security Office'
+
+    # A fresh security read, matching the existing five-second client polling,
+    # returns the same persisted values without a separate security record.
+    api_client.force_authenticate(user=officer)
+    refreshed = api_client.get('/api/v1/custody/locations/')
+    refreshed_row = next(row for row in refreshed.data if row['id'] == location_id)
+    assert refreshed_row['name'] == 'North Campus Security Office'
+    assert refreshed_row['lockers'][0]['lockerNumber'] == 'NORTH-LOCKER-02'
+    assert refreshed_row['lockers'][0]['location'] == 'North Campus Security Office'
+
+    api_client.force_authenticate(user=admin)
+    disabled = api_client.patch(f'/api/v1/custody/locations/{location_id}/', {'isActive': False}, format='json')
+    assert disabled.status_code == status.HTTP_200_OK
+    api_client.force_authenticate(user=officer)
+    assert all(row['id'] != location_id for row in api_client.get('/api/v1/custody/locations/').data)
+    assert all(row['id'] != locker_id for row in api_client.get('/api/v1/custody/lockers/').data)
+    disabled_assignment = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(test_setup['item2'].id), 'lockerId': locker_id,
+    }, format='json')
+    assert disabled_assignment.status_code == status.HTTP_409_CONFLICT
+
+    api_client.force_authenticate(user=admin)
+    api_client.delete(f'/api/v1/custody/lockers/{locker_id}/')
+    archived_location = api_client.delete(f'/api/v1/custody/locations/{location_id}/')
+    assert archived_location.status_code == status.HTTP_200_OK
+    assert archived_location.data['deleted'] is True
+    assert not CustodyLocation.objects.filter(pk=location_id).exists()
+    assert AuditEntry.objects.filter(
+        target_entity='CustodyLocation', target_id=location_id,
+        metadata__event='CUSTODY_LOCATION_CREATED',
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_occupied_and_active_custody_dependencies_block_deletion_and_history_is_preserved(api_client, test_setup):
+    admin = test_setup['campus_admin']
+    officer = test_setup['security_officer']
+    item = test_setup['item2']
+
+    api_client.force_authenticate(user=admin)
+    location_a = api_client.post('/api/v1/custody/locations/', {
+        'code': 'SECURITY-EAST', 'name': 'East Security Office',
+    }, format='json')
+    location_b = api_client.post('/api/v1/custody/locations/', {
+        'code': 'SECURITY-WEST', 'name': 'West Security Office',
+    }, format='json')
+    assert location_a.status_code == location_b.status_code == status.HTTP_201_CREATED
+    locker = api_client.post('/api/v1/custody/lockers/', {
+        'lockerNumber': 'EAST-LOCKER-01', 'custodyLocationId': location_a.data['id'],
+    }, format='json')
+    assert locker.status_code == status.HTTP_201_CREATED
+
+    api_client.force_authenticate(user=officer)
+    assigned = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(item.id), 'lockerId': locker.data['id'], 'reason': 'Secure storage',
+    }, format='json')
+    assert assigned.status_code == status.HTTP_201_CREATED
+    location_audit_state = CustodyLocation.objects.get(pk=location_a.data['id'])
+    assert location_audit_state.updated_by_id == officer.id
+    assert location_audit_state.updated_at is not None
+    api_client.force_authenticate(user=admin)
+    blocked_locker_delete = api_client.delete(f"/api/v1/custody/lockers/{locker.data['id']}/")
+    assert blocked_locker_delete.status_code == status.HTTP_409_CONFLICT
+    blocked_location_delete = api_client.delete(f"/api/v1/custody/locations/{location_a.data['id']}/")
+    assert blocked_location_delete.status_code == status.HTTP_409_CONFLICT
+
+    api_client.force_authenticate(user=officer)
+    released = api_client.post('/api/v1/custody/assign-locker/', {
+        'itemId': str(item.id), 'lockerId': None, 'reason': 'Moved from locker',
+    }, format='json')
+    assert released.status_code == status.HTTP_201_CREATED
+    api_client.force_authenticate(user=admin)
+    archived_locker = api_client.delete(f"/api/v1/custody/lockers/{locker.data['id']}/")
+    assert archived_locker.status_code == status.HTTP_200_OK
+    assert archived_locker.data['archived'] is True
+    # The item still has an active custody location, so location removal remains blocked.
+    assert api_client.delete(f"/api/v1/custody/locations/{location_a.data['id']}/").status_code == status.HTTP_409_CONFLICT
+
+    api_client.force_authenticate(user=officer)
+    moved = api_client.post('/api/v1/custody/transfer/', {
+        'itemId': str(item.id),
+        'custodyLocationId': location_b.data['id'],
+        'toLocation': location_b.data['name'],
+        'action': 'TRANSFERRED_DESK',
+        'remarks': 'Moved to the west security office',
+    }, format='json')
+    assert moved.status_code == status.HTTP_201_CREATED
+    api_client.force_authenticate(user=admin)
+    archived_location = api_client.delete(f"/api/v1/custody/locations/{location_a.data['id']}/")
+    assert archived_location.status_code == status.HTTP_200_OK
+    assert archived_location.data['archived'] is True
+    assert AuditEntry.objects.filter(
+        target_entity='CustodyLocation', target_id=location_a.data['id'],
+        metadata__event='CUSTODY_LOCATION_DELETE_BLOCKED',
+    ).exists()
+    item.refresh_from_db()
+    assert item.current_custody_desk == location_b.data['name']
+    history = api_client.get(f'/api/v1/custody/items/{item.id}/history/')
+    assert history.status_code == status.HTTP_200_OK
+    assert any(row['lockerReference'] == 'EAST-LOCKER-01' for row in history.data)
 
 @pytest.mark.django_db
 def test_item_update_permissions(api_client, test_setup):

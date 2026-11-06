@@ -5,3 +5,6 @@ class AuditConfig(AppConfig):
     name = 'apps.audit'
     label = 'audit'
     verbose_name = 'Forensic Compliance Audit Trail'
+
+    def ready(self):
+        from . import signals  # noqa: F401

@@ -137,6 +137,15 @@ def admin_setup(db):
 def test_security_dashboard_stats_and_audit_trail(api_client, admin_setup):
     """Test security stats aggregation and audit trail queries."""
     api_client.force_authenticate(user=admin_setup['security_officer'])
+    AuditEntry.objects.create(
+        actor=admin_setup['security_officer'],
+        actor_role=admin_setup['security_officer'].role,
+        action=AuditAction.CUSTODY_TRANSFER,
+        target_entity='Item',
+        target_id=str(admin_setup['item_in_custody'].id),
+        ip_address='127.0.0.1',
+        metadata={'itemId': str(admin_setup['item_in_custody'].id), 'toLocation': 'Locker 5'},
+    )
 
     # 1. Dashboard stats
     res = api_client.get('/api/v1/security/dashboard-stats/')
@@ -151,6 +160,7 @@ def test_security_dashboard_stats_and_audit_trail(api_client, admin_setup):
     res_trail = api_client.get('/api/v1/security/audit-trail/')
     assert res_trail.status_code == status.HTTP_200_OK
     assert len(res_trail.data['data']) >= 1
+    assert all(entry['actorRole'] != UserRole.CAMPUS_ADMIN for entry in res_trail.data['data'])
 
 @pytest.mark.django_db
 def test_admin_analytics_dashboard(api_client, admin_setup):
@@ -368,6 +378,7 @@ def test_non_admin_roles_cannot_manage_accounts_or_change_roles(api_client, admi
             {'role': UserRole.SECURITY_PERSONNEL},
             format='json',
         ).status_code == status.HTTP_403_FORBIDDEN
+        assert api_client.delete(f'/api/v1/admin/users/{target.id}/').status_code == status.HTTP_403_FORBIDDEN
         assert not User.objects.filter(registration_number='UNAUTH9200').exists()
 
     api_client.force_authenticate(user=None)
@@ -375,3 +386,97 @@ def test_non_admin_roles_cannot_manage_accounts_or_change_roles(api_client, admi
         status.HTTP_401_UNAUTHORIZED,
         status.HTTP_403_FORBIDDEN,
     )
+
+
+@pytest.mark.django_db
+def test_admin_delete_deactivates_referenced_user_and_revokes_access_tokens(api_client, admin_setup):
+    admin = admin_setup['admin']
+    student = admin_setup['student']
+    linked_item = admin_setup['item_in_custody']
+
+    login = api_client.post('/api/v1/auth/login/', {
+        'emailOrRegNo': student.registration_number,
+        'password': 'Password123!',
+    }, format='json')
+    assert login.status_code == status.HTTP_200_OK
+    access_token = login.json()['data']['accessToken']
+    refresh_token = login.json()['data']['refreshToken']
+    session_client = APIClient()
+    session_client.force_login(student)
+    assert session_client.get('/api/v1/auth/me/').status_code == status.HTTP_200_OK
+
+    api_client.force_authenticate(user=admin)
+    deleted = api_client.delete(f'/api/v1/admin/users/{student.id}/')
+    assert deleted.status_code == status.HTTP_200_OK
+    assert deleted.data['data']['deleted'] is False
+    assert deleted.data['data']['deactivated'] is True
+
+    student.refresh_from_db()
+    linked_item.refresh_from_db()
+    assert student.is_active is False
+    assert student.auth_token_version == 1
+    assert linked_item.reported_by_id == student.id
+    assert Item.objects.filter(pk=linked_item.id).exists()
+    assert Claim.objects.filter(claimant=student).exists()
+    assert AuditEntry.objects.filter(
+        actor=admin,
+        target_entity='User',
+        target_id=str(student.id),
+        metadata__event='ADMIN_USER_DEACTIVATED_ON_DELETE',
+    ).exists()
+
+    token_client = APIClient()
+    token_client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+    assert token_client.get('/api/v1/auth/me/').status_code == status.HTTP_401_UNAUTHORIZED
+    assert session_client.get('/api/v1/auth/me/').status_code == status.HTTP_401_UNAUTHORIZED
+    assert api_client.post('/api/v1/auth/token/refresh/', {'refresh': refresh_token}, format='json').status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_admin_delete_removes_only_unreferenced_account_and_audits_target(api_client, admin_setup):
+    admin = admin_setup['admin']
+    target = User.objects.create_user(
+        email='temporary.unreferenced@lpu.in',
+        registration_number='TMP-UNREF-100',
+        full_name='Unreferenced Account',
+        password='Password123!',
+        role=UserRole.STUDENT_STAFF,
+        user_type=UserType.STUDENT,
+    )
+    api_client.force_authenticate(user=admin)
+
+    result = api_client.delete(f'/api/v1/admin/users/{target.id}/')
+    assert result.status_code == status.HTTP_200_OK
+    assert result.data['data']['deleted'] is True
+    assert result.data['data']['deactivated'] is False
+    assert not User.objects.filter(pk=target.id).exists()
+    audit = AuditEntry.objects.get(
+        actor=admin,
+        target_entity='User',
+        target_id=str(target.id),
+        metadata__event='ADMIN_USER_DELETED',
+    )
+    assert audit.metadata['targetRegistrationNumber'] == target.registration_number
+
+
+@pytest.mark.django_db
+def test_admin_cannot_delete_self_or_last_active_super_admin(api_client, admin_setup):
+    admin = admin_setup['admin']
+    super_admin = User.objects.create_superuser(
+        email='only.superadmin@lpu.in',
+        registration_number='ONLY-SUPER-001',
+        full_name='Only System Administrator',
+        password='Password123!',
+    )
+    api_client.force_authenticate(user=admin)
+
+    assert api_client.delete(f'/api/v1/admin/users/{admin.id}/').status_code == status.HTTP_400_BAD_REQUEST
+    blocked_delete = api_client.delete(f'/api/v1/admin/users/{super_admin.id}/')
+    assert blocked_delete.status_code == status.HTTP_409_CONFLICT
+    blocked_deactivation = api_client.patch(
+        f'/api/v1/admin/users/{super_admin.id}/', {'isActive': False}, format='json'
+    )
+    assert blocked_deactivation.status_code == status.HTTP_409_CONFLICT
+    super_admin.refresh_from_db()
+    assert super_admin.is_active is True
+    assert super_admin.is_superuser is True

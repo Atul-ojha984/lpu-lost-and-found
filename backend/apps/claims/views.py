@@ -277,7 +277,7 @@ class ClaimEvidenceUploadAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                private_dir = settings.BASE_DIR / 'private_evidence' / str(claim.id)
+                private_dir = settings.PRIVATE_EVIDENCE_ROOT / str(claim.id)
                 os.makedirs(private_dir, exist_ok=True)
 
                 safe_filename = f"{uuid.uuid4().hex}{ext}"
@@ -346,7 +346,7 @@ class ClaimEvidenceDownloadAPIView(APIView):
             )
 
         safe_filename = os.path.basename(filename)
-        file_path = settings.BASE_DIR / 'private_evidence' / str(claim.id) / safe_filename
+        file_path = settings.PRIVATE_EVIDENCE_ROOT / str(claim.id) / safe_filename
 
         if not os.path.exists(file_path):
             raise Http404("Evidence document not found.")

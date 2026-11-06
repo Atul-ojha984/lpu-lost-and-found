@@ -6,7 +6,9 @@ Phase 1 Test Suite: AES-256-GCM Cryptographic Vault
 """
 
 import pytest
-from apps.core.crypto import AESGCMVault
+from django.test import override_settings
+from apps.core.crypto import AESGCMVault, decrypt_field, encrypt_field, get_encryption_key
+import base64
 
 def test_aes_gcm_roundtrip():
     """Verify encryption and decryption roundtrip with 12-byte IV and 16-byte auth tag."""
@@ -42,3 +44,20 @@ def test_aes_gcm_tamper_detection():
     tampered_tag = ("0" if auth_tag[0] != "0" else "1") + auth_tag[1:]
     with pytest.raises(ValueError):
         vault.decrypt(ciphertext, iv, tampered_tag)
+
+
+@pytest.mark.parametrize('key_value', [
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    base64.b64encode(bytes(range(32))).decode('ascii'),
+])
+def test_configured_encryption_key_formats_roundtrip(key_value):
+    with override_settings(FIELD_ENCRYPTION_KEY=key_value):
+        encrypted = encrypt_field('private verification detail')
+        assert decrypt_field(encrypted['ciphertext'], encrypted['iv'], encrypted['authTag']) == 'private verification detail'
+
+
+@pytest.mark.parametrize('key_value', ['too-short', base64.b64encode(b'not-32-bytes').decode('ascii')])
+def test_invalid_configured_encryption_key_is_rejected(key_value):
+    with override_settings(FIELD_ENCRYPTION_KEY=key_value):
+        with pytest.raises(ValueError, match='FIELD_ENCRYPTION_KEY'):
+            get_encryption_key()

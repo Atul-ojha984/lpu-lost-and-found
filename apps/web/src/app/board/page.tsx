@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/navigation/Navbar';
 import { Footer } from '@/components/navigation/Footer';
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 function BoardContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   // URL query parameter initial state
@@ -44,6 +45,7 @@ function BoardContent() {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Current User Session
@@ -63,15 +65,27 @@ function BoardContent() {
 
   // Check auth session
   useEffect(() => {
+    let isMounted = true;
     apiClient.getCurrentUser()
-      .then((user) => setCurrentUser(user))
-      .catch(() => setCurrentUser(null));
-  }, []);
+      .then((user) => {
+        if (!isMounted) return;
+        if (!user) {
+          router.replace('/login');
+          return;
+        }
+        setCurrentUser(user);
+        setIsCheckingAuth(false);
+      })
+      .catch(() => {
+        if (isMounted) router.replace('/login');
+      });
+    return () => { isMounted = false; };
+  }, [router]);
 
   // Handle URL claim parameter auto-trigger
   const claimParam = searchParams.get('claim');
   useEffect(() => {
-    if (claimParam) {
+    if (claimParam && currentUser) {
       apiClient.getItemById(claimParam)
         .then((item) => {
           if (item && item.itemType === 'FOUND' && item.status !== 'HANDED_OVER') {
@@ -82,10 +96,11 @@ function BoardContent() {
           // ignore if item not found
         });
     }
-  }, [claimParam]);
+  }, [claimParam, currentUser]);
 
   // Fetch items from Django REST API
   const fetchBoardItems = useCallback(async () => {
+    if (!currentUser) return;
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -112,9 +127,10 @@ function BoardContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedType, selectedCategory, selectedZone, selectedStatus, currentPage]);
+  }, [currentUser, searchQuery, selectedType, selectedCategory, selectedZone, selectedStatus, currentPage]);
 
   useEffect(() => {
+    if (!currentUser) return;
     let isMounted = true;
 
     async function loadBoardItems() {
@@ -154,7 +170,7 @@ function BoardContent() {
     return () => {
       isMounted = false;
     };
-  }, [searchQuery, selectedType, selectedCategory, selectedZone, selectedStatus, currentPage, pageSize]);
+  }, [currentUser, searchQuery, selectedType, selectedCategory, selectedZone, selectedStatus, currentPage, pageSize]);
 
   const handleResetFilters = () => {
     setSearchQuery('');
@@ -222,6 +238,14 @@ function BoardContent() {
     }
   };
 
+  if (isCheckingAuth || !currentUser) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F5F5F5] p-8">
+        <LoadingState message="Verifying your campus account..." />
+      </main>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
       <Navbar />
@@ -233,13 +257,13 @@ function BoardContent() {
             <div>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F58220]">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Sanitized Public Search Board</span>
+                <span>Campus Search Board</span>
               </div>
               <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#283442] sm:text-3xl">
                 Campus Property Listings
               </h1>
               <p className="mt-1 text-xs text-slate-500">
-                Browse lost and found items with redacted public descriptions across Lovely Professional University.
+                Browse sanitized lost and found listings across Lovely Professional University.
               </p>
             </div>
 

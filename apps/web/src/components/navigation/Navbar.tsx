@@ -52,11 +52,11 @@ export const Navbar: React.FC = () => {
 
   const navLinks = [
     { href: '/', label: 'Home' },
-    { href: '/board', label: 'Public Board' },
     { href: '/report', label: 'Report Item' },
   ];
 
   if (currentUser) {
+    navLinks.splice(1, 0, { href: '/board', label: 'Campus Listings' });
     if (isAdmin) {
       navLinks.push({ href: '/admin', label: 'Admin Dashboard' });
       navLinks.push({ href: '/security', label: 'Security Desk' });
@@ -111,13 +111,13 @@ export const Navbar: React.FC = () => {
 
         {/* Right Action Buttons */}
         <div className="hidden sm:flex items-center gap-2.5">
-          <Link
+          {currentUser && <Link
             href="/board"
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F5F5] px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#F58220]/40 hover:text-[#283442] transition-colors"
           >
             <Search className="h-3.5 w-3.5 text-slate-500" />
             <span>Search Board</span>
-          </Link>
+          </Link>}
 
           <Link
             href="/report"

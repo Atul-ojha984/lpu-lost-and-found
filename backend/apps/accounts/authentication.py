@@ -7,6 +7,7 @@ Authentication Classes: Dual-Mode Cookie and Header JWT Authentication
 
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
+from rest_framework.authentication import SessionAuthentication
 
 class CookieOrHeaderJWTAuthentication(JWTAuthentication):
     """
@@ -29,10 +30,12 @@ class CookieOrHeaderJWTAuthentication(JWTAuthentication):
             try:
                 raw_token = cookie_token.encode('utf-8') if isinstance(cookie_token, str) else cookie_token
                 validated_token = self.get_validated_token(raw_token)
-                return self.get_user(validated_token), validated_token
-            except Exception:
+            except InvalidToken:
                 # Ambient expired/stale cookie should not crash public unauthenticated requests
                 return None
+            if request.method not in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
+                SessionAuthentication().enforce_csrf(request)
+            return self.get_user(validated_token), validated_token
 
     def get_user(self, validated_token):
         """
@@ -49,5 +52,12 @@ class CookieOrHeaderJWTAuthentication(JWTAuthentication):
 
         if not user.is_active:
             raise AuthenticationFailed("User account is inactive or suspended", code="user_inactive")
+
+        try:
+            token_version = int(validated_token.get('authVersion', 0))
+        except (TypeError, ValueError):
+            raise AuthenticationFailed("Token authorization version is invalid", code="token_revoked")
+        if token_version != user.auth_token_version:
+            raise AuthenticationFailed("User session has been revoked", code="token_revoked")
 
         return user

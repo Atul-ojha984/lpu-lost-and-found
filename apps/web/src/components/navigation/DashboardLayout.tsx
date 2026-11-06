@@ -12,13 +12,11 @@ import {
   LogOut, 
   Search, 
   ShieldCheck, 
-  ChevronDown,
-  ClipboardCheck,
-  CheckCircle2
+  ChevronDown
 } from 'lucide-react';
 import { Sidebar } from '@/components/navigation/Sidebar';
 import { LPULogo } from '@/components/branding/LPULogo';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, type PortalNotification } from '@/lib/api-client';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -38,6 +36,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationState, setNotificationState] = useState<{
+    userId: string;
+    items: PortalNotification[];
+    unreadCount: number;
+  }>({ userId: '', items: [], unreadCount: 0 });
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -45,6 +48,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const notificationsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
+  const notificationUserId = String(currentUser?.id || currentUser?._id || '');
 
   useEffect(() => {
     let isMounted = true;
@@ -84,6 +88,50 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
   }, [pathname, router]);
 
+  // Poll the authenticated user's cursor-based feed while this portal is visible.
+  useEffect(() => {
+    if (!notificationUserId) return;
+    let isMounted = true;
+    let cursor = '';
+    let knownItems: PortalNotification[] = [];
+
+    const loadNotifications = async (initial = false) => {
+      try {
+        const response = await apiClient.getNotifications(initial ? undefined : cursor || undefined);
+        if (!isMounted) return;
+        cursor = response.nextCursor || cursor;
+        if (initial) {
+          knownItems = response.items || [];
+        } else if (response.items?.length) {
+          const incoming = [...response.items].reverse();
+          const incomingIds = new Set(incoming.map((item) => item.id));
+          knownItems = [...incoming, ...knownItems.filter((item) => !incomingIds.has(item.id))].slice(0, 10);
+        }
+        setNotificationState({
+          userId: notificationUserId,
+          items: knownItems,
+          unreadCount: response.unreadCount || 0,
+        });
+      } catch {
+        // Keep the existing header usable when the notification endpoint is temporarily unavailable.
+      }
+    };
+
+    void loadNotifications(true);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadNotifications();
+    }, 10000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void loadNotifications();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      isMounted = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [notificationUserId]);
+
   // Click outside listener for dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -105,6 +153,51 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       // ignore
     }
     router.push('/login');
+  };
+
+  const visibleNotifications = notificationState.userId === notificationUserId
+    ? notificationState.items
+    : [];
+  const visibleUnreadCount = notificationState.userId === notificationUserId
+    ? notificationState.unreadCount
+    : 0;
+
+  const handleNotificationClick = async (notification: PortalNotification) => {
+    try {
+      const result = await apiClient.markNotificationRead(notification.id);
+      setNotificationState((previous) => previous.userId === notificationUserId
+        ? {
+          ...previous,
+          items: previous.items.map((item) => item.id === notification.id
+            ? { ...item, isRead: true, readAt: result.readAt }
+            : item),
+          unreadCount: result.unreadCount,
+        }
+        : previous);
+    } catch {
+      // Navigation remains available even if persisting read state must be retried later.
+    }
+    setNotificationsOpen(false);
+    const target = notification.targetPath;
+    const safeTarget = target.startsWith('/') && !target.startsWith('//')
+      ? target
+      : (currentUser?.role === 'SECURITY_PERSONNEL' ? '/security' : '/dashboard');
+    router.push(safeTarget);
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      const result = await apiClient.markAllNotificationsRead();
+      setNotificationState((previous) => previous.userId === notificationUserId
+        ? {
+          ...previous,
+          items: previous.items.map((item) => ({ ...item, isRead: true, readAt: new Date().toISOString() })),
+          unreadCount: result.unreadCount,
+        }
+        : previous);
+    } catch {
+      // Keep the notification list available if the API is temporarily unreachable.
+    }
   };
 
   const getProfileLink = () => {
@@ -205,7 +298,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-[#F5F5F5] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:border-[#F58220]/40 transition-colors"
             >
               <Search className="h-3.5 w-3.5 text-slate-400" />
-              <span>Public Board</span>
+              <span>Campus Listings</span>
             </Link>
 
             {/* Notifications Menu */}
@@ -217,7 +310,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 aria-label="View notifications"
               >
                 <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#F58220] ring-2 ring-white" />
+                {visibleUnreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F58220] px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                    {visibleUnreadCount > 99 ? '99+' : visibleUnreadCount}
+                  </span>
+                )}
               </button>
 
               {notificationsOpen && (
@@ -226,37 +323,46 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <span className="text-xs font-bold uppercase tracking-wider text-[#283442]">
                       Recovery Notifications
                     </span>
-                    <span className="text-[10px] font-bold text-[#F58220] bg-[#FFF1E6] px-2 py-0.5 rounded-full">
-                      2 Unread
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-[#F58220] bg-[#FFF1E6] px-2 py-0.5 rounded-full">
+                        {visibleUnreadCount} Unread
+                      </span>
+                      {visibleUnreadCount > 0 && (
+                        <button type="button" onClick={() => void handleMarkAllNotificationsRead()} className="text-[10px] font-semibold text-slate-500 hover:text-[#F58220]">
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="divide-y divide-slate-100 mt-2 text-xs">
-                    <div className="py-2.5 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[#16876A] font-semibold text-[11px]">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>Claim Approved • Handover Ready</span>
-                      </div>
-                      <p className="text-slate-600 text-[11px] leading-tight">
-                        Your claim for Casio Scientific Calculator was approved at Block 38 Security Desk.
-                      </p>
-                      <span className="text-[10px] text-slate-400">15m ago</span>
-                    </div>
-
-                    <div className="py-2.5 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[#356DE8] font-semibold text-[11px]">
-                        <ClipboardCheck className="h-3.5 w-3.5" />
-                        <span>Custody Intake Logged</span>
-                      </div>
-                      <p className="text-slate-600 text-[11px] leading-tight">
-                        Security Desk updated custody status for recent campus property.
-                      </p>
-                      <span className="text-[10px] text-slate-400">1h ago</span>
-                    </div>
+                  <div className="mt-2 max-h-80 divide-y divide-slate-100 overflow-y-auto text-xs">
+                    {visibleNotifications.length ? visibleNotifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => void handleNotificationClick(notification)}
+                        className={`w-full py-2.5 text-left transition-colors hover:bg-[#F5F5F5] ${notification.isRead ? 'opacity-70' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-[#283442]">{notification.title}</span>
+                          {!notification.isRead && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#F58220]" />}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-tight text-slate-600">{notification.message}</p>
+                        <span className="mt-1 block text-[10px] text-slate-400">
+                          {new Date(notification.createdAt).toLocaleString('en-IN')}
+                        </span>
+                      </button>
+                    )) : (
+                      <p className="py-6 text-center text-[11px] text-slate-500">No notifications yet.</p>
+                    )}
                   </div>
 
                   <Link
-                    href="/dashboard/my-reports"
+                    href={currentUser?.role === 'SECURITY_PERSONNEL'
+                      ? '/security/custody'
+                      : currentUser?.role === 'CAMPUS_ADMIN' || currentUser?.role === 'SYSTEM_ADMIN'
+                        ? '/admin/audit'
+                        : '/dashboard/my-reports'}
                     onClick={() => setNotificationsOpen(false)}
                     className="mt-3 block text-center rounded-xl bg-[#F5F5F5] py-1.5 text-[11px] font-bold text-[#F58220] hover:bg-[#FFF1E6] transition-colors"
                   >

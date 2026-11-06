@@ -4,12 +4,12 @@ Enterprise-grade Django REST Framework backend powering the Lovely Professional 
 
 ## 1. Overview & Architecture
 
-- **Framework:** Python 3.14 / Django 5.2.18 / Django REST Framework 3.15.2
+- **Framework:** Python 3.12+ / Django 5.x / Django REST Framework 3.x
 - **Database:** PostgreSQL 16 (production) / SQLite with WAL mode (local development & testing)
 - **Authentication:** JWT (JSON Web Tokens via `djangorestframework-simplejwt`) with HTTP-only secure cookie support and Bcrypt password hashing
 - **API Documentation:** OpenAPI 3.0 via `drf-spectacular` (interactive Swagger UI & Redoc)
-- **Security & Cryptography:** 
-  - Symmetric AES-128-CBC / Fernet field-level encryption for private item verification vaults
+- **Security & Cryptography:**
+  - AES-256-GCM field-level encryption for private item verification vaults
   - In-memory EXIF and GPS metadata stripping for uploaded property images via Pillow
   - Single-use 6-digit cryptographic OTPs for supervised physical item handovers
   - Anti-self-claim invariants and strict multi-role permission guards (`STUDENT_STAFF`, `SECURITY_OFFICER`, `ADMIN`)
@@ -73,7 +73,7 @@ source .venv/bin/activate
 
 ```bash
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ### 4.3 Configure Environment Variables
@@ -89,7 +89,9 @@ Key environment settings:
 - `SECRET_KEY`: Set to a random secret string.
 - `DATABASE_URL`: Defaults to `sqlite:///db.sqlite3` for local development. Use `postgresql://user:pass@host:5432/dbname` in production.
 - `JWT_SIGNING_KEY`: Minimum 32-character secret for JWT tokens.
-- `FIELD_ENCRYPTION_KEY`: 64-hex-character (32-byte) key for private vault field encryption.
+- `FIELD_ENCRYPTION_KEY`: A 32-byte key encoded as 64 hexadecimal characters or base64. Keep this stable across deployments because existing encrypted records depend on it.
+- `MEDIA_ROOT`: Directory for uploaded item photographs. Production must use durable storage.
+- `PRIVATE_EVIDENCE_ROOT`: Directory for private claim evidence. Production must use durable storage and serve files only through the authenticated evidence endpoint.
 
 ### 4.4 Run Database Migrations
 

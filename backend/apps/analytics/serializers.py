@@ -7,7 +7,7 @@ Analytics & Administration Serializers
 
 from rest_framework import serializers
 from apps.accounts.models import User, UserRole, UserType
-from apps.accounts.serializers import CreateAdminUserSerializer
+from apps.accounts.serializers import CreateAdminUserSerializer, IndianMobileNumberField
 from apps.disposal.models import DisposalMethod
 
 class DisposalApprovalInputSerializer(serializers.Serializer):
@@ -51,7 +51,7 @@ class UpdateUserAdminSerializer(serializers.Serializer):
     userType = serializers.ChoiceField(choices=UserType.choices, required=False)
     securityPost = serializers.CharField(required=False, allow_blank=True, max_length=150)
     department = serializers.CharField(required=False, allow_blank=True, max_length=150)
-    phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    phone = IndianMobileNumberField(required=False, allow_blank=True, max_length=20)
     isActive = serializers.BooleanField(required=False)
 
     def validate(self, attrs):

@@ -25,5 +25,8 @@
     "smoke:auth": "node scripts/auth-integration-smoke-test.mjs",
     "smoke:e2e": "node scripts/e2e-workflow-smoke-test.mjs",
     "setup:db": "node scripts/setup-db-indexes.mjs"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

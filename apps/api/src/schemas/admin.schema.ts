@@ -4,7 +4,7 @@ import { UserRole, DisposalMethod } from '../constants/enums';
 export const disposalApprovalSchema = z.object({
   itemId: z.string().min(1, 'Item ID is required'),
   method: z.nativeEnum(DisposalMethod, {
-    errorMap: () => ({ message: 'Valid disposal method is required (DONATION, AUCTION, DESTRUCTION, RECYCLED)' }),
+    error: 'Valid disposal method is required (DONATION, AUCTION, DESTRUCTION, RECYCLED)',
   }),
   reason: z.string().min(5, 'Disposal justification/reason must be at least 5 characters').max(1000),
   recipientOrganization: z.string().max(200).optional(),

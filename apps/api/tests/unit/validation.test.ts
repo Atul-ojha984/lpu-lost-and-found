@@ -31,7 +31,7 @@ describe('Validation Schemas', () => {
       const result = registerSchema.safeParse(invalidEmailPayload);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.errors[0].message).toContain('Lovely Professional University domain');
+        expect(result.error.issues[0].message).toContain('Lovely Professional University domain');
       }
     });
 
@@ -47,7 +47,7 @@ describe('Validation Schemas', () => {
       const result = registerSchema.safeParse(mismatchPayload);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.errors[0].message).toEqual('Passwords do not match');
+        expect(result.error.issues[0].message).toEqual('Passwords do not match');
       }
     });
   });

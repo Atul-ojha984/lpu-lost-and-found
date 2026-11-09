@@ -15,10 +15,10 @@ export function validate(schemas: RequestValidationSchemas) {
         req.body = await schemas.body.parseAsync(req.body);
       }
       if (schemas.query) {
-        req.query = await schemas.query.parseAsync(req.query);
+        req.query = await schemas.query.parseAsync(req.query) as unknown as Request['query'];
       }
       if (schemas.params) {
-        req.params = await schemas.params.parseAsync(req.params);
+        req.params = await schemas.params.parseAsync(req.params) as unknown as Request['params'];
       }
       next();
     } catch (error) {
@@ -27,7 +27,7 @@ export function validate(schemas: RequestValidationSchemas) {
           ApiError.badRequest(
             'Request validation failed',
             'VALIDATION_ERROR',
-            error.errors.map((e) => ({
+            error.issues.map((e) => ({
               field: e.path.join('.'),
               message: e.message,
             }))

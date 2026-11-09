@@ -20,8 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR / 'apps'))
 
-# Load environment variables
-load_dotenv(BASE_DIR / '.env')
+# Load local environment variables during development. Production values must
+# come from the hosting platform's environment, never a bundled local .env file.
+if os.getenv('DJANGO_ENV', '').strip().lower() != 'production':
+    load_dotenv(BASE_DIR / '.env')
 
 # Core Security Settings
 DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').strip().lower()
@@ -124,21 +126,50 @@ ASGI_APPLICATION = 'config.asgi.application'
 
 # Database Setup (SQLite is a local-development fallback only)
 DEFAULT_SQLITE_PATH = (BASE_DIR / 'db.sqlite3').resolve()
+
+
+def _build_database_config(database_url: str | None, *, is_production: bool) -> dict:
+    """Parse the configured database URL and fail closed for production."""
+    configured_url = (database_url or '').strip()
+    if not configured_url:
+        if is_production:
+            raise ImproperlyConfigured(
+                'DATABASE_URL is missing. Set it in the Render backend service to the '
+                'Internal Database URL for the existing Render PostgreSQL database.'
+            )
+        configured_url = f'sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}'
+
+    try:
+        db_config = dj_database_url.parse(
+            configured_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    except (TypeError, ValueError, KeyError, IndexError) as exc:
+        raise ImproperlyConfigured(
+            'DATABASE_URL is invalid. Use a PostgreSQL connection URL for production '
+            'or an explicitly configured local database URL for development.'
+        ) from exc
+
+    if db_config.get('ENGINE') == 'django.db.backends.sqlite3':
+        db_name = db_config.get('NAME')
+        if not db_name or not os.path.isabs(str(db_name)):
+            db_config['NAME'] = str(
+                DEFAULT_SQLITE_PATH
+                if not db_name or db_name == 'db.sqlite3'
+                else (BASE_DIR / db_name).resolve()
+            )
+
+    if is_production and db_config.get('ENGINE') != 'django.db.backends.postgresql':
+        raise ImproperlyConfigured(
+            'Production deployments must use PostgreSQL. Set DATABASE_URL to the '
+            'Internal Database URL for the existing Render PostgreSQL database.'
+        )
+    return db_config
+
+
 DATABASE_URL = os.getenv('DATABASE_URL')
-if IS_PRODUCTION and not DATABASE_URL:
-    raise ImproperlyConfigured('DATABASE_URL must point to PostgreSQL in production.')
-DATABASE_URL = DATABASE_URL or f'sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}'
-_db_config = dj_database_url.config(
-    default=DATABASE_URL,
-    conn_max_age=600,
-    conn_health_checks=True,
-)
-if _db_config.get('ENGINE') == 'django.db.backends.sqlite3':
-    _db_name = _db_config.get('NAME')
-    if not _db_name or not os.path.isabs(str(_db_name)):
-        _db_config['NAME'] = str(DEFAULT_SQLITE_PATH if not _db_name or _db_name == 'db.sqlite3' else (BASE_DIR / _db_name).resolve())
-if IS_PRODUCTION and _db_config.get('ENGINE') != 'django.db.backends.postgresql':
-    raise ImproperlyConfigured('Production deployments must use PostgreSQL.')
+_db_config = _build_database_config(DATABASE_URL, is_production=IS_PRODUCTION)
 
 DATABASES = {
     'default': _db_config

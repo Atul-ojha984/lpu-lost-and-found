@@ -1,0 +1,49 @@
+# Exported from Render on 2026-11-09T19:36:07Z
+version: "1"
+services:
+- type: web
+  name: lpu-lost-found-backend-django-zf75
+  runtime: python
+  repo: https://github.com/Atul-ojha984/lpu-lost-and-found
+  plan: free
+  envVars:
+  - key: PYTHON_VERSION
+    sync: false
+  - key: CSRF_COOKIE_SECURE
+    sync: false
+  - key: SESSION_COOKIE_SECURE
+    sync: false
+  - key: SECRET_KEY
+    sync: false
+  - key: CSRF_TRUSTED_ORIGINS
+    sync: false
+  - key: DEBUG
+    sync: false
+  - key: DJANGO_ENV
+    sync: false
+  - key: SECURE_SSL_REDIRECT
+    sync: false
+  - key: MEDIA_ROOT
+    sync: false
+  - key: JWT_SIGNING_KEY
+    sync: false
+  - key: PRIVATE_EVIDENCE_ROOT
+    sync: false
+  - key: ALLOWED_HOSTS
+    sync: false
+  - key: CORS_ALLOWED_ORIGINS
+    sync: false
+  - key: SECURE_HSTS_SECONDS
+    sync: false
+  - key: FIELD_ENCRYPTION_KEY
+    sync: false
+  - key: DATABASE_URL
+    sync: false
+  region: oregon
+  buildCommand: pip install -r requirements.txt && python manage.py collectstatic
+    --noinput
+  startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application
+    --bind 0.0.0.0:$PORT --workers 1
+  healthCheckPath: /api/v1/health
+  autoDeployTrigger: commit
+  rootDir: backend

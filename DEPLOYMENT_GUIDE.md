@@ -1,6 +1,6 @@
 # LPU Lost & Found Deployment Guide
 
-Last inspected: 2026-11-09. This guide describes the repository configuration and local verification; it does not claim that the latest Render deployment has succeeded.
+Last inspected: 2026-11-09. The Render health endpoint was verified after the database environment variable was configured; other production-readiness checklist items remain open.
 
 ## Deployment readiness report
 
@@ -11,7 +11,7 @@ Last inspected: 2026-11-09. This guide describes the repository configuration an
 | Legacy API | `apps/api`: Express 4 and Mongoose 8 with a MongoDB configuration template. The current frontend does not use this service; it is not a verified replacement for the Django API. |
 | Local database | SQLite is used for local development and tests when `DATABASE_URL` is unset outside production. |
 | Production database | PostgreSQL only. Production settings fail closed unless `DATABASE_URL` parses as PostgreSQL. `backend/render.yaml` requires `DATABASE_URL` to be entered manually (`sync: false`) and does not create or link a database. |
-| Render | Django web service runs in Oregon on the free plan; health endpoint is `/api/v1/health`. Current Blueprint uses temporary `/tmp` media paths and has no cron service or persistent disk. The latest deployment is not verified by this guide. |
+| Render | Django web service runs in Oregon on the free plan; `/api/v1/health` returned HTTP 200 with PostgreSQL connected on 2026-11-09. Current Blueprint uses temporary `/tmp` media paths and has no cron service or persistent disk. |
 | Vercel | Next.js App Router; no custom rewrite or `vercel.json` is needed for the current routes. |
 | Background/realtime | Current app uses HTTP polling for dashboard updates. Report expiry has a management command but no scheduled Render job in the current Blueprint. Django Channels, Redis, and Celery are not configured in the active Django service. |
 | Secrets and local data | No tracked `.env` files were found. Local `.env`, SQLite, media, and private evidence paths are ignored by Git. |
@@ -20,9 +20,9 @@ Last inspected: 2026-11-09. This guide describes the repository configuration an
 
 The active Django backend uses Django ORM and PostgreSQL in production. MongoDB configuration under `apps/api` belongs to a separate legacy Express service and does not configure this backend. The existing Render PostgreSQL database is the required production database; do not change the database engine or create a replacement database for this deployment.
 
-The reported Render failure is caused by the backend service starting without `DATABASE_URL`. Django intentionally refuses to start in production without a PostgreSQL URL. Add the existing database's **Internal Database URL** to the Render web service as `DATABASE_URL`. The current `backend/render.yaml` marks this value `sync: false`, so Render requires it to be entered in the service's Environment page or when syncing the Blueprint; it does not link/create a database. A Render internal URL can be used as provided when the service and database share an account and region; for an external PostgreSQL URL, require TLS with `sslmode=require`.
+The Render startup failure was caused by the backend service starting without `DATABASE_URL`. Django correctly refused to start in production without PostgreSQL. The existing database's **Internal Database URL** is now set as `DATABASE_URL` in the Render service environment; the value is not stored in this repository. The current `backend/render.yaml` marks the variable `sync: false`, so the Blueprint does not link or create a database and a service environment value must be supplied. Render internal URLs work when the service and database share an account and region; external PostgreSQL URLs should require TLS with `sslmode=require`.
 
-The `KeyError: 'collectstatic'` is secondary: Django's command lookup imports settings during app discovery, and settings raise when the production database URL is missing. Render build logs for the latest failed deployment show both the `KeyError` and the `ImproperlyConfigured` database error. The source has `django.contrib.staticfiles` installed and WhiteNoise configured. Production now skips loading a local `.env` file, so Render environment variables are authoritative. If a collectstatic error remains after `DATABASE_URL` is set, inspect the subsequent traceback separately.
+The earlier `KeyError: 'collectstatic'` was secondary: Django's command lookup imported settings during app discovery, and settings raised because the production database URL was missing. The failing build logs showed both errors. With the database URL configured, the service deployed and the health check confirmed a PostgreSQL connection. The source has `django.contrib.staticfiles` installed and WhiteNoise configured. Production now skips loading a local `.env` file, so Render environment variables are authoritative.
 
 ## Vercel frontend
 
@@ -45,11 +45,11 @@ The existing blueprint is `backend/render.yaml`. When creating the Blueprint in 
 - Start: `python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1`
 - Health check: `/api/v1/health`
 - Upload paths: `MEDIA_ROOT=/tmp/media` and `PRIVATE_EVIDENCE_ROOT=/tmp/private_evidence` (ephemeral; not production-durable)
-- Database: `DATABASE_URL` is `sync: false` and must be entered manually; no database resource or cron service is defined in this Blueprint
+- Database: `DATABASE_URL` is `sync: false`; it is configured in the current Render service environment. No database resource or cron service is defined in this Blueprint
 
 For the current service, the backend hostname is `lpu-lost-found-backend-django-zf75.onrender.com`; include it in `ALLOWED_HOSTS` and use the API base URL `https://lpu-lost-found-backend-django-zf75.onrender.com/api/v1` in Vercel. Add the exact deployed Vercel origin to both CORS and CSRF variables.
 
-The current Blueprint does not create or link a database resource; set `DATABASE_URL` to the already-existing Render PostgreSQL instance. It runs `migrate` in the single web process's start command before Gunicorn. The free web service has one instance. The report-expiry management command is not scheduled by the current Blueprint because its cron service was removed.
+The current Blueprint does not create or link a database resource; the existing Render PostgreSQL instance is configured through the service environment. It runs `migrate` in the single web process's start command before Gunicorn. The free web service has one instance. The report-expiry management command is not scheduled by the current Blueprint because its cron service was removed.
 
 The service currently stores public media and private evidence under `/tmp`, which is ephemeral and can be lost on restart or redeploy. Treat durable media/evidence storage as a production blocker before collecting real user uploads; configure a persistent disk or object storage on a paid/compatible service plan. Render persistent disks attach to one service instance and affect scaling/deploy behavior. [Render persistent disks](https://render.com/docs/disks).
 
@@ -66,7 +66,7 @@ Set values in the Render dashboard/Blueprint secret store, never in frontend var
 | `SECRET_KEY` | Unique high-entropy Django secret; keep stable across deploys. |
 | `JWT_SIGNING_KEY` | Separate stable high-entropy signing key. |
 | `FIELD_ENCRYPTION_KEY` | Stable key in the format accepted by `backend/apps/core/crypto.py`; losing it can make protected identifying details unreadable. |
-| `DATABASE_URL` | **Required.** Internal connection URL for the existing Render PostgreSQL database. Set in the Render service environment; never put it in GitHub, `.env.example`, or frontend variables. |
+| `DATABASE_URL` | **Required and configured in Render.** Internal URL for the existing PostgreSQL database; never put its value in GitHub, `.env.example`, or frontend variables. |
 | `ALLOWED_HOSTS` | **Required.** `lpu-lost-found-backend-django-zf75.onrender.com` plus any configured backend custom domain. |
 | `CORS_ALLOWED_ORIGINS` | **Required.** Exact deployed Vercel frontend origin(s), comma-separated. |
 | `CSRF_TRUSTED_ORIGINS` | **Required.** Exact HTTPS frontend origin(s) used for trusted unsafe requests. |
@@ -136,15 +136,16 @@ The legacy Express/Mongoose service is separate from the active Next.js-to-Djang
 
 ## Deployment checklist
 
-- [ ] Confirm the existing Render PostgreSQL resource and that the backend service uses its same-region internal URL as `DATABASE_URL`.
-- [ ] Review the intended GitHub diff and confirm the `main` branch and remote.
+- [x] Confirm the existing Render PostgreSQL resource and configure its same-region internal URL as `DATABASE_URL` on the backend service.
+- [x] Review and push the deployment fix to the GitHub `main` branch.
 - [ ] Set Vercel `NEXT_PUBLIC_API_URL` to the current Render API base URL.
 - [ ] Set the exact production `ALLOWED_HOSTS`, CORS/CSRF origins, and stable Django/JWT/encryption secrets in Render.
 - [ ] Confirm database plan/expiry and restrict its IP allowlist to required sources.
 - [ ] Configure durable storage for public media and private evidence before accepting real user uploads.
 - [ ] Restore the report-expiry schedule if automatic expiry is a production requirement.
 - [ ] Back up PostgreSQL and media/evidence before a production migration or storage change.
-- [ ] Verify the deployed health endpoint and test authentication, role boundaries, uploads, claims, OTP, direct handover, receipts, audit, and Recovery History.
+- [x] Verify `/api/v1/health`; it returned HTTP 200 with PostgreSQL connected on 2026-11-09.
+- [ ] Verify deployed authentication, role boundaries, uploads, claims, OTP, direct handover, receipts, audit, and Recovery History.
 - [ ] If using a Render persistent disk for uploads, confirm its single-instance limit is acceptable.
 
 ## Rollback

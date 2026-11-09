@@ -165,12 +165,18 @@ test('Production API configuration never falls back to localhost', () => {
 // -----------------------------------------------------------------------------
 test('Login page contains split-screen branding, error alert, and show/hide password', () => {
   const loginPath = resolve(rootDir, 'apps/web/src/app/login/page.tsx');
+  const apiClientPath = resolve(rootDir, 'apps/web/src/lib/api-client.ts');
   const content = readFileSync(loginPath, 'utf8');
+  const apiClient = readFileSync(apiClientPath, 'utf8');
 
   assert.ok(content.includes('Welcome Back'), 'Must have Welcome Back heading');
   assert.ok(content.includes('showPassword'), 'Must support show/hide password toggle');
   assert.ok(content.includes('apiClient.login'), 'Must authenticate against backend API');
   assert.ok(content.includes('lpu-btn-primary'), 'Must use teal submit button');
+  assert.ok(apiClient.includes("apiFetch<any>('auth/login'"), 'Login must call the Django auth endpoint');
+  assert.ok(apiClient.includes('emailOrRegNo: identifier') && apiClient.includes('registration_number: identifier'), 'Login must send the identifier fields accepted by Django');
+  assert.ok(apiClient.includes('password: payload.password'), 'Login must submit the entered password to the backend');
+  assert.ok(apiClient.includes('res.accessToken || res.token'), 'Login must accept the access-token response fields');
 });
 
 // -----------------------------------------------------------------------------

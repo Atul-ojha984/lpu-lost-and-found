@@ -164,12 +164,14 @@ class Command(BaseCommand):
                     user.phone = doc.get('phone', '')
                     user.is_active = doc.get('isActive', True)
 
-                    # Password hash compatibility validation
+                    # Preserve supported encoded hashes. Express stores raw
+                    # bcrypt hashes, which Django's raw bcrypt hasher accepts
+                    # as `bcrypt$$2b$...`; successful login upgrades them to
+                    # the preferred bcrypt_sha256 hasher.
                     pw_hash = doc.get('passwordHash', '')
-                    if pw_hash.startswith('$2a$') or pw_hash.startswith('$2b$'):
-                        # Compatible bcrypt hash: wrap for Django's BCryptSHA256PasswordHasher or set directly
-                        user.password = f"bcrypt_sha256${pw_hash}" if not pw_hash.startswith('bcrypt_sha256$') else pw_hash
-                    elif pw_hash.startswith('pbkdf2_sha256$') or pw_hash.startswith('argon2'):
+                    if pw_hash.startswith(('$2a$', '$2b$', '$2y$')):
+                        user.password = f'bcrypt${pw_hash}'
+                    elif pw_hash.startswith(('bcrypt_sha256$', 'pbkdf2_sha256$', 'argon2$')):
                         user.password = pw_hash
                     else:
                         user.set_unusable_password()

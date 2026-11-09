@@ -5,6 +5,7 @@ Phase 1 Test Suite: Identity, Authentication & JWT Access Control
 ==============================================================================
 """
 
+import bcrypt
 import pytest
 from rest_framework.test import APIClient
 from apps.accounts.models import User, UserRole, UserType
@@ -112,6 +113,50 @@ class TestAuthenticationSuite:
         body = response.json()
         assert body['success'] is False
         assert body['error']['code'] == 'VALIDATION_ERROR'
+
+    def test_login_migrates_legacy_imported_bcrypt_hash(self):
+        """A legacy raw-bcrypt hash mislabeled by the old importer is verified and upgraded."""
+        password = 'LegacyImportedPassword@123'
+        raw_bcrypt_hash = bcrypt.hashpw(
+            password.encode('utf-8'),
+            bcrypt.gensalt(rounds=4),
+        ).decode('ascii')
+        user = User.objects.create_user(
+            email='legacy.bcrypt@lpu.in',
+            registration_number='LEGACYBCRYPT1',
+            full_name='Legacy Bcrypt User',
+            password='TemporaryPassword@123',
+        )
+        # The pre-fix Mongo import command wrapped raw Express bcrypt hashes
+        # with Django's bcrypt_sha256 algorithm name, despite not SHA-256
+        # preprocessing the password.
+        malformed_legacy_hash = f'bcrypt_sha256${raw_bcrypt_hash}'
+        user.password = malformed_legacy_hash
+        user.save(update_fields=['password'])
+
+        wrong_password = self.client.post(
+            '/api/v1/auth/login/',
+            {'emailOrRegNo': 'LEGACYBCRYPT1', 'password': 'NotThePassword'},
+            format='json',
+        )
+        assert wrong_password.status_code == 400
+        user.refresh_from_db()
+        assert user.password == malformed_legacy_hash
+
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'emailOrRegNo': 'LEGACYBCRYPT1', 'password': password},
+            format='json',
+        )
+        assert response.status_code == 200
+        token = response.json()['data']['accessToken']
+        assert token
+        authenticated_client = APIClient()
+        authenticated_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        assert authenticated_client.get('/api/v1/auth/me/').status_code == 200
+        user.refresh_from_db()
+        assert user.password != malformed_legacy_hash
+        assert user.check_password(password)
 
     def test_current_user_profile_access(self):
         """Profile /api/v1/auth/me/ enforces authentication and returns profile."""

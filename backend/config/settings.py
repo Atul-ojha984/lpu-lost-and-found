@@ -181,6 +181,9 @@ AUTH_USER_MODEL = 'accounts.User'
 # Password validation & Hashers (Supporting Bcrypt compatibility with Express backend)
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    # Verify raw bcrypt hashes imported from the previous Express system.
+    # Successful login upgrades these to BCryptSHA256 automatically.
+    'django.contrib.auth.hashers.BCryptPasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
     'django.contrib.auth.hashers.Argon2PasswordHasher',

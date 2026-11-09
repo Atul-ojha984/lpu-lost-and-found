@@ -5,10 +5,12 @@ Phase 2 Test Suite: MongoDB to Django ORM Import & Mapping Command
 ==============================================================================
 """
 
+import bcrypt
 import json
 import pytest
 from pathlib import Path
 from django.core.management import call_command
+from rest_framework.test import APIClient
 from apps.accounts.models import User, UserRole
 from apps.items.models import ItemCategory, Item
 from apps.locations.models import Location
@@ -17,6 +19,11 @@ from apps.verification.models import PrivateDetail
 @pytest.mark.django_db
 def test_import_mongo_data_from_json(tmp_path):
     """Verifies that import_mongo_data reads JSON exports, validates references, and imports cleanly."""
+    imported_password = 'ImportedBcryptPassword@123'
+    valid_bcrypt_hash = bcrypt.hashpw(
+        imported_password.encode('utf-8'),
+        bcrypt.gensalt(rounds=4),
+    ).decode('ascii')
     json_dir = tmp_path / "mongo_exports"
     json_dir.mkdir()
 
@@ -48,7 +55,7 @@ def test_import_mongo_data_from_json(tmp_path):
             'email': 'student.mongo@lpu.in',
             'fullName': 'Mongo Test Student',
             'role': 'STUDENT_STAFF',
-            'passwordHash': '$2b$10$w...validbcryptmockhash12345678901234567890',
+            'passwordHash': valid_bcrypt_hash,
             'isActive': True,
         }
     ]
@@ -94,9 +101,19 @@ def test_import_mongo_data_from_json(tmp_path):
     location = Location.objects.get(code='UNI_MALL')
     assert location.has_security_desk is True
 
-    # Assert user imported and bcrypt format recognized
+    # Assert raw Express bcrypt is represented using Django's legacy bcrypt
+    # format and can authenticate, then upgrades to the preferred hasher.
     user = User.objects.get(registration_number='12009988')
     assert user.full_name == 'Mongo Test Student'
+    assert user.password.startswith('bcrypt$$2')
+
+    response = APIClient().post(
+        '/api/v1/auth/login/',
+        {'emailOrRegNo': '12009988', 'password': imported_password},
+        format='json',
+    )
+    assert response.status_code == 200
+    user.refresh_from_db()
     assert user.password.startswith('bcrypt_sha256$')
 
     # Assert item imported with correct foreign key mappings

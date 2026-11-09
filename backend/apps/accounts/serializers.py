@@ -9,6 +9,7 @@ from django.conf import settings
 from rest_framework import serializers
 from .models import User, UserRole, UserType
 from .phone import INVALID_INDIAN_MOBILE_MESSAGE, normalize_indian_mobile_number
+from .passwords import verify_user_password
 
 
 class IndianMobileNumberField(serializers.CharField):
@@ -237,7 +238,7 @@ class LoginSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError("Invalid login credentials provided.")
 
-        is_valid = user.check_password(password)
+        is_valid = verify_user_password(user, password)
         if not is_valid and getattr(settings, 'DEBUG', False):
             # Development/demo password fallback for seamless testing
             dev_student_passwords = {'DemoStudent2026!', 'Student@123', 'Student@12345'}

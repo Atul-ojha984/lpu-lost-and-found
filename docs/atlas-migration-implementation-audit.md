@@ -110,3 +110,26 @@ The existing `backend/config/settings.py`, `backend/requirements.txt`, and `back
 - MongoDB Django Backend 5.2 feature compatibility: https://www.mongodb.com/docs/languages/python/django-mongodb/v5.2/limitations-upcoming/
 - MongoDB Django Backend compatibility matrix: https://www.mongodb.com/docs/drivers/compatibility/?driver-language=python&python-driver-framework=django
 - MongoDB Django Backend 5.2 release notes: https://www.mongodb.com/docs/languages/python/django-mongodb/v5.2/reference/release-notes/
+
+
+## Selected implementation path (confirmed)
+
+The project owner selected **Option 1: preserve the active Django 5.2 / DRF backend and migrate it to MongoDB Atlas using the official Django MongoDB Backend 5.2 release line**.
+
+Non-negotiable boundaries:
+- Keep `apps/web` unchanged unless API contract tests identify a necessary compatibility fix.
+- Keep the current Django API as the active API; preserve endpoint paths, authentication semantics, permissions, and response envelopes.
+- Keep `apps/api` (legacy Express/Mongoose) untouched and do not switch traffic to it.
+- Keep `main` unchanged while work is performed on `migration/mongodb-atlas`.
+- Do not configure production to use Atlas until the refactor, import rehearsal, and acceptance gates pass.
+
+Implementation sequence:
+1. Pin the exact Django MongoDB Backend 5.2 patch release and verify its dependency constraints against the repository's installed Django/Python versions.
+2. Create a disposable Atlas test database / replica-set test target; never use production data for the initial proof of concept.
+3. Build a minimal compatibility spike for the custom user model, UUID primary keys, authentication, representative relations, indexes, and API serialization.
+4. Refactor high-risk state transitions to MongoDB-supported atomic conditional writes and/or the backend's supported transaction API. Add concurrency and retry tests before changing the database setting.
+5. Refactor unsupported queryset operations and audit all constraints, migrations, serializers, admin, filters, background jobs, and management commands.
+6. Implement a repeatable PostgreSQL export → transformation → Atlas import command with dry-run, validation report, idempotency, and rollback instructions.
+7. Update settings, dependencies, Render configuration, and environment documentation only after test gates pass.
+
+No runtime dependency, settings, model, or service code has been switched yet. The migration remains in the assessment/refactor phase.

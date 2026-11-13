@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 3 - Critical business logic redesign: NOT STARTED**
+**Phase 5 - PostgreSQL-to-MongoDB migration tool: NOT STARTED.** Phases 0-4 have been implemented and locally validated; Phase 4 is not an Atlas or production cutover approval.
 
 ## Phase status
 
@@ -16,8 +16,8 @@
 | 0 - Repository initialization | COMPLETED | Audited repository/branch and preserved user changes; tracker committed. |
 | 1 - Complete codebase audit | COMPLETED | Compatibility report committed as `c36fa5f`; baseline checks/tests recorded. |
 | 2 - MongoDB database architecture | COMPLETED | Proposed reference-first document mapping and candidate indexes documented; Atlas-generated indexes and runtime behavior remain unverified. |
-| 3 - Critical business logic redesign | NOT STARTED | Must replace row locks while proving claim, OTP, handover, locker, custody and admin guarantees. |
-| 4 - Backend database migration | NOT STARTED | No Mongo engine configuration or application-code changes made. |
+| 3 - Critical business logic redesign | VERIFIED | Backend-aware transactions, workflow mutexes, conflict retry, and Mongo call-site refactors pass real local replica-set integration and full application Mongo tests. Atlas staging and operation-specific concurrency stress remain release gates. |
+| 4 - Backend database migration | COMPLETED | Opt-in Mongo settings, ObjectId contrib migration graph, domain snapshots, required schema adaptations, and pinned backend locally migrate and pass the application suite. PostgreSQL remains default; Atlas is not configured. |
 | 5 - PostgreSQL-to-MongoDB data migration tool | NOT STARTED | Imports must remain explicit and guarded; production data must remain unchanged. |
 | 6 - Automated testing | NOT STARTED | Requires isolated MongoDB replica-set integration/concurrency environment. |
 | 7 - Frontend/API regression | NOT STARTED | Preserve `/api/v1` contracts and current UI. |
@@ -112,7 +112,7 @@
 | `backend/.venv/Scripts/python.exe manage.py makemigrations --check --dry-run` (run from `backend/`) | PASS - no model changes detected. |
 | `backend/.venv/Scripts/python.exe -m pytest` (run from `backend/`) | PASS - 170 passed, 1 skipped in 159.17s. An initial invocation from repository root failed collection because pytest did not load backend settings; rerun from `backend/` succeeded. |
 | `npm run test:web` | PASS - 11 passed, 0 failed. |
-| MongoDB Atlas index creation/explain/concurrency validation | NOT RUN - no isolated MongoDB replica set or Atlas connection configured. |
+| MongoDB Atlas index creation/explain/concurrency validation | NOT RUN in Atlas; local replica-set validation was performed in Phase 3/4. |
 
 ### Known issues and risks
 
@@ -123,7 +123,7 @@
 
 ### Commit
 
-- Pending final review and commit for Phase 2.
+- `3fa1615 docs: define MongoDB Atlas architecture and data mapping`.
 
 ## Existing uncommitted user changes preserved
 
@@ -135,7 +135,7 @@
 - `backend/apps/accounts/management/commands/provision_initial_admin.py`
 - `backend/tests/test_bootstrap_admin_command.py`
 
-These include prior Mongo-to-PostgreSQL work and initial-admin provisioning work. They must not be mistaken for PostgreSQL-to-MongoDB migration implementation.
+These were present before this migration implementation and must not be discarded. The migration implementation only made compatibility edits needed for the configured Mongo test path; later commits must stage only intentional task files and preserve the rest of each file's existing content.
 
 ## Architectural decisions
 
@@ -145,8 +145,74 @@ These include prior Mongo-to-PostgreSQL work and initial-admin provisioning work
 - Keep PostgreSQL as an available migration source and rollback reference.
 - Preserve existing UUID domain identifiers and API string formats where feasible.
 - Do not change the production database default, import production data, deploy, or cut over traffic without separate explicit approval.
-- A setting-only engine swap is unsafe; critical concurrency and append-only guarantees require redesign and real Atlas tests first.
+- A setting-only engine swap is unsafe; critical concurrency and append-only guarantees require the implemented workflow coordination, then Atlas staging tests before any cutover.
 
-## Next action
+## Phase 3 - Critical business logic redesign
 
-Start Phase 3: redesign and test Mongo-safe claim, OTP, handover, locker, custody, disposal, and administrator concurrency guarantees before changing the database backend.
+### Completed tasks
+
+- Added `WorkflowMutex` records and shared item, user, custody, and administrator aggregate scopes. Existing PostgreSQL paths continue to use Django transactions/row locks.
+- Added a transaction facade for PostgreSQL and the official Mongo transaction API, including explicit rollback and safe abort behavior when nested Mongo atomic blocks fail and their exceptions are caught by callers.
+- Added bounded retries for labeled transient Mongo transaction errors only. Unknown commit outcomes are not replayed.
+- Refactored claim, direct recovery, OTP/handover, locker/custody, reporting quota/expiry, disposal, matching, notifications, and administrator-sensitive operations to use common workflow scopes and reread state in their transaction.
+- Kept the existing public API and frontend workflows. No UI files were modified.
+- Added real replica-set tests for transaction commit, rollback, `on_commit`, nested-failure abort, and competing transactions on shared scopes.
+
+### Tests and results
+
+| Validation | Result |
+|---|---|
+| Mongo transaction primitive suite on local replica set | PASS - 5 tests, including a real two-thread Mongo transaction conflict/retry. |
+| Full backend suite under `config.settings_mongodb`, Python 3.12.14, Django 5.2.19, backend 5.2.4 | PASS - 176 passed, 1 PostgreSQL-only row-lock test skipped. |
+| Full default SQLite regression suite under Python 3.12.14 | PASS - 171 passed, 6 backend-specific tests skipped. |
+
+### Limits
+
+- Full endpoint workflow tests run against MongoDB; simultaneous endpoint stress is currently represented by the real shared-scope concurrency test plus API-level workflow coverage. Run explicit per-endpoint race tests on isolated Atlas staging before production cutover.
+- The current local replica set is disposable local infrastructure. No Atlas or production data was used.
+
+### Commit
+
+- Phase 3 implementation and Phase 4 test harness are in final review; commit is pending.
+
+## Phase 4 - Backend database migration
+
+### Completed tasks
+
+- Added pinned Django MongoDB Backend 5.2.4 and constrained Django to the matching 5.2 minor line.
+- Added opt-in `config.settings_mongodb`; PostgreSQL remains the default and production setting. Mongo settings require environment-supplied URI/database and reject localhost in production mode.
+- Added Mongo-specific app configs for Django admin/auth/contenttypes using `ObjectIdAutoField`, plus isolated migration modules for contrib and domain apps. Domain UUID IDs remain UUIDs.
+- Replaced the functional custody-location lower-case uniqueness constraint with a normalized `name_key`; the relational migration checks for collisions and preserves existing records.
+- Removed redundant duplicate field indexes and kept the existing query indexes/unique fields.
+- Preserved existing API shapes; implemented the exact lookup/write changes required for Mongo-compatible claim search and notification idempotency.
+- Added docs at `docs/MONGODB_ATLAS_BACKEND_IMPLEMENTATION.md`.
+
+### Tests and results
+
+| Validation | Result |
+|---|---|
+| Mongo-configured Django system check | PASS - 0 issues. |
+| Mongo `makemigrations --check --dry-run` | PASS - no model drift. |
+| Fresh Mongo schema migration | PASS - all contrib and domain migrations applied to disposable local database `lpu_phase4_migrate02`. |
+| Full Mongo backend suite | PASS - 176 passed, 1 PostgreSQL row-lock-only skip. |
+| Full default SQLite suite | PASS - 171 passed, 6 expected backend-specific skips. |
+| Frontend unit/contract suite | PASS - 11 passed. |
+| Frontend TypeScript | PASS. |
+| Frontend ESLint | PASS with one existing `react-hooks/set-state-in-effect` warning at `apps/web/src/app/login/page.tsx:37`; no errors. |
+| Frontend production build | PASS - Next.js generated all 27 pages/routes. |
+
+### Risks and limits
+
+- Mongo migrations/indexes and workflows have not yet been applied or verified on Atlas. No Atlas URI or Atlas staging access was used.
+- PostgreSQL remains source of truth; migration import, reconciliation, Atlas index checks, media/evidence storage, deployment, and rollback are still pending.
+- Do not select `config.settings_mongodb` for Render or production before later phases and explicit approval.
+
+### Commit
+
+- Phase 4 implementation is pending final diff review and commit.
+
+## Current outstanding work and next action
+
+Start Phase 5 by implementing a distinct PostgreSQL-to-MongoDB migration command with dry-run, validation-only, import, resume/checkpoint, retries, duplicate detection, relationship resolution, and count reconciliation. It must never select production automatically. Preserve the existing prior Mongo-to-PostgreSQL importer and its user changes.
+
+The last completed task is the local Mongo schema migration and complete Mongo/default regression suites. The next task is Phase 5 design/implementation; following that, continue Phases 6-10 sequentially.

@@ -5,7 +5,7 @@ Custody App Views
 ==============================================================================
 """
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
 from uuid import UUID
@@ -16,6 +16,12 @@ from rest_framework.permissions import AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
 from apps.accounts.permissions import IsCampusAdmin, IsSecurityOrAdmin
+from apps.core.workflow_concurrency import (
+    CUSTODY_INVENTORY_SCOPE,
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 from apps.audit.models import AuditEntry, AuditAction
 from apps.items.models import Item, ItemStatus
 from apps.items.serializers import PublicItemSerializer
@@ -81,11 +87,12 @@ class CustodyLocationListCreateAPIView(APIView):
             queryset = queryset.filter(is_active=True)
         return Response(CustodyLocationSerializer(queryset, many=True, context={'request': request}).data)
 
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = CustodyLocationWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            with transaction.atomic():
+            with workflow_transaction(CUSTODY_INVENTORY_SCOPE):
                 location = serializer.save(created_by=request.user, updated_by=request.user)
                 _audit_configuration(
                     request, 'CustodyLocation', location.id, 'CUSTODY_LOCATION_CREATED',
@@ -102,10 +109,11 @@ class CustodyLocationDetailAPIView(APIView):
     """Admin-only edit, archive, and safe deletion for custody locations."""
     permission_classes = [IsCampusAdmin]
 
+    @retry_transient_mongo_transaction()
     def patch(self, request, location_id):
-        with transaction.atomic():
+        with workflow_transaction(CUSTODY_INVENTORY_SCOPE):
             try:
-                location = CustodyLocation.objects.select_for_update().get(pk=location_id)
+                location = CustodyLocation.objects.get(pk=location_id)
             except (CustodyLocation.DoesNotExist, ValueError):
                 return Response({'message': 'Custody location not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -143,7 +151,7 @@ class CustodyLocationDetailAPIView(APIView):
             updated = serializer.save(updated_by=request.user)
             if updated.name != previous['name']:
                 timestamp = timezone.now()
-                for locker in updated.lockers.select_for_update().all():
+                for locker in updated.lockers.all():
                     locker.location = updated.name
                     locker.updated_by = request.user
                     locker.save(update_fields=['location', 'updated_by', 'updated_at'])
@@ -165,10 +173,11 @@ class CustodyLocationDetailAPIView(APIView):
         updated = CustodyLocation.objects.select_related('created_by', 'updated_by').prefetch_related('lockers').get(pk=updated.pk)
         return Response(CustodyLocationSerializer(updated, context={'request': request}).data)
 
+    @retry_transient_mongo_transaction()
     def delete(self, request, location_id):
-        with transaction.atomic():
+        with workflow_transaction(CUSTODY_INVENTORY_SCOPE):
             try:
-                location = CustodyLocation.objects.select_for_update().get(pk=location_id)
+                location = CustodyLocation.objects.get(pk=location_id)
             except (CustodyLocation.DoesNotExist, ValueError):
                 return Response({'message': 'Custody location not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -258,10 +267,11 @@ class LockerListCreateAPIView(APIView):
             lockers = lockers.filter(custody_location__is_active=True)
         return Response(LockerSerializer(lockers, many=True).data, status=status.HTTP_200_OK)
 
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = LockerCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
+        with workflow_transaction(CUSTODY_INVENTORY_SCOPE):
             locker = serializer.save(updated_by=request.user)
             _touch_custody_location(locker.custody_location, request.user)
             if serializer.legacy_location_created:
@@ -289,10 +299,11 @@ class LockerDetailAPIView(APIView):
     """Administrators manage locker configuration; history remains immutable."""
     permission_classes = [IsCampusAdmin]
 
+    @retry_transient_mongo_transaction()
     def patch(self, request, locker_id):
-        with transaction.atomic():
+        with workflow_transaction(CUSTODY_INVENTORY_SCOPE):
             try:
-                locker = Locker.objects.select_for_update().get(pk=locker_id)
+                locker = Locker.objects.get(pk=locker_id)
             except (Locker.DoesNotExist, ValueError):
                 return Response({'message': 'Locker not found.'}, status=status.HTTP_404_NOT_FOUND)
             if locker.current_item_id and 'lockerNumber' in request.data:
@@ -340,10 +351,11 @@ class LockerDetailAPIView(APIView):
         locker = Locker.objects.select_related('current_item', 'custody_location', 'updated_by').get(pk=locker.pk)
         return Response(LockerSerializer(locker).data, status=status.HTTP_200_OK)
 
+    @retry_transient_mongo_transaction()
     def delete(self, request, locker_id):
-        with transaction.atomic():
+        with workflow_transaction(CUSTODY_INVENTORY_SCOPE):
             try:
-                locker = Locker.objects.select_for_update().get(pk=locker_id)
+                locker = Locker.objects.get(pk=locker_id)
             except (Locker.DoesNotExist, ValueError):
                 return Response({'message': 'Locker not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -395,13 +407,14 @@ class LockerAssignmentAPIView(APIView):
     """Assign, move, or release an item's registered locker allocation."""
     permission_classes = [IsSecurityOrAdmin]
 
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = LockerAssignmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
-        with transaction.atomic():
+        with workflow_transaction(item_scope(values['itemId']), CUSTODY_INVENTORY_SCOPE):
             try:
-                item = Item.objects.select_for_update().get(pk=values['itemId'], is_archived=False)
+                item = Item.objects.get(pk=values['itemId'], is_archived=False)
             except (Item.DoesNotExist, ValueError):
                 return Response({'message': 'Active item not found.'}, status=status.HTTP_404_NOT_FOUND)
             if item.status not in LOCKABLE_ITEM_STATUSES:
@@ -414,7 +427,7 @@ class LockerAssignmentAPIView(APIView):
                 return Response({'message': 'Locker not found.'}, status=status.HTTP_404_NOT_FOUND)
             locker_ids = [locker_id for locker_id in (current_locker_id, new_locker_id) if locker_id]
             locked_lockers = list(
-                Locker.objects.select_for_update().select_related('custody_location')
+                Locker.objects.select_related('custody_location')
                 .filter(pk__in=locker_ids).order_by('pk')
             )
             current_locker = next((locker for locker in locked_lockers if locker.current_item_id == item.id), None)
@@ -580,14 +593,15 @@ class CustodyTransferAPIView(APIView):
         request=CustodyTransferInputSerializer,
         responses={201: CustodyRecordSerializer},
     )
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = CustodyTransferInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
 
-        with transaction.atomic():
+        with workflow_transaction(item_scope(vd['itemId']), CUSTODY_INVENTORY_SCOPE):
             try:
-                item = Item.objects.select_for_update().get(pk=vd['itemId'], is_archived=False)
+                item = Item.objects.get(pk=vd['itemId'], is_archived=False)
             except Item.DoesNotExist:
                 return Response(
                     {
@@ -624,7 +638,7 @@ class CustodyTransferAPIView(APIView):
                 requested_locker_number = Locker.objects.filter(pk=requested_locker_id).values_list('locker_number', flat=True).first() or ''
             locker_ids = [locker_id for locker_id in (previous_locker_id, requested_locker_id) if locker_id]
             locked_lockers = list(
-                Locker.objects.select_for_update().select_related('custody_location')
+                Locker.objects.select_related('custody_location')
                 .filter(pk__in=locker_ids).order_by('pk')
             )
             previous_locker = next((locker for locker in locked_lockers if locker.current_item_id == item.id), None)

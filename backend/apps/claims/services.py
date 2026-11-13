@@ -9,7 +9,6 @@ import logging
 import secrets
 import uuid
 from datetime import timedelta
-from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotFound
@@ -19,6 +18,11 @@ from apps.audit.models import AuditEntry, AuditAction
 from apps.items.models import Item, ItemStatus, ItemType
 from apps.verification.models import VerificationChallenge
 from apps.handovers.models import DirectRecovery, DirectRecoveryStatus, Handover
+from apps.core.workflow_concurrency import (
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 from .models import Claim, ClaimChallengeAnswer, ClaimStatus
 
 logger = logging.getLogger(__name__)
@@ -27,6 +31,7 @@ def generate_secure_numeric_otp(digits: int = 6) -> str:
     """Generates a cryptographically strong numeric OTP string."""
     return ''.join(str(secrets.randbelow(10)) for _ in range(digits))
 
+@retry_transient_mongo_transaction()
 def submit_claim(user, item_id: str, statement: str, challenge_answers: list = None, private_evidence_urls: list = None, req_ip: str = '127.0.0.1', user_agent: str = '') -> Claim:
     """Submit an ownership claim against an item."""
     item = None
@@ -48,11 +53,11 @@ def submit_claim(user, item_id: str, statement: str, challenge_answers: list = N
 
     answers_map = {a.get('challengeId'): a.get('providedAnswer', '') for a in (challenge_answers or [])}
 
-    with transaction.atomic():
+    with workflow_transaction(item_scope(item.pk)):
         # Serialize claim submission with owner withdrawal and security custody
         # intake so an active report cannot be withdrawn while a claim is added.
         try:
-            item = Item.objects.select_for_update().get(pk=item.pk, is_archived=False)
+            item = Item.objects.get(pk=item.pk, is_archived=False)
         except Item.DoesNotExist:
             raise NotFound(f"Campus property '{target_id_str}' was not found or is no longer active.")
 
@@ -123,6 +128,7 @@ def submit_claim(user, item_id: str, statement: str, challenge_answers: list = N
 
     return claim
 
+@retry_transient_mongo_transaction()
 def answer_challenge(claim_id: str, user, challenge_id: str, answer_text: str, req_ip: str = '127.0.0.1', user_agent: str = '') -> dict:
     """Answer a verification challenge on an active claim."""
     try:
@@ -130,36 +136,43 @@ def answer_challenge(claim_id: str, user, challenge_id: str, answer_text: str, r
     except Claim.DoesNotExist:
         raise NotFound("Claim record not found.")
 
-    if claim.claimant_id != user.id:
-        raise PermissionDenied("You are not authorized to answer challenges for this claim.")
+    with workflow_transaction(item_scope(claim.item_id)):
+        # Re-read all mutable state after acquiring the item-wide gate. This
+        # keeps challenge attempts and claim transitions serializable on both
+        # PostgreSQL and MongoDB without relying on unsupported row locks.
+        claim = Claim.objects.get(pk=claim_id)
+        if claim.claimant_id != user.id:
+            raise PermissionDenied("You are not authorized to answer challenges for this claim.")
 
-    if claim.claim_status not in (ClaimStatus.CHALLENGE_REQUIRED, ClaimStatus.SUBMITTED):
-        raise ValidationError("This claim is not currently awaiting challenge verification.")
+        if claim.claim_status not in (ClaimStatus.CHALLENGE_REQUIRED, ClaimStatus.SUBMITTED):
+            raise ValidationError("This claim is not currently awaiting challenge verification.")
 
-    try:
-        challenge = VerificationChallenge.objects.get(pk=challenge_id, is_active=True)
-    except VerificationChallenge.DoesNotExist:
-        raise NotFound("Verification challenge not found or no longer active.")
+        try:
+            challenge = VerificationChallenge.objects.get(pk=challenge_id, item_id=claim.item_id, is_active=True)
+        except VerificationChallenge.DoesNotExist:
+            raise NotFound("Verification challenge not found or no longer active.")
 
-    if challenge.expires_at and challenge.expires_at <= timezone.now():
-        raise ValidationError("This verification challenge has expired. Please contact campus security.")
+        if challenge.expires_at and challenge.expires_at <= timezone.now():
+            raise ValidationError("This verification challenge has expired. Please contact campus security.")
 
-    max_attempts = challenge.max_attempts or 3
-    if claim.verification_attempts_count >= max_attempts:
-        raise ValidationError("Maximum verification attempts exceeded for this challenge.")
+        max_attempts = challenge.max_attempts or 3
+        if claim.verification_attempts_count >= max_attempts:
+            raise ValidationError("Maximum verification attempts exceeded for this challenge.")
 
-    is_match = challenge.check_answer(answer_text)
-    claim.verification_attempts_count += 1
-
-    with transaction.atomic():
-        ClaimChallengeAnswer.objects.update_or_create(
-            claim=claim,
-            challenge=challenge,
-            defaults={
-                'provided_answer': answer_text.strip(),
-                'is_correct': is_match,
-            }
-        )
+        is_match = challenge.check_answer(answer_text)
+        claim.verification_attempts_count += 1
+        answer = ClaimChallengeAnswer.objects.filter(claim=claim, challenge=challenge).first()
+        if answer is None:
+            ClaimChallengeAnswer.objects.create(
+                claim=claim,
+                challenge=challenge,
+                provided_answer=answer_text.strip(),
+                is_correct=is_match,
+            )
+        else:
+            answer.provided_answer = answer_text.strip()
+            answer.is_correct = is_match
+            answer.save(update_fields=['provided_answer', 'is_correct'])
 
         all_challenges = VerificationChallenge.objects.filter(item=claim.item, is_active=True)
         all_passed = True
@@ -200,6 +213,7 @@ def answer_challenge(claim_id: str, user, challenge_id: str, answer_text: str, r
         'claimStatus': claim.claim_status,
     }
 
+@retry_transient_mongo_transaction()
 def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', rejection_reason: str = '', req_ip: str = '127.0.0.1', user_agent: str = '') -> Claim:
     """
     Adjudicate an ownership claim (Approve or Reject).
@@ -213,13 +227,13 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
     except Claim.DoesNotExist:
         raise NotFound("Claim not found.")
 
-    with transaction.atomic():
+    with workflow_transaction(item_scope(item_id)):
         # Serialize decisions for the same item before locking a claim. This
         # keeps competing claims from being approved concurrently and prevents
         # a repeated approval from replacing an already-issued handover OTP.
         try:
-            item = Item.objects.select_for_update().get(pk=item_id)
-            claim = Claim.objects.select_for_update().select_related('claimant').get(
+            item = Item.objects.get(pk=item_id)
+            claim = Claim.objects.select_related('claimant').get(
                 pk=claim_id,
                 item_id=item.id,
             )
@@ -263,9 +277,8 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
             item.status = ItemStatus.READY_FOR_HANDOVER
             item.save(update_fields=['status'])
 
-            handover, _ = Handover.objects.update_or_create(
-                claim=claim,
-                defaults={
+            handover = Handover.objects.filter(claim=claim).first()
+            handover_values = {
                     'item': item,
                     'recipient': claim.claimant,
                     'supervising_officer': reviewer,
@@ -276,7 +289,11 @@ def review_claim(reviewer, claim_id: str, action: str, review_notes: str = '', r
                     'id_card_number_masked': 'PENDING',
                     'is_completed': False,
                 }
-            )
+            if handover is None:
+                handover = Handover.objects.create(claim=claim, **handover_values)
+            else:
+                for field, value in handover_values.items():
+                    setattr(handover, field, value)
             handover.set_otp(raw_otp)
             handover.save()
 

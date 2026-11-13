@@ -11,6 +11,11 @@ Weights:
 """
 
 import re
+from apps.core.workflow_concurrency import (
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 from apps.items.models import Item, ItemType, ItemStatus
 from .models import MatchSuggestion, MatchConfidence, MatchStatus
 
@@ -161,6 +166,7 @@ def calculate_item_match_score(item_a: Item, item_b: Item) -> dict:
         },
     }
 
+@retry_transient_mongo_transaction()
 def generate_match_suggestions_for_item(item_id, threshold_score: float = 35.0) -> list[MatchSuggestion]:
     """
     Computes matches against opposite active item candidates and stores suggestions.
@@ -191,21 +197,35 @@ def generate_match_suggestions_for_item(item_id, threshold_score: float = 35.0) 
             lost_item = current_item if current_item.item_type == ItemType.LOST else candidate
             found_item = current_item if current_item.item_type == ItemType.FOUND else candidate
 
-            suggestion, _ = MatchSuggestion.objects.update_or_create(
-                lost_item=lost_item,
-                found_item=found_item,
-                defaults={
+            with workflow_transaction(item_scope(lost_item.pk), item_scope(found_item.pk)):
+                suggestion = MatchSuggestion.objects.filter(
+                    lost_item=lost_item,
+                    found_item=found_item,
+                ).first()
+                defaults = {
                     'match_score': scoring['matchScore'],
                     'confidence': scoring['confidence'],
                     'explanation': scoring['explanation'],
                     'status': MatchStatus.PENDING,
                 }
-            )
+                if suggestion is None:
+                    suggestion = MatchSuggestion.objects.create(
+                        lost_item=lost_item,
+                        found_item=found_item,
+                        **defaults,
+                    )
+                else:
+                    for field, value in defaults.items():
+                        setattr(suggestion, field, value)
+                    suggestion.save(update_fields=[*defaults.keys(), 'updated_at'])
             results.append(suggestion)
 
     if has_high_confidence and current_item.status == ItemStatus.REPORTED:
-        current_item.status = ItemStatus.MATCH_PENDING
-        current_item.save(update_fields=['status'])
+        with workflow_transaction(item_scope(current_item.pk)):
+            current_item = Item.objects.get(pk=current_item.pk)
+            if current_item.status == ItemStatus.REPORTED:
+                current_item.status = ItemStatus.MATCH_PENDING
+                current_item.save(update_fields=['status'])
 
     return results
 

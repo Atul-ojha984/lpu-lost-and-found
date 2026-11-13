@@ -1,51 +1,86 @@
 # MongoDB Atlas Migration Execution Tracker
 
+**Repository:** `Atul-ojha984/lpu-lost-and-found`
 **Target branch:** `migration/mongodb-atlas`
-
-**Main branch baseline:** `d2d2187857b7584412efa4dfb43b0dc50347efd5`
-
-**Production cutover/import authorization:** Not granted; no production changes are authorized by this tracker.
+**Main baseline:** `d2d2187857b7584412efa4dfb43b0dc50347efd5`
+**Production import/cutover/deployment approval:** Not granted.
 
 ## Current phase
 
-**Phase 1 — Complete Codebase Audit: NOT STARTED**
+**Phase 2 - MongoDB database architecture: NOT STARTED**
 
 ## Phase status
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0 — Repository initialization | COMPLETED | Repository and preserved worktree reviewed; target branch created; tracker recorded. |
-| 1 — Complete codebase audit | NOT STARTED | Must inspect Django, Next.js, data access, and MongoDB compatibility in detail. |
-| 2 — MongoDB database architecture | NOT STARTED | Depends on Phase 1 findings. |
-| 3 — Critical business logic redesign | NOT STARTED | Must preserve concurrency and authorization guarantees. |
-| 4 — Backend database migration | NOT STARTED | No production default change before test gates. |
-| 5 — PostgreSQL-to-MongoDB data migration tool | NOT STARTED | Import must remain explicit and production guarded. |
-| 6 — Automated testing | NOT STARTED | Real MongoDB integration/concurrency tests require an isolated replica set. |
-| 7 — Frontend and API regression | NOT STARTED | Preserve `/api/v1` contracts and current UI. |
-| 8 — Deployment preparation | NOT STARTED | No automatic deploys or production service changes. |
-| 9 — Rollback and recovery | NOT STARTED | Must account for post-cutover writes before any cutover can be considered. |
-| 10 — Final production readiness review | NOT STARTED | Production cutover remains disabled until explicit approval. |
+| 0 - Repository initialization | COMPLETED | Audited repository/branch and preserved user changes; tracker committed. |
+| 1 - Complete codebase audit | COMPLETED | Compatibility report written and baseline checks/tests recorded. |
+| 2 - MongoDB database architecture | NOT STARTED | Define collections, references/embedding, identifier mapping, and indexes from Phase 1. |
+| 3 - Critical business logic redesign | NOT STARTED | Must replace row locks while proving claim, OTP, handover, locker, custody and admin guarantees. |
+| 4 - Backend database migration | NOT STARTED | No Mongo engine configuration or application-code changes made. |
+| 5 - PostgreSQL-to-MongoDB data migration tool | NOT STARTED | Imports must remain explicit and guarded; production data must remain unchanged. |
+| 6 - Automated testing | NOT STARTED | Requires isolated MongoDB replica-set integration/concurrency environment. |
+| 7 - Frontend/API regression | NOT STARTED | Preserve `/api/v1` contracts and current UI. |
+| 8 - Deployment preparation | NOT STARTED | No Render/Vercel service or environment changes made. |
+| 9 - Rollback and recovery | NOT STARTED | Must address writes made after any future cutover. |
+| 10 - Final production readiness review | NOT STARTED | Production cutover remains disabled pending explicit approval. |
 
-## Phase 0 — Completed tasks
+## Phase 0 - Completed tasks
 
 - Confirmed repository root: `C:/Users/kumar/Downloads/lpu-lost-and-found-main/lpu-lost-and-found-main`.
-- Confirmed `main` was at `d2d2187857b7584412efa4dfb43b0dc50347efd5` and remained at that commit.
-- Created and checked out `migration/mongodb-atlas` at the unchanged `main` baseline. No remote migration branch existed at initialization.
-- Reviewed top-level structure: active Next.js frontend in `apps/web`, active Django backend in `backend`, legacy Express/Mongoose service in `apps/api`, plus `docs` and `scripts`.
-- Confirmed the two requested historical documents were absent: `MONGODB_ATLAS_MIGRATION_PLAN.md` and `docs/atlas-migration-implementation-audit.md`.
-- Reviewed the nearest existing plan, `docs/django-migration-plan.md`; it documents the reverse Express/MongoDB-to-Django/PostgreSQL migration and is not an Atlas migration plan.
-- Reviewed `MONGODB_TO_POSTGRESQL_MIGRATION_REPORT.md` and `PROJECT_PROGRESS.md`. The prior work prepared a MongoDB-to-PostgreSQL importer, not the requested PostgreSQL-to-Atlas migration.
-- Recorded existing migration blockers from the previous report: 286 unresolved Mongo source references, an unverified historical AES encryption key, and a separate image/document storage inventory requirement. No import was run.
-- Confirmed root development commands from `package.json`: `npm run test`, `npm run test:django`, `npm run check:django`, `npm run typecheck:web`, `npm run build:web`, and `npm run test:api`.
-- Preserved all pre-existing uncommitted changes; they were not staged or included in this phase commit.
+- Confirmed `main` was at `d2d2187857b7584412efa4dfb43b0dc50347efd5`; migration work is on `migration/mongodb-atlas`.
+- Created the target branch at the unchanged main baseline; no remote migration branch existed at initialization.
+- Reviewed the monorepo: active Next.js frontend at `apps/web`, active Django backend at `backend`, and legacy Express/Mongoose service at `apps/api`.
+- Confirmed requested historical planning files were absent: root `MONGODB_ATLAS_MIGRATION_PLAN.md` and `docs/atlas-migration-implementation-audit.md`.
+- Reviewed the nearest migration plan and existing Mongo-to-PostgreSQL report; they concern the reverse migration and are not implementation of PostgreSQL-to-Atlas.
+- Recorded earlier legacy Mongo import risks (broken source references, unverified historical AES key, and separate media inventory). No import was run.
+- Preserved all pre-existing uncommitted changes and did not include them in migration commits.
+- Commit: `8db7bd0 chore: initialize MongoDB migration execution tracker`.
 
-## Phase 0 — Files and Git state
+## Phase 1 - Completed codebase audit
 
-### Files created in this phase
+### Completed tasks
 
-- `docs/MONGODB_ATLAS_EXECUTION_TRACKER.md`
+- Inspected active Django settings, app/model metadata, model relationships, serializers, views, service functions, permissions, auth/JWT paths, URL routes, migrations, middleware/signals, management commands, and tests.
+- Inspected Next.js app routes, central API client, API base URL, token storage/refresh behavior, and role-specific student/security/admin pages.
+- Verified the existing app currently uses PostgreSQL in production and SQLite locally/tests; production settings reject non-PostgreSQL databases.
+- Verified that most domain models use UUID IDs, while Django contrib auth/admin/session models use AutoField/BigAutoField identifiers.
+- Counted 35 `select_for_update()` references, 29 `transaction.atomic` references, 7 `prefetch_related()` references, and 48 `select_related()` references in active backend app code.
+- Identified database-level PostgreSQL audit triggers, partial/functional uniqueness rules, JSON-field queries, joins/aggregates, filesystem media/evidence, and HTTP-polled notifications.
+- Checked version-specific official Django MongoDB Backend v5.2 limitations and compatibility references.
+- Produced `docs/MONGODB_ATLAS_COMPATIBILITY_REPORT.md` with source-to-feature mapping, required actions, risks, and workflow-specific findings.
+- No Django, frontend, migration, database, API, production, or legacy `apps/api` code was changed.
 
-### Pre-existing uncommitted files preserved
+### Files created or modified
+
+- Created `docs/MONGODB_ATLAS_COMPATIBILITY_REPORT.md`.
+- Updated this execution tracker.
+- Phase 0 tracker is committed; Phase 1 docs commit is pending final Git review.
+
+### Tests and validation
+
+| Command | Result |
+|---|---|
+| `backend/.venv/Scripts/python.exe manage.py check` | PASS - no issues (0 silenced). |
+| `backend/.venv/Scripts/python.exe manage.py makemigrations --check --dry-run` | PASS - no changes detected. |
+| `backend/.venv/Scripts/python.exe -m pytest` | PASS - 170 passed, 1 skipped in 160.15s. |
+| `npm run test:web` | PASS - 11 passed, 0 failed. |
+| MongoDB backend/Atlas connectivity/integration | NOT RUN - `django-mongodb-backend` and an isolated MongoDB replica set are not configured in this environment. |
+
+### Known issues and risks
+
+- `select_for_update()` is unsupported by the target backend and guards high-risk business transitions.
+- Django native `transaction.atomic()` is unsupported; the backend's transaction API has no nested savepoints and needs a replica set or sharded cluster.
+- `prefetch_related()` is unsupported; current code has seven usages.
+- Django contrib AutoField/BigAutoField models need a Mongo-compatible migration strategy.
+- PostgreSQL audit immutability trigger cannot be carried over; replacement is not yet verified.
+- Exact support for current functional/conditional unique constraints must be verified on the pinned backend and Atlas.
+- `ForeignKey` joins, JSON queries, DRF, django-filter, analytics aggregates, migration operations, and notification commit callbacks require integration testing.
+- Item photographs/private evidence are stored on local filesystem paths; a database migration does not move file bytes. Durable storage must be separately selected and tested.
+- No MongoDB backend package or Atlas URI is configured locally; no live Mongo test was possible.
+- Existing worktree changes listed below remain uncommitted user work and were not edited or staged.
+
+## Existing uncommitted user changes preserved
 
 - `PROJECT_PROGRESS.md`
 - `backend/apps/core/management/commands/import_mongo_data.py`
@@ -55,32 +90,18 @@
 - `backend/apps/accounts/management/commands/provision_initial_admin.py`
 - `backend/tests/test_bootstrap_admin_command.py`
 
-These files were present before Phase 0 work and were not modified or staged for the Phase 0 commit.
-
-## Tests and validation
-
-- Repository/branch/status/history inspection: completed.
-- Required historical document presence checks: completed; both files are absent.
-- No application tests were run for this documentation-only initialization phase.
-- No model, migration, API, database, deployment, or production data changes were made.
+These include prior Mongo-to-PostgreSQL work and initial-admin provisioning work. They must not be mistaken for PostgreSQL-to-MongoDB migration implementation.
 
 ## Architectural decisions
 
-- Retain Next.js and Django as the active frontend/API architecture.
-- Leave `apps/api` untouched.
-- Evaluate only the official Django MongoDB Backend 5.2 release line for compatibility with Django 5.2.
-- Keep PostgreSQL configuration and data intact for migration, comparison, and rollback planning.
+- Keep the Next.js frontend and Django API active; do not switch to Express.
+- Do not modify `apps/api`.
+- Use only the official Django MongoDB Backend 5.2 release line compatible with Django 5.2.
+- Keep PostgreSQL as an available migration source and rollback reference.
+- Preserve existing UUID domain identifiers and API string formats where feasible.
 - Do not change the production database default, import production data, deploy, or cut over traffic without separate explicit approval.
-
-## Known issues and risks
-
-- The current active Django/PostgreSQL implementation relies on relational constraints, transactions, and row-locking patterns; actual support and replacement designs must be verified against version-specific official documentation.
-- Existing MongoDB/PostgreSQL migration artifacts address the opposite data direction and cannot be treated as implementation of PostgreSQL-to-Atlas migration.
-- The two requested migration planning/audit files were unavailable in this checkout.
-- Previous source-data import work reports unresolved relationships and an unverified source encryption key. These issues matter if legacy MongoDB data is reused, but they do not establish the contents of the production PostgreSQL source.
-- The installed environment lists Python 3.14 only; runtime compatibility and test interpreter requirements need verification during audit.
-- Existing local changes must remain isolated from commits for this migration unless reviewed and intentionally adopted in a later phase.
+- A setting-only engine swap is unsafe; critical concurrency and append-only guarantees require redesign and real Atlas tests first.
 
 ## Next action
 
-Begin Phase 1 by inventorying all Django models/relations/constraints/query patterns and all frontend API consumers; verify the exact Django MongoDB Backend 5.2 compatibility limits from official MongoDB documentation; then produce `docs/MONGODB_ATLAS_COMPATIBILITY_REPORT.md` before modifying application code.
+Start Phase 2: define the MongoDB collection and relationship plan, preserve UUID identifiers, specify unique/compound indexes and query paths, and document architecture, mapping, and index decisions before modifying application code.

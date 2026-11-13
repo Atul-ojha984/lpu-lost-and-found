@@ -7,15 +7,15 @@
 
 ## Current phase
 
-**Phase 2 - MongoDB database architecture: NOT STARTED**
+**Phase 3 - Critical business logic redesign: NOT STARTED**
 
 ## Phase status
 
 | Phase | Status | Notes |
 |---|---|---|
 | 0 - Repository initialization | COMPLETED | Audited repository/branch and preserved user changes; tracker committed. |
-| 1 - Complete codebase audit | COMPLETED | Compatibility report written and baseline checks/tests recorded. |
-| 2 - MongoDB database architecture | NOT STARTED | Define collections, references/embedding, identifier mapping, and indexes from Phase 1. |
+| 1 - Complete codebase audit | COMPLETED | Compatibility report committed as `c36fa5f`; baseline checks/tests recorded. |
+| 2 - MongoDB database architecture | COMPLETED | Proposed reference-first document mapping and candidate indexes documented; Atlas-generated indexes and runtime behavior remain unverified. |
 | 3 - Critical business logic redesign | NOT STARTED | Must replace row locks while proving claim, OTP, handover, locker, custody and admin guarantees. |
 | 4 - Backend database migration | NOT STARTED | No Mongo engine configuration or application-code changes made. |
 | 5 - PostgreSQL-to-MongoDB data migration tool | NOT STARTED | Imports must remain explicit and guarded; production data must remain unchanged. |
@@ -55,7 +55,7 @@
 
 - Created `docs/MONGODB_ATLAS_COMPATIBILITY_REPORT.md`.
 - Updated this execution tracker.
-- Phase 0 tracker is committed; Phase 1 docs commit is pending final Git review.
+- Phase 0 and Phase 1 documentation commits are recorded below.
 
 ### Tests and validation
 
@@ -66,6 +66,10 @@
 | `backend/.venv/Scripts/python.exe -m pytest` | PASS - 170 passed, 1 skipped in 160.15s. |
 | `npm run test:web` | PASS - 11 passed, 0 failed. |
 | MongoDB backend/Atlas connectivity/integration | NOT RUN - `django-mongodb-backend` and an isolated MongoDB replica set are not configured in this environment. |
+
+### Commit
+
+- `c36fa5f docs: complete MongoDB compatibility audit`
 
 ### Known issues and risks
 
@@ -78,7 +82,48 @@
 - `ForeignKey` joins, JSON queries, DRF, django-filter, analytics aggregates, migration operations, and notification commit callbacks require integration testing.
 - Item photographs/private evidence are stored on local filesystem paths; a database migration does not move file bytes. Durable storage must be separately selected and tested.
 - No MongoDB backend package or Atlas URI is configured locally; no live Mongo test was possible.
+- Phase 1 confirms a current security issue relevant to cutover design: `Claim.handover_otp` stores active OTP plaintext while encrypted companion fields also exist. Phase 3 must define a tested encrypted read/verification path and prevent plaintext exposure before importing active OTP state.
 - Existing worktree changes listed below remain uncommitted user work and were not edited or staged.
+
+## Phase 2 - MongoDB database architecture
+
+### Completed tasks
+
+- Defined one-collection-per-concrete-model and reference-first persistence for domain records; kept workflow/history records separate and bounded JSON/list values with their existing parent.
+- Documented UUID preservation for domain models and the required ObjectId-based strategy for Django framework models that use AutoField/BigAutoField.
+- Mapped all current domain models, framework auth/content-type/group/permission data, session policy, relationship load order, file-storage handling, and reconciliation gates.
+- Proposed model/query-driven indexes, explicitly marking partial and conditional uniqueness as unverified until Atlas index creation and concurrent write tests pass.
+- Recorded replica-set requirements, transaction boundaries, audit-log least-privilege requirement, and the prohibition on production cutover/import without approval.
+- Flagged the current plaintext active OTP field and required a compatible encrypted path as a Phase 3 security gate.
+- No application code, database, migration, API, frontend, Render service, or production data was changed.
+
+### Files created or modified
+
+- Created `docs/MONGODB_ATLAS_ARCHITECTURE.md`.
+- Created `docs/MONGODB_ATLAS_DATA_MAPPING.md`.
+- Created `docs/MONGODB_ATLAS_INDEX_STRATEGY.md`.
+- Updated this execution tracker.
+
+### Tests and validation
+
+| Command | Result |
+|---|---|
+| `backend/.venv/Scripts/python.exe manage.py check` (run from `backend/`) | PASS - no issues (0 silenced). |
+| `backend/.venv/Scripts/python.exe manage.py makemigrations --check --dry-run` (run from `backend/`) | PASS - no model changes detected. |
+| `backend/.venv/Scripts/python.exe -m pytest` (run from `backend/`) | PASS - 170 passed, 1 skipped in 159.17s. An initial invocation from repository root failed collection because pytest did not load backend settings; rerun from `backend/` succeeded. |
+| `npm run test:web` | PASS - 11 passed, 0 failed. |
+| MongoDB Atlas index creation/explain/concurrency validation | NOT RUN - no isolated MongoDB replica set or Atlas connection configured. |
+
+### Known issues and risks
+
+- All conditional/functional uniqueness candidates require exact backend migration and Atlas verification; candidate indexes are not proof of enforcement.
+- `Claim.handover_otp` currently contains plaintext OTP material. It is not to be logged or exported in reports; a compatible encrypted operational path must be proven before migration.
+- Mapping collection names and framework ObjectId migration behavior require Phase 4 verification with the pinned backend.
+- Phase 3 must prove concurrency semantics using a real isolated MongoDB replica set before migration implementation can claim the required safety guarantees.
+
+### Commit
+
+- Pending final review and commit for Phase 2.
 
 ## Existing uncommitted user changes preserved
 
@@ -104,4 +149,4 @@ These include prior Mongo-to-PostgreSQL work and initial-admin provisioning work
 
 ## Next action
 
-Start Phase 2: define the MongoDB collection and relationship plan, preserve UUID identifiers, specify unique/compound indexes and query paths, and document architecture, mapping, and index decisions before modifying application code.
+Start Phase 3: redesign and test Mongo-safe claim, OTP, handover, locker, custody, disposal, and administrator concurrency guarantees before changing the database backend.

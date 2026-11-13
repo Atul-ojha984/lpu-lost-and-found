@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 5 - PostgreSQL-to-MongoDB migration tool: NOT STARTED.** Phases 0-4 have been implemented and locally validated; Phase 4 is not an Atlas or production cutover approval.
+**Phase 5 - PostgreSQL-to-MongoDB migration tool: IN PROGRESS.** Phases 0-4 have been implemented and locally validated; Phase 4 is not an Atlas or production cutover approval.
 
 ## Phase status
 
@@ -16,7 +16,7 @@
 | 0 - Repository initialization | COMPLETED | Audited repository/branch and preserved user changes; tracker committed. |
 | 1 - Complete codebase audit | COMPLETED | Compatibility report committed as `c36fa5f`; baseline checks/tests recorded. |
 | 2 - MongoDB database architecture | COMPLETED | Proposed reference-first document mapping and candidate indexes documented; Atlas-generated indexes and runtime behavior remain unverified. |
-| 3 - Critical business logic redesign | VERIFIED | Backend-aware transactions, workflow mutexes, conflict retry, and Mongo call-site refactors pass real local replica-set integration and full application Mongo tests. Atlas staging and operation-specific concurrency stress remain release gates. |
+| 3 - Critical business logic redesign | VERIFIED | Backend-aware transactions, workflow mutexes, conflict retry, and Mongo call-site refactors pass real local replica-set integration and full application Mongo tests. Commit: `dad6edb`. Atlas staging and operation-specific concurrency stress remain release gates. |
 | 4 - Backend database migration | COMPLETED | Opt-in Mongo settings, ObjectId contrib migration graph, domain snapshots, required schema adaptations, and pinned backend locally migrate and pass the application suite. PostgreSQL remains default; Atlas is not configured. |
 | 5 - PostgreSQL-to-MongoDB data migration tool | NOT STARTED | Imports must remain explicit and guarded; production data must remain unchanged. |
 | 6 - Automated testing | NOT STARTED | Requires isolated MongoDB replica-set integration/concurrency environment. |
@@ -173,7 +173,7 @@ These were present before this migration implementation and must not be discarde
 
 ### Commit
 
-- Phase 3 implementation and Phase 4 test harness are in final review; commit is pending.
+- `dad6edb refactor: implement Mongo-safe workflow coordination`.
 
 ## Phase 4 - Backend database migration
 

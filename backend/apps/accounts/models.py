@@ -114,11 +114,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name = 'Campus User'
         verbose_name_plural = 'Campus Users'
         ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['email']),
-            models.Index(fields=['registration_number']),
-            models.Index(fields=['role']),
-        ]
 
     def __str__(self):
         return f"{self.full_name} ({self.registration_number}) - {self.role}"

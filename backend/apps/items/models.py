@@ -43,10 +43,6 @@ class ItemCategory(models.Model):
         verbose_name = 'Item Category'
         verbose_name_plural = 'Item Categories'
         ordering = ['name']
-        indexes = [
-            models.Index(fields=['code']),
-            models.Index(fields=['is_active']),
-        ]
 
     def __str__(self):
         return f"{self.name} ({self.code})"
@@ -109,7 +105,6 @@ class Item(models.Model):
             models.Index(fields=['status', 'item_type']),
             models.Index(fields=['category', 'location']),
             models.Index(fields=['-created_at']),
-            models.Index(fields=['reference_number']),
         ]
 
     def __str__(self):

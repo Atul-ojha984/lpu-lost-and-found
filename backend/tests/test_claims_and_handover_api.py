@@ -8,6 +8,7 @@ Test Suite: Claims & Handover APIs, Challenge Verification & Duplicate Guard
 import logging
 import pytest
 from datetime import datetime, timezone, timedelta
+from django.db import connection
 from rest_framework.test import APIClient
 from rest_framework import status
 from rest_framework_simplejwt.tokens import AccessToken
@@ -749,7 +750,12 @@ def test_direct_recovery_from_lost_report_without_claim(api_client, workflow_set
     assert expired_attempt.status_code == status.HTTP_400_BAD_REQUEST
     assert 'expired' in expired_attempt.data['message'].lower()
     record.refresh_from_db()
-    assert record.otp_expires_at == expired_at
+    expected_expiry = expired_at
+    if connection.vendor == 'mongodb':
+        expected_expiry = expected_expiry.replace(
+            microsecond=(expected_expiry.microsecond // 1000) * 1000
+        )
+    assert record.otp_expires_at == expected_expiry
     assert record.status == DirectRecoveryStatus.APPROVED
 
     # Accessing the recipient's portal renews an expired pending OTP once.

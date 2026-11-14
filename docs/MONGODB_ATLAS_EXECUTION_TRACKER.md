@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 9 - Rollback and recovery: IN PROGRESS.** Phase 8 staging guidance and explicit Mongo settings-selection tests are complete locally. The rollback plan documents the post-write data-divergence blocker. No production import, deployment, or cutover has occurred.
+**Phase 10 - Final production readiness review: IN PROGRESS.** Phases 8 and 9 are committed; the final review is documenting local evidence and external blockers. No production import, deployment, or cutover has occurred.
 
 ## Phase status
 
@@ -22,8 +22,8 @@
 | 6 - Automated testing | VERIFIED | Full local Mongo and SQLite backend suites, frontend unit/type/lint/build checks pass; exact results in `MONGODB_ATLAS_TEST_REPORT.md`. Atlas and PostgreSQL-source tests remain external gates. |
 | 7 - Frontend/API regression | VERIFIED | Shared API client uses `NEXT_PUBLIC_API_URL`, preserves `/api/v1`, handles Bearer refresh/errors, and does not fall back to localhost outside development. Frontend checks/build and backend API suite pass; live production browser/API integration was not run. |
 | 8 - Deployment preparation | COMPLETED | Added staging-only Render/Vercel/Atlas instructions, sanitized local Mongo env template, and explicit settings-selection regression coverage. Commit `be6086e`. Cloud staging, Atlas access, import, and cutover remain external gates; no service was changed or created. |
-| 9 - Rollback and recovery | IN PROGRESS | Documenting safe pre-write rollback and explicitly blocking a blind post-write switch to stale PostgreSQL. |
-| 10 - Final production readiness review | NOT STARTED | Production cutover remains disabled pending explicit approval. |
+| 9 - Rollback and recovery | COMPLETED | Documented pre-write PostgreSQL rollback and blocked post-write rollback without a tested reverse path. Commit `1978e64`; not rehearsed against provider services. |
+| 10 - Final production readiness review | BLOCKED | Review report is complete, but Atlas/source-database integration, plaintext OTP remediation, audit database permissions, durable media, backup restore, and post-write rollback gates cannot be verified here. Production cutover is not ready. |
 
 ## Phase 0 - Completed tasks
 
@@ -342,6 +342,69 @@ These were present before this migration implementation and must not be discarde
 
 - Phase 8 preparation is committed in `be6086e`; no deployment was performed.
 
+## Phase 9 - Rollback and recovery
+
+### Completed tasks
+
+- Added `docs/MONGODB_ATLAS_ROLLBACK_PLAN.md` with separate recovery states before cutover, after routing but before Mongo writes, after Mongo-only writes, and during suspected corruption/security incidents.
+- Documented that PostgreSQL remains the active source and a pre-write rollback is planned, while a post-write switch to stale PostgreSQL is unsafe.
+- Documented the current one-way import limitation and required choices (fix forward or first build/test a write-freeze reverse reconciliation). No dual-write/CDC mechanism was assumed.
+- Added backup/snapshot retention, media consistency, secret/key continuity, deployment history, recovery verification, and maintenance-window preconditions.
+- No database, hosting resource, environment variable, backup, deployment, or live traffic was changed.
+
+### Verification and risks
+
+| Validation | Result |
+|---|---|
+| `git diff --check` on rollback plan/tracker | PASS. |
+| Review against Phase 5 importer and Phase 8 Render/Vercel configuration | PASS - identifies one-way PG→Mongo import, current Postgres production config, frontend API URL behavior, and ephemeral media roots. |
+| Provider backup/restore rehearsal | NOT RUN - no Atlas or Render staging infrastructure/access. |
+| Post-write Mongo→PostgreSQL reverse migration | BLOCKED - no reverse importer, CDC, or dual-write implementation exists. |
+
+### Commit
+
+- `1978e64 docs: define MongoDB Atlas rollback and recovery`.
+
+## Phase 10 - Final production readiness review
+
+### Completed assessment
+
+- Added `docs/MONGODB_ATLAS_PRODUCTION_READINESS.md` with explicit status per architecture, database/backend, authentication, workflow, audit, files, frontend, hosting, backup, rollback, and cutover gate.
+- Reviewed all Phase 1–9 reports, current settings, OTP model/serializer, audit model/PostgreSQL trigger migration, migration utility, deployment config, frontend API client, branch, main baseline, and worktree.
+- Confirmed `main` remains at the recorded baseline `d2d2187857b7584412efa4dfb43b0dc50347efd5`; work is isolated to `migration/mongodb-atlas`.
+- Final recommendation: **Ready for local development testing; not ready for staging sign-off or production cutover.**
+
+### Verification evidence
+
+| Validation | Result |
+|---|---|
+| Phase 6 backend suites | PASS locally - Mongo 186 passed/1 skipped; SQLite 181 passed/6 skipped. |
+| Phase 6 importer/custody focused tests | PASS - 11 per settings path. |
+| Phase 6 frontend checks | PASS - 11 frontend tests, TypeScript, lint (one pre-existing warning), and 27-route production build. |
+| Phase 8 production settings regression | PASS - 2 tests; Mongo selected settings do not require PostgreSQL URL, normal production PostgreSQL settings still do. |
+| Django system checks, default and explicit Mongo settings | PASS - zero issues. |
+| Current default migration check | PASS - no model changes detected using explicit local SQLite. |
+| Current Mongo migration check | BLOCKED - no local replica-set primary for configured `rs0`; earlier Phase 4 fresh local Mongo migration/drift check remains documented. |
+| Atlas/PostgreSQL source/deployed browser and API/backup restore/cutover | NOT TESTED or BLOCKED as detailed in the readiness report. |
+| `main` and unrelated working-tree changes | PRESERVED - no `main` edits; uncommitted existing user files were not staged. |
+
+### Critical release blockers
+
+- No isolated PostgreSQL source plus Atlas staging pair for actual import, resume, and reconciliation.
+- Plaintext active OTP remains stored in `Claim.handover_otp` and is exposed to authorized claim serializer consumers; encrypted-only operational compatibility needs remediation and tests.
+- PostgreSQL append-only audit trigger has no verified Mongo database-level replacement; Atlas runtime least-privilege policy is not configured/tested.
+- Render's current `/tmp` media/evidence paths are ephemeral; durable storage migration and authorization/checksum verification are outstanding.
+- Atlas indexes, full workflow concurrency, production provider connection, backup/restore, and Vercel→Render/Atlas live integration are unverified.
+- No tested reverse importer or change-capture system exists for safely returning Mongo-only writes to PostgreSQL.
+
+### Commit
+
+- Phase 10 readiness assessment is committed with this final review record. This review does not authorize production changes.
+
 ## Current outstanding work and next action
 
-Complete and commit Phase 9 rollback/recovery documentation, then assess Phase 10 readiness gates. Do not modify service configuration, environment variables, production database settings, or traffic until staging verification and explicit approval.
+Phase 10 readiness review is recorded; staging and production readiness remain BLOCKED on the external and security gates above. Keep PostgreSQL live and unchanged. Do not import production data, change services/environment, deploy, or switch traffic without the required explicit approvals.
+
+## Current uncommitted user changes preserved
+
+At the Phase 10 review, these pre-existing user changes remained untouched and unstaged: `PROJECT_PROGRESS.md`, `backend/apps/core/management/commands/import_mongo_data.py`, `backend/tests/test_mongo_import.py`, and `MONGODB_TO_POSTGRESQL_MIGRATION_REPORT.md`. Only migration-task files are staged/committed in this branch.

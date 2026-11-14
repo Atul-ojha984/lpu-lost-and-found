@@ -65,6 +65,8 @@ class AuditAction(models.TextChoices):
     CATEGORY_MANAGE = 'CATEGORY_MANAGE', 'Manage Categories'
     LOCATION_MANAGE = 'LOCATION_MANAGE', 'Manage Locations'
     CONFIG_UPDATE = 'CONFIG_UPDATE', 'Update Platform Configuration'
+    VERIFICATION_CHALLENGE_EVALUATE = 'VERIFICATION_CHALLENGE_EVALUATE', 'Evaluate Verification Challenge'
+    TEST_SENSITIVE_AUDIT = 'TEST_SENSITIVE_AUDIT', 'Test Sensitive Audit'
 
 class AppendOnlyAuditQuerySet(models.QuerySet):
     """Reject application-level mutations to compliance records."""

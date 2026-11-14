@@ -32,7 +32,7 @@ export async function connectDatabase(): Promise<boolean> {
     });
 
     mongoose.connection.on('error', (err) => {
-      logger.error({ err: err.message }, 'MongoDB connection error encountered');
+      logger.error({ errorName: err.name }, 'MongoDB connection error encountered');
     });
 
     mongoose.connection.on('disconnected', () => {
@@ -59,14 +59,14 @@ export async function connectDatabase(): Promise<boolean> {
 
     if (env.NODE_ENV === 'production') {
       logger.fatal(
-        { error: errMessage },
+        { errorName: error instanceof Error ? error.name : 'UnknownError' },
         'MongoDB connection is required in production; refusing to start without database access.'
       );
       throw new Error('Required MongoDB connection failed. Check Atlas network access, database credentials, and environment variables.');
     }
 
     logger.warn(
-      { error: errMessage },
+      { errorName: error instanceof Error ? error.name : 'UnknownError' },
       'MongoDB connection failed during startup. The API is running without database connectivity; configure MONGODB_URI before using database-backed routes.'
     );
     return false;

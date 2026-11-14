@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 5 - PostgreSQL-to-MongoDB migration tool: BLOCKED.** The guarded importer, checkpoint/resume handling, source snapshot, and local Mongo tests are implemented. Source PostgreSQL integration and Atlas validation cannot run because no isolated PostgreSQL source or Atlas staging connection is available. Independent documentation and regression phases may proceed; no data import or cutover has occurred.
+**Phase 7 - Frontend/API regression: IN PROGRESS.** Phase 5's importer is implemented but source PostgreSQL integration remains BLOCKED; Phase 6 local suites are VERIFIED. No production import, deployment, or cutover has occurred.
 
 ## Phase status
 
@@ -19,8 +19,8 @@
 | 3 - Critical business logic redesign | VERIFIED | Backend-aware transactions, workflow mutexes, conflict retry, and Mongo call-site refactors pass real local replica-set integration and full application Mongo tests. Commit: `dad6edb`. Atlas staging and operation-specific concurrency stress remain release gates. |
 | 4 - Backend database migration | COMPLETED | Opt-in Mongo settings, ObjectId contrib migration graph, domain snapshots, required schema adaptations, and pinned backend locally migrate and pass the application suite. PostgreSQL remains default; Atlas is not configured. |
 | 5 - PostgreSQL-to-MongoDB data migration tool | BLOCKED | Importer implemented and focused tests pass. Actual PostgreSQL source, copy, resume, and reconciliation integration remains unverified; isolated PostgreSQL source and Atlas access are unavailable. |
-| 6 - Automated testing | NOT STARTED | Local Mongo replica-set and SQLite suites exist; Atlas-specific integration/concurrency remains an external gate. |
-| 7 - Frontend/API regression | NOT STARTED | Preserve `/api/v1` contracts and current UI. |
+| 6 - Automated testing | VERIFIED | Full local Mongo and SQLite backend suites, frontend unit/type/lint/build checks pass; exact results in `MONGODB_ATLAS_TEST_REPORT.md`. Atlas and PostgreSQL-source tests remain external gates. |
+| 7 - Frontend/API regression | IN PROGRESS | Existing `/api/v1` response contract and frontend routes compile; full local frontend checks are being recorded. Production browser/API testing is not available from this environment. |
 | 8 - Deployment preparation | NOT STARTED | No Render/Vercel service or environment changes made. |
 | 9 - Rollback and recovery | NOT STARTED | Must address writes made after any future cutover. |
 | 10 - Final production readiness review | NOT STARTED | Production cutover remains disabled pending explicit approval. |
@@ -251,6 +251,35 @@ These were present before this migration implementation and must not be discarde
 - Active claim approval OTP remains in the legacy plaintext `Claim.handover_otp` field in the current application model. The importer never logs it, but encryption-path compatibility and a separately reviewed handling policy remain cutover security gates.
 - Reconciliation expects the destination model collections to contain exactly the corresponding source records; independent destination rows must be reviewed, not silently merged.
 
+## Phase 6 - Automated testing
+
+### Verification completed
+
+- Full backend Mongo settings suite on the dedicated local replica set: **186 passed, 1 skipped**. The one skip explicitly requires PostgreSQL row-lock semantics.
+- Full default SQLite suite: **181 passed, 6 skipped**. The skips are the PostgreSQL row-lock case and five Mongo transaction tests requiring the Mongo settings.
+- Focused importer/custody-order tests after final test updates: **11 passed** under Mongo settings and **11 passed** under SQLite.
+- Frontend unit/contract checks: **11 passed**; TypeScript passed; ESLint passed with one pre-existing React effect warning in `apps/web/src/app/login/page.tsx:37`; Next.js production build passed and emitted all 27 routes.
+- Mongo settings `manage.py check`: 0 issues; `makemigrations --check --dry-run`: no changes detected.
+- The initial SQLite run exposed two test portability assumptions and a timestamp-tie race in an existing test. The focused rerun and complete SQLite rerun both passed after correction. The application workflow and UI were not changed for this test-only fix.
+- Created `docs/MONGODB_ATLAS_TEST_REPORT.md` with pass/fail/skip/not-tested separation and external gates.
+
+### Files added or modified for Phase 6
+
+- Added `docs/MONGODB_ATLAS_TEST_REPORT.md`.
+- Updated `backend/tests/test_postgres_to_mongodb_migration.py` so environment-guard coverage works under both database settings.
+- Updated `backend/tests/test_model_constraints.py` to make the custody timeline test deterministic across timestamp precision differences.
+- Updated this tracker.
+
+### Limits
+
+- PostgreSQL-specific locking test remains skipped on non-PostgreSQL backends; it has not been run against a live PostgreSQL source in this environment.
+- Atlas-specific integration, production browser/API checks, migration reconciliation, and cutover are not tested.
+- Phase 5 remains blocked at the actual cross-database source integration gate.
+
+### Commit
+
+- Phase 6 implementation and report are pending review and commit.
+
 ## Current outstanding work and next action
 
-Continue Phase 6 test/report consolidation using the existing isolated Mongo replica-set and SQLite suites. Keep all environment-dependent source-to-Atlas and production operations marked BLOCKED/NOT TESTED until suitable staging infrastructure and explicit approval exist.
+Complete Phase 7 frontend/API regression documentation. Then prepare Render/Vercel/Atlas deployment and rollback guides, keeping Atlas/production configuration and imports untouched until staging infrastructure and explicit approval are available.

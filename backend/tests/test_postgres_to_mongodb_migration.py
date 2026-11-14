@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.apps import apps
-from django.db import models
+from django.db import connections, models
 from django.test.utils import override_settings
 from django_mongodb_backend.fields import ObjectIdAutoField
 from django.utils import timezone
@@ -164,7 +164,9 @@ def test_remote_endpoint_cannot_be_mislabeled_local(monkeypatch, tmp_path):
         settings,
         "MONGODB_URI",
         "mongodb+srv://migration_user:private-value@cluster.example.invalid/app",
+        raising=False,
     )
+    monkeypatch.setattr(type(connections["default"]), "vendor", "mongodb")
 
     with pytest.raises(CommandError, match="remote PostgreSQL source cannot be classified as local") as exc:
         call_command(
@@ -187,7 +189,9 @@ def test_production_data_requires_separate_explicit_guard(monkeypatch, tmp_path)
         settings,
         "MONGODB_URI",
         "mongodb+srv://migration_user:private-value@cluster.example.invalid/app",
+        raising=False,
     )
+    monkeypatch.setattr(type(connections["default"]), "vendor", "mongodb")
 
     with pytest.raises(CommandError, match="requires --allow-production-data") as exc:
         call_command(

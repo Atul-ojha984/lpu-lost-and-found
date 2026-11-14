@@ -7,7 +7,6 @@ Admin & Analytics Views
 
 from datetime import datetime, timezone
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
 from django.db.utils import IntegrityError
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
@@ -18,6 +17,16 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiRespon
 
 from apps.accounts.models import User, UserRole, UserType
 from apps.accounts.permissions import IsCampusAdmin
+from apps.core.db_transactions import transaction
+from apps.core.workflow_concurrency import (
+    CUSTODY_INVENTORY_SCOPE,
+    SYSTEM_ADMIN_SCOPE,
+    item_scope,
+    retry_transient_mongo_transaction,
+    user_scope,
+    workflow_transaction,
+    coordinated_workflow,
+)
 from apps.items.models import Item, ItemStatus
 from apps.custody.models import CustodyRecord, CustodyAction, Locker
 from apps.custody.serializers import CustodyRecordSerializer, LockerSerializer
@@ -51,8 +60,8 @@ def _user_has_historical_references(user):
 
 
 def _active_system_super_admin_ids_for_update():
-    """Lock the active Super Admin set so concurrent revocations cannot remove the last one."""
-    return list(User.objects.select_for_update().filter(
+    """Read the active set while the caller holds SYSTEM_ADMIN_SCOPE."""
+    return list(User.objects.filter(
         is_active=True,
         is_superuser=True,
         role=UserRole.SYSTEM_ADMIN,
@@ -214,6 +223,11 @@ class AdminDisposalApproveAPIView(APIView):
         request=DisposalApprovalInputSerializer,
         responses={200: OpenApiResponse(description='Disposal executed and logged')},
     )
+    @retry_transient_mongo_transaction()
+    @coordinated_workflow(lambda self, request: (
+        item_scope(request.data.get('itemId', 'unresolved')),
+        CUSTODY_INVENTORY_SCOPE,
+    ))
     def post(self, request):
         serializer = DisposalApprovalInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -252,7 +266,26 @@ class AdminDisposalApproveAPIView(APIView):
             )
 
         with transaction.atomic():
+            # Re-read state after entering the item's Mongo-safe aggregate gate.
+            item = Item.objects.get(pk=vd['itemId'])
+            if item.status in (ItemStatus.DISPOSED, ItemStatus.HANDED_OVER):
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {'code': 'CONFLICT', 'message': 'The item is already in a terminal state.'},
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
             previous_status = item.status
+            assigned_locker = Locker.objects.filter(current_item=item).first()
+            previous_locker_reference = (
+                assigned_locker.locker_number if assigned_locker else item.locker_storage_reference
+            )
+            if assigned_locker:
+                assigned_locker.current_item = None
+                assigned_locker.updated_by = request.user
+                assigned_locker.save(update_fields=['current_item', 'updated_by', 'updated_at'])
 
             disposal_record = DisposalRecord.objects.create(
                 item=item,
@@ -275,6 +308,7 @@ class AdminDisposalApproveAPIView(APIView):
                 action=CustodyAction.DISPOSED,
                 from_location=item.current_custody_desk or 'Central Security Repository',
                 to_location=vd.get('recipientOrganization') or vd['method'],
+                previous_locker_reference=previous_locker_reference,
                 handled_by=request.user,
                 evidence_reference=vd.get('certificateUrl', ''),
                 remarks=f"Disposal authorized by administrative committee via {vd['method']}. Reason: {vd['reason']}",
@@ -329,12 +363,13 @@ class AdminUsersAPIView(APIView):
         request=CreateAdminUserSerializer,
         responses={201: AdminUserSerializer},
     )
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = CreateAdminUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            with transaction.atomic():
+            with workflow_transaction(SYSTEM_ADMIN_SCOPE):
                 user = serializer.save()
                 AuditEntry.objects.create(
                     actor=request.user,
@@ -455,11 +490,12 @@ class AdminUserDetailAPIView(APIView):
         request=UpdateUserAdminSerializer,
         responses={200: AdminUserSerializer},
     )
-    @transaction.atomic
+    @retry_transient_mongo_transaction()
+    @coordinated_workflow(lambda self, request, pk: (SYSTEM_ADMIN_SCOPE, user_scope(pk)))
     def patch(self, request, pk):
         active_system_admin_ids = _active_system_super_admin_ids_for_update()
         try:
-            user = User.objects.select_for_update().get(pk=pk)
+            user = User.objects.get(pk=pk)
         except User.DoesNotExist:
             return Response(
                 {
@@ -567,11 +603,12 @@ class AdminUserDetailAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    @transaction.atomic
+    @retry_transient_mongo_transaction()
+    @coordinated_workflow(lambda self, request, pk: (SYSTEM_ADMIN_SCOPE, user_scope(pk)))
     def delete(self, request, pk):
         active_system_admin_ids = _active_system_super_admin_ids_for_update()
         try:
-            user = User.objects.select_for_update().get(pk=pk)
+            user = User.objects.get(pk=pk)
         except (User.DoesNotExist, ValueError, TypeError):
             return Response(
                 {
@@ -639,8 +676,7 @@ class AdminUserDetailAPIView(APIView):
             )
 
         try:
-            with transaction.atomic():
-                user.delete()
+            user.delete()
         except ProtectedError:
             # A relation added by another app may not be enumerable above; retain
             # the account and its records rather than allowing a partial cascade.

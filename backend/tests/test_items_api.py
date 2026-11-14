@@ -200,7 +200,12 @@ def test_student_can_withdraw_own_lost_or_found_report(api_client, test_setup, r
     assert response.data['withdrawalStatus'] == 'WITHDRAWN'
     item.refresh_from_db()
     assert item.is_archived is True
-    assert item.created_at == original_created_at
+    expected_created_at = original_created_at
+    if connection.vendor == 'mongodb':
+        expected_created_at = expected_created_at.replace(
+            microsecond=(expected_created_at.microsecond // 1000) * 1000
+        )
+    assert item.created_at == expected_created_at
     assert item.reported_by_id == test_setup['student1'].id
     assert item.status == ItemStatus.REPORTED
 

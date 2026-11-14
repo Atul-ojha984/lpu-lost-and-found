@@ -6,7 +6,6 @@ Handovers App Views
 """
 
 import logging
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -16,6 +15,12 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from apps.accounts.permissions import IsSecurityOrAdmin, IsStudentOrStaff
+from apps.core.workflow_concurrency import (
+    CUSTODY_INVENTORY_SCOPE,
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 from apps.audit.models import AuditEntry, AuditAction
 from apps.custody.models import CustodyLocation, CustodyRecord, CustodyAction, Locker
 from apps.items.models import Item, ItemStatus
@@ -283,6 +288,7 @@ class VerifyOtpHandoverAPIView(APIView):
         request=VerifyOtpInputSerializer,
         responses={200: HandoverReceiptSerializer},
     )
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = VerifyOtpInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -324,16 +330,31 @@ class VerifyOtpHandoverAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        with transaction.atomic():
-            # Use the same lock order as claim approval (item, claim, handover)
-            # so verification cannot race an approval or a second redemption.
+        with workflow_transaction(item_scope(item_id), CUSTODY_INVENTORY_SCOPE):
+            # Claim approval and all custody mutations share the item and
+            # custody gates, preventing duplicate approval/release races.
+            if custody_location_id:
+                custody_location = CustodyLocation.objects.filter(pk=custody_location_id).first()
+                if not custody_location:
+                    return Response({'message': 'Custody location not found.'}, status=status.HTTP_404_NOT_FOUND)
+                if not custody_location.is_active:
+                    return Response({'message': 'This custody location is inactive and cannot be selected.'}, status=status.HTTP_409_CONFLICT)
+                vd['physicalDeskLocation'] = custody_location.name
+            else:
+                configured_location = CustodyLocation.objects.filter(
+                    name__iexact=vd['physicalDeskLocation'].strip()
+                ).first()
+                if configured_location:
+                    if not configured_location.is_active:
+                        return Response({'message': 'This custody location is inactive and cannot be selected.'}, status=status.HTTP_409_CONFLICT)
+                    vd['physicalDeskLocation'] = configured_location.name
             try:
-                item = Item.objects.select_for_update().get(pk=item_id)
-                claim = Claim.objects.select_for_update().select_related('claimant').get(
+                item = Item.objects.get(pk=item_id)
+                claim = Claim.objects.select_related('claimant').get(
                     pk=claim_id,
                     item_id=item.pk,
                 )
-                handover = Handover.objects.select_for_update().get(claim=claim)
+                handover = Handover.objects.get(claim=claim)
             except Item.DoesNotExist:
                 return Response(
                     {
@@ -511,7 +532,7 @@ class VerifyOtpHandoverAPIView(APIView):
             masked_id = mask_id_number(vd['idCardNumber'])
             completion_time = verified_at
             previous_custody_desk = item.current_custody_desk or vd['physicalDeskLocation'].strip()
-            assigned_locker = Locker.objects.select_for_update().filter(current_item=item).first()
+            assigned_locker = Locker.objects.filter(current_item=item).first()
             previous_locker_reference = (
                 assigned_locker.locker_number if assigned_locker else item.locker_storage_reference
             )

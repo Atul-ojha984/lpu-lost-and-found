@@ -8,7 +8,7 @@ Management Command: Seed Initial Taxonomy, Demo Accounts & Sample Records
 from datetime import datetime, timezone, timedelta
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from apps.core.db_transactions import transaction
 
 from apps.accounts.models import User, UserRole
 from apps.locations.models import Location

@@ -24,12 +24,14 @@ export default function StudentDashboardOverview() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [myClaims, setMyClaims] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({
-    activeLostReports: 0,
-    foundItemsReported: 0,
-    pendingClaims: 0,
-    itemsInCustody: 0,
-    itemsSuccessfullyReturned: 0,
+    activeLostReports: null as number | null,
+    foundItemsReported: null as number | null,
+    pendingClaims: null as number | null,
+    itemsInCustody: null as number | null,
+    itemsSuccessfullyReturned: null as number | null,
   });
+  const [reportsLoaded, setReportsLoaded] = useState(false);
+  const [dashboardLoadError, setDashboardLoadError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -44,23 +46,30 @@ export default function StudentDashboardOverview() {
 
         if (!isMounted) return;
 
-        let reportsData: PublicItem[] = [];
-        if (reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value)) {
-          reportsData = reportsRes.value;
-        }
+        const reportsLoadedSuccessfully = reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value);
+        const claimsLoadedSuccessfully = claimsRes.status === 'fulfilled' && Array.isArray(claimsRes.value);
+        const recoveriesLoadedSuccessfully = recoveriesRes.status === 'fulfilled' && Array.isArray(recoveriesRes.value);
+        const reportsData: PublicItem[] = reportsLoadedSuccessfully ? reportsRes.value : [];
+        setReportsLoaded(reportsLoadedSuccessfully);
         setMyReports(reportsData);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let claimsData: any[] = [];
-        if (claimsRes.status === 'fulfilled' && Array.isArray(claimsRes.value)) {
-          claimsData = claimsRes.value;
-        }
+        const claimsData: any[] = claimsLoadedSuccessfully ? claimsRes.value : [];
         setMyClaims(claimsData);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const recoveryData: any[] = recoveriesRes.status === 'fulfilled' && Array.isArray(recoveriesRes.value)
-          ? recoveriesRes.value
-          : [];
+        const recoveryData: any[] = recoveriesLoadedSuccessfully ? recoveriesRes.value : [];
+
+        const failedResources = [
+          !reportsLoadedSuccessfully && 'reports',
+          !claimsLoadedSuccessfully && 'claims',
+          !recoveriesLoadedSuccessfully && 'recovery history',
+        ].filter(Boolean);
+        setDashboardLoadError(
+          failedResources.length
+            ? `Could not load ${failedResources.join(', ')}. Values for unavailable data are shown as a dash.`
+            : ''
+        );
 
         // Calculate accurate real metrics
         const lostCount = reportsData.filter((i) => i.itemType === 'LOST').length;
@@ -70,15 +79,24 @@ export default function StudentDashboardOverview() {
         const returnedCount = recoveryData.length;
 
         setMetrics({
-          activeLostReports: lostCount,
-          foundItemsReported: foundCount,
-          pendingClaims: pendingClaimsCount,
-          itemsInCustody: inCustodyCount,
-          itemsSuccessfullyReturned: returnedCount,
+          activeLostReports: reportsLoadedSuccessfully ? lostCount : null,
+          foundItemsReported: reportsLoadedSuccessfully ? foundCount : null,
+          pendingClaims: claimsLoadedSuccessfully ? pendingClaimsCount : null,
+          itemsInCustody: reportsLoadedSuccessfully ? inCustodyCount : null,
+          itemsSuccessfullyReturned: recoveriesLoadedSuccessfully ? returnedCount : null,
         });
       } catch {
         setMyReports([]);
         setMyClaims([]);
+        setReportsLoaded(false);
+        setDashboardLoadError('Dashboard data could not be loaded. Refresh the page and try again.');
+        setMetrics({
+          activeLostReports: null,
+          foundItemsReported: null,
+          pendingClaims: null,
+          itemsInCustody: null,
+          itemsSuccessfullyReturned: null,
+        });
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -128,7 +146,7 @@ export default function StudentDashboardOverview() {
             </div>
           </div>
           <p className="mt-2 text-2xl font-black text-[#283442]">
-            {loading ? '...' : metrics.activeLostReports}
+            {loading ? '...' : metrics.activeLostReports ?? '—'}
           </p>
           <span className="text-[10px] text-slate-500 font-medium">Logged by you</span>
         </div>
@@ -144,7 +162,7 @@ export default function StudentDashboardOverview() {
             </div>
           </div>
           <p className="mt-2 text-2xl font-black text-[#283442]">
-            {loading ? '...' : metrics.foundItemsReported}
+            {loading ? '...' : metrics.foundItemsReported ?? '—'}
           </p>
           <span className="text-[10px] text-slate-500 font-medium">Surrendered</span>
         </div>
@@ -160,7 +178,7 @@ export default function StudentDashboardOverview() {
             </div>
           </div>
           <p className="mt-2 text-2xl font-black text-[#283442]">
-            {loading ? '...' : metrics.pendingClaims}
+            {loading ? '...' : metrics.pendingClaims ?? '—'}
           </p>
           <span className="text-[10px] text-amber-700 font-medium">In verification</span>
         </div>
@@ -176,7 +194,7 @@ export default function StudentDashboardOverview() {
             </div>
           </div>
           <p className="mt-2 text-2xl font-black text-[#283442]">
-            {loading ? '...' : metrics.itemsInCustody}
+            {loading ? '...' : metrics.itemsInCustody ?? '—'}
           </p>
           <span className="text-[10px] text-[#356DE8] font-medium">Station lockers</span>
         </div>
@@ -192,11 +210,17 @@ export default function StudentDashboardOverview() {
             </div>
           </div>
           <p className="mt-2 text-2xl font-black text-[#283442]">
-            {loading ? '...' : metrics.itemsSuccessfullyReturned}
+            {loading ? '...' : metrics.itemsSuccessfullyReturned ?? '—'}
           </p>
           <span className="text-[10px] text-emerald-700 font-medium">Verified release</span>
         </div>
       </div>
+
+      {!loading && dashboardLoadError && (
+        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+          {dashboardLoadError}
+        </div>
+      )}
 
       {/* Action Banner: Approved Claim Ready for Collection OTP */}
       {myClaims.some((c) => c.claimStatus === 'APPROVED' && c.handoverOtp) && (
@@ -242,12 +266,18 @@ export default function StudentDashboardOverview() {
               href="/dashboard/my-reports"
               className="text-xs font-bold text-[#F58220] hover:underline"
             >
-              View All ({myReports.length})
+              {reportsLoaded ? `View All (${myReports.length})` : 'View All'}
             </Link>
           </div>
 
           <div className="divide-y divide-slate-100 mt-2">
-            {myReports.length > 0 ? (
+            {loading ? (
+              <div className="py-12 text-center text-xs text-slate-500">Loading your reports...</div>
+            ) : !reportsLoaded ? (
+              <div role="alert" className="py-12 text-center text-xs text-amber-800">
+                Your reports could not be loaded. Use View All to open the reports page and try again.
+              </div>
+            ) : myReports.length > 0 ? (
               myReports.slice(0, 5).map((item) => (
                 <div key={item.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="overflow-hidden">

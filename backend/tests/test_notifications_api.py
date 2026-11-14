@@ -1,11 +1,11 @@
 import uuid
 
 import pytest
-from django.db import transaction
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
+from apps.core.db_transactions import transaction
 from apps.audit.models import AuditAction, AuditEntry, Notification
 from apps.items.models import Item, ItemCategory, ItemType
 from apps.locations.models import Location

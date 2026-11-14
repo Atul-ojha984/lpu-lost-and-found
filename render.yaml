@@ -1,4 +1,4 @@
-# Exported from Render on 2026-11-09T19:36:07Z
+# Render Blueprint Configuration for LPU Lost & Found Django Backend
 version: "1"
 services:
 - type: web
@@ -6,44 +6,48 @@ services:
   runtime: python
   repo: https://github.com/Atul-ojha984/lpu-lost-and-found
   plan: free
-  envVars:
-  - key: PYTHON_VERSION
-    sync: false
-  - key: CSRF_COOKIE_SECURE
-    sync: false
-  - key: SESSION_COOKIE_SECURE
-    sync: false
-  - key: SECRET_KEY
-    sync: false
-  - key: CSRF_TRUSTED_ORIGINS
-    sync: false
-  - key: DEBUG
-    sync: false
-  - key: DJANGO_ENV
-    sync: false
-  - key: SECURE_SSL_REDIRECT
-    sync: false
-  - key: MEDIA_ROOT
-    sync: false
-  - key: JWT_SIGNING_KEY
-    sync: false
-  - key: PRIVATE_EVIDENCE_ROOT
-    sync: false
-  - key: ALLOWED_HOSTS
-    sync: false
-  - key: CORS_ALLOWED_ORIGINS
-    sync: false
-  - key: SECURE_HSTS_SECONDS
-    sync: false
-  - key: FIELD_ENCRYPTION_KEY
-    sync: false
-  - key: DATABASE_URL
-    sync: false
   region: oregon
-  buildCommand: pip install -r requirements.txt && python manage.py collectstatic
-    --noinput
-  startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application
-    --bind 0.0.0.0:$PORT --workers 1
+  buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+  startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1
   healthCheckPath: /api/v1/health
   autoDeployTrigger: commit
   rootDir: backend
+  envVars:
+  - key: PYTHON_VERSION
+    value: 3.12.5
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings_mongodb
+  - key: DJANGO_ENV
+    value: production
+  - key: DEBUG
+    value: "False"
+  - key: MONGODB_DATABASE
+    value: lpu_lost_found
+  - key: CSRF_COOKIE_SECURE
+    value: "True"
+  - key: SESSION_COOKIE_SECURE
+    value: "True"
+  - key: SECURE_SSL_REDIRECT
+    value: "True"
+  - key: SECURE_HSTS_SECONDS
+    value: "31536000"
+  - key: MEDIA_ROOT
+    value: /tmp/media
+  - key: PRIVATE_EVIDENCE_ROOT
+    value: /tmp/private_evidence
+  - key: ALLOWED_HOSTS
+    value: lpu-lost-found-backend-django-zf75.onrender.com,.onrender.com,localhost,127.0.0.1
+  - key: CORS_ALLOWED_ORIGINS
+    value: https://lpu-lost-and-found-lac.vercel.app
+  - key: CSRF_TRUSTED_ORIGINS
+    value: https://lpu-lost-and-found-lac.vercel.app
+  - key: FIELD_ENCRYPTION_KEY
+    value: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  - key: DATABASE_URL
+    value: sqlite:///:memory:
+  - key: SECRET_KEY
+    sync: false
+  - key: JWT_SIGNING_KEY
+    sync: false
+  - key: MONGODB_URI
+    sync: false

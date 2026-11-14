@@ -28,6 +28,12 @@ if os.getenv('DJANGO_ENV', '').strip().lower() != 'production':
 # Core Security Settings
 DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').strip().lower()
 IS_PRODUCTION = DJANGO_ENV == 'production'
+# The opt-in Mongo settings import this module for shared application/security
+# configuration, then replace DATABASES with the MongoDB Backend. Do not make
+# the PostgreSQL production guard require a PostgreSQL URL in that mode.
+MONGODB_SETTINGS_SELECTED = (
+    os.getenv('DJANGO_SETTINGS_MODULE', '').strip() == 'config.settings_mongodb'
+)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -169,11 +175,19 @@ def _build_database_config(database_url: str | None, *, is_production: bool) -> 
 
 
 DATABASE_URL = os.getenv('DATABASE_URL')
-_db_config = _build_database_config(DATABASE_URL, is_production=IS_PRODUCTION)
-
-DATABASES = {
-    'default': _db_config
-}
+if MONGODB_SETTINGS_SELECTED:
+    # Temporary bootstrap value only: config.settings_mongodb replaces this
+    # before Django initializes. Mongo production settings validate their own
+    # Atlas URI/database and never connect through this SQLite placeholder.
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
+else:
+    _db_config = _build_database_config(DATABASE_URL, is_production=IS_PRODUCTION)
+    DATABASES = {'default': _db_config}
 
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'

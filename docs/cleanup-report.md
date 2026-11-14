@@ -1,6 +1,10 @@
 # LPU Lost & Found Property Recovery Platform
 ## Repository Cleanup, Dead Code & Asset Audit Report
 
+> Historical audit dated October 19, 2026. Its completion claims describe that
+> checkout only and are superseded by the current, evidence-based report at
+> [`docs/PROJECT_CLEANUP_REPORT.md`](PROJECT_CLEANUP_REPORT.md), updated November 14, 2026.
+
 **Date:** October 19, 2026  
 **Auditor / Engineer:** Senior Django REST Framework & Next.js Systems Engineer  
 **Scope:** Full repository audit, comments hygiene, unused imports, workspace configuration, and documentation cleanup.  

@@ -8,7 +8,6 @@ Items App Views: Categories, Public Board, Reporting & Ingestion
 from datetime import datetime, timezone, timedelta
 import logging
 import uuid
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone as django_timezone
 from rest_framework.views import APIView
@@ -25,7 +24,12 @@ from apps.accounts.permissions import (
     IsStudentOrStaff,
     IsRecordOwner,
 )
-from apps.accounts.models import User
+from apps.core.workflow_concurrency import (
+    item_scope,
+    retry_transient_mongo_transaction,
+    user_scope,
+    workflow_transaction,
+)
 from apps.audit.models import AuditEntry, AuditAction
 from apps.claims.models import Claim, ClaimStatus
 from apps.custody.models import CustodyRecord
@@ -302,6 +306,7 @@ class ItemDetailAPIView(APIView):
         request=UpdateReportSerializer,
         responses={200: PublicItemSerializer},
     )
+    @retry_transient_mongo_transaction()
     def patch(self, request, pk):
         if not (request.user and request.user.is_authenticated):
             return Response(
@@ -364,16 +369,49 @@ class ItemDetailAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
 
-        if 'title' in vd: item.title = vd['title'].strip()
-        if 'category' in vd: item.category = vd['category']
-        if 'location' in vd: item.location = vd['location']
-        if 'specificLocation' in vd: item.specific_location = vd['specificLocation'].strip()
-        if 'eventDate' in vd: item.event_date = vd['eventDate']
-        if 'publicDescription' in vd: item.public_description = vd['publicDescription'].strip()
-        if 'primaryImageUrl' in vd: item.primary_image_url = vd['primaryImageUrl'].strip()
-        if 'additionalImages' in vd: item.additional_images = vd['additionalImages']
-
-        with transaction.atomic():
+        with workflow_transaction(item_scope(item.pk)):
+            item = Item.objects.get(pk=item.pk)
+            if item.status == ItemStatus.EXPIRED:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'REPORT_EXPIRED',
+                            'message': 'Report expired after 30 days without recovery.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if item.reported_by_id != request.user.id and request.user.role not in ('CAMPUS_ADMIN', 'SYSTEM_ADMIN'):
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_403_FORBIDDEN,
+                        'error': {'code': 'FORBIDDEN', 'message': 'You are not the owner of this report.'},
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if item.status == ItemStatus.HANDED_OVER:
+                return Response(
+                    {
+                        'success': False,
+                        'statusCode': status.HTTP_409_CONFLICT,
+                        'error': {
+                            'code': 'RECOVERY_COMPLETED',
+                            'message': 'Completed recovery records are read-only and can no longer be edited.',
+                        },
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if 'title' in vd: item.title = vd['title'].strip()
+            if 'category' in vd: item.category = vd['category']
+            if 'location' in vd: item.location = vd['location']
+            if 'specificLocation' in vd: item.specific_location = vd['specificLocation'].strip()
+            if 'eventDate' in vd: item.event_date = vd['eventDate']
+            if 'publicDescription' in vd: item.public_description = vd['publicDescription'].strip()
+            if 'primaryImageUrl' in vd: item.primary_image_url = vd['primaryImageUrl'].strip()
+            if 'additionalImages' in vd: item.additional_images = vd['additionalImages']
             item.save()
             AuditEntry.objects.create(
                 actor=request.user,
@@ -402,6 +440,7 @@ class CreateItemReportAPIView(APIView):
         request=CreateReportSerializer,
         responses={201: PublicItemSerializer},
     )
+    @retry_transient_mongo_transaction()
     def post(self, request, item_type='LOST'):
         data = request.data.copy()
         if 'itemType' not in data:
@@ -416,12 +455,10 @@ class CreateItemReportAPIView(APIView):
         retention_days = category.default_retention_days or 90
         retention_expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
 
-        with transaction.atomic():
-            # Serialize count-and-create for this account. PostgreSQL holds this
-            # user-row lock until commit, so simultaneous requests cannot both
-            # observe the same remaining allowance and exceed the cap.
+        with workflow_transaction(user_scope(request.user.pk)):
+            # Serialize count-and-create for this account with a backend-safe
+            # conditional revision update. This replaces PostgreSQL-only row locks.
             if vd['itemType'] == ItemType.LOST and is_student_reporter(request.user):
-                User.objects.select_for_update().only('id').get(pk=request.user.pk)
                 allowance = get_student_daily_lost_report_allowance(request.user)
                 if allowance['remaining'] <= 0:
                     return Response(
@@ -503,6 +540,7 @@ class UpdateItemReportAPIView(APIView):
         request=UpdateReportSerializer,
         responses={200: PublicItemSerializer},
     )
+    @retry_transient_mongo_transaction()
     def patch(self, request, pk):
         try:
             item = Item.objects.get(pk=pk)
@@ -522,16 +560,18 @@ class UpdateItemReportAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
 
-        if 'title' in vd: item.title = vd['title'].strip()
-        if 'category' in vd: item.category = vd['category']
-        if 'location' in vd: item.location = vd['location']
-        if 'specificLocation' in vd: item.specific_location = vd['specificLocation'].strip()
-        if 'eventDate' in vd: item.event_date = vd['eventDate']
-        if 'publicDescription' in vd: item.public_description = vd['publicDescription'].strip()
-        if 'primaryImageUrl' in vd: item.primary_image_url = vd['primaryImageUrl'].strip()
-        if 'additionalImages' in vd: item.additional_images = vd['additionalImages']
-
-        item.save()
+        with workflow_transaction(item_scope(item.pk)):
+            item = Item.objects.get(pk=item.pk)
+            self.check_object_permissions(request, item)
+            if 'title' in vd: item.title = vd['title'].strip()
+            if 'category' in vd: item.category = vd['category']
+            if 'location' in vd: item.location = vd['location']
+            if 'specificLocation' in vd: item.specific_location = vd['specificLocation'].strip()
+            if 'eventDate' in vd: item.event_date = vd['eventDate']
+            if 'publicDescription' in vd: item.public_description = vd['publicDescription'].strip()
+            if 'primaryImageUrl' in vd: item.primary_image_url = vd['primaryImageUrl'].strip()
+            if 'additionalImages' in vd: item.additional_images = vd['additionalImages']
+            item.save()
         return Response(PublicItemSerializer(item, context={'request': request}).data, status=status.HTTP_200_OK)
 
 class WithdrawItemReportAPIView(APIView):
@@ -543,6 +583,7 @@ class WithdrawItemReportAPIView(APIView):
         summary='Withdraw Own Lost or Found Report',
         responses={200: OpenApiResponse(description='Report withdrawn or already withdrawn')},
     )
+    @retry_transient_mongo_transaction()
     def delete(self, request, pk):
         try:
             item_id = uuid.UUID(str(pk))
@@ -556,8 +597,8 @@ class WithdrawItemReportAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        with transaction.atomic():
-            item = Item.objects.select_for_update().select_related('reported_by').filter(pk=item_id).first()
+        with workflow_transaction(item_scope(item_id)):
+            item = Item.objects.select_related('reported_by').filter(pk=item_id).first()
             if not item:
                 return Response(
                     {

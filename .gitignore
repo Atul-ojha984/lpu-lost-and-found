@@ -50,6 +50,7 @@ backend/.env.*
 !apps/api/.env.example
 !apps/web/.env.example
 !backend/.env.example
+!backend/.env.mongodb.example
 
 # Local Database Files
 *.sqlite3
@@ -99,3 +100,8 @@ ehthumbs.db
 *.swp
 *.swo
 *~
+
+# Database Backups and Dumps (NEVER COMMIT DUMPS)
+database-backups/
+*.bson
+dump/

@@ -18,20 +18,22 @@ import { apiClient } from '@/lib/api-client';
 import { formatDisplayDateTime } from '@/lib/formatters';
 
 export default function SecurityDeskOverview() {
-  const [stats, setStats] = useState({
-    inCustodyCount: 0,
-    pendingClaimsCount: 0,
-    readyHandoverCount: 0,
-    completedHandoversCount: 0,
-  });
+  const [stats, setStats] = useState<{
+    inCustodyCount: number;
+    pendingClaimsCount: number;
+    readyHandoverCount: number;
+    completedHandoversCount: number;
+  } | null>(null);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const [recentEvents, setRecentEvents] = useState<any[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
   const fetchLiveStats = () => {
     setIsLoading(true);
+    setLoadError('');
     setReloadKey((prev) => prev + 1);
   };
 
@@ -41,19 +43,24 @@ export default function SecurityDeskOverview() {
     async function loadLiveStats() {
       try {
         const data = await apiClient.getSecurityStats();
-        if (isMounted && data) {
-          setStats({
-            inCustodyCount: data.custodyInventoryCount ?? 0,
-            pendingClaimsCount: data.pendingClaimsCount ?? 0,
-            readyHandoverCount: data.approvedAwaitingHandoverCount ?? 0,
-            completedHandoversCount: data.completedHandoversCount ?? 0,
-          });
-          if (Array.isArray(data.recentAuditEvents)) {
-            setRecentEvents(data.recentAuditEvents);
-          }
+        if (!isMounted) return;
+        if (!data || !Array.isArray(data.recentAuditEvents)) {
+          throw new Error('Dashboard response was incomplete.');
         }
+        setStats({
+          inCustodyCount: data.custodyInventoryCount ?? 0,
+          pendingClaimsCount: data.pendingClaimsCount ?? 0,
+          readyHandoverCount: data.approvedAwaitingHandoverCount ?? 0,
+          completedHandoversCount: data.completedHandoversCount ?? 0,
+        });
+        setRecentEvents(data.recentAuditEvents);
+        setLoadError('');
       } catch {
-        // Leave at current real records
+        if (isMounted) {
+          setStats(null);
+          setRecentEvents(null);
+          setLoadError('Security dashboard data could not be loaded. Refresh to try again.');
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -71,7 +78,7 @@ export default function SecurityDeskOverview() {
   return (
     <DashboardLayout
       title="Campus Security Reception & Custody Post"
-      subtitle="Gate 1 Main Control Desk • Physical property intake, claim adjudication, and supervised handover."
+      subtitle="Campus security operations: physical property intake, claim adjudication, and supervised handover."
       role="SECURITY_PERSONNEL"
       actionButton={
         <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +110,7 @@ export default function SecurityDeskOverview() {
               <Package className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-black text-[#283442]">{stats.inCustodyCount}</p>
+          <p className="mt-3 text-2xl font-black text-[#283442]">{isLoading ? '...' : stats?.inCustodyCount ?? '—'}</p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
             <span>Stored in station lockers</span>
           </div>
@@ -118,7 +125,7 @@ export default function SecurityDeskOverview() {
               <ClipboardCheck className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-black text-[#283442]">{stats.pendingClaimsCount}</p>
+          <p className="mt-3 text-2xl font-black text-[#283442]">{isLoading ? '...' : stats?.pendingClaimsCount ?? '—'}</p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-[#F58220] font-semibold">
             <span>Requires proof verification</span>
           </div>
@@ -133,7 +140,7 @@ export default function SecurityDeskOverview() {
               <KeyRound className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-black text-[#283442]">{stats.readyHandoverCount}</p>
+          <p className="mt-3 text-2xl font-black text-[#283442]">{isLoading ? '...' : stats?.readyHandoverCount ?? '—'}</p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-[#16876A] font-semibold">
             <span>Awaiting claimant OTP check-in</span>
           </div>
@@ -148,12 +155,18 @@ export default function SecurityDeskOverview() {
               <CheckCircle2 className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-2xl font-black text-[#283442]">{stats.completedHandoversCount}</p>
+          <p className="mt-3 text-2xl font-black text-[#283442]">{isLoading ? '...' : stats?.completedHandoversCount ?? '—'}</p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
             <span>Safely released to verified owners</span>
           </div>
         </div>
       </div>
+
+      {!isLoading && loadError && (
+        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+          {loadError}
+        </div>
+      )}
 
       {/* Security Action Panels */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -261,7 +274,13 @@ export default function SecurityDeskOverview() {
         </div>
 
         <div className="divide-y divide-slate-100 mt-2">
-          {recentEvents.length > 0 ? (
+          {isLoading ? (
+            <div className="py-8 text-center text-xs text-slate-500">Loading recent custody activity...</div>
+          ) : recentEvents === null ? (
+            <div role="alert" className="py-8 text-center text-xs text-amber-800">
+              Recent custody activity could not be loaded.
+            </div>
+          ) : recentEvents.length > 0 ? (
             recentEvents.slice(0, 5).map((ev) => (
               <div key={ev._id || ev.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="text-xs space-y-1">

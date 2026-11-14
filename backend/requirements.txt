@@ -4,13 +4,17 @@
 # ==============================================================================
 
 # Core Framework
-Django>=5.1.0,<6.0.0
+Django>=5.2.0,<5.3.0
 djangorestframework>=3.15.2,<4.0.0
+
+# Keep the official MongoDB backend minor line aligned with Django 5.2.
+django-mongodb-backend==5.2.4
 
 # Database & ORM
 psycopg2-binary>=2.9.9; sys_platform != 'win32'
 psycopg[binary]>=3.2.0; sys_platform == 'win32'
 dj-database-url>=2.2.0
+pymongo>=4.8.0,<5.0.0  # Read-only source access for the controlled legacy data migration command.
 
 # API Tooling & Documentation
 django-filter>=24.3

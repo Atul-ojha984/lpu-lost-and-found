@@ -16,36 +16,62 @@ import { normalizeIndianMobileInput } from '@/lib/indian-mobile';
 
 export default function StudentProfilePage() {
   const [profile, setProfile] = useState({
-    fullName: 'Aarav Sharma',
-    registrationNumber: '12108801',
-    email: 'aarav.sharma.12108@lpu.in',
+    fullName: '',
+    registrationNumber: '',
+    email: '',
     phone: '',
-    notifyEmail: true,
-    notifyOtp: true,
   });
   const [loading, setLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [reportCount, setReportCount] = useState<number | null>(null);
+  const [recoveryCount, setRecoveryCount] = useState<number | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState('');
 
   useEffect(() => {
-    apiClient.getCurrentUser()
-      .then((data) => {
-        const u = data?.user || data;
-        if (u) {
-          setProfile((prev) => ({
-            ...prev,
-            fullName: u.fullName || prev.fullName,
-            registrationNumber: u.registrationNumber || prev.registrationNumber,
-            email: u.email || prev.email,
-            phone: u.phone ?? '',
-          }));
-        }
-      })
-      .catch(() => {
-        // Fallback default
-      })
-      .finally(() => setLoading(false));
+    let isMounted = true;
+
+    async function loadProfileAndSummary() {
+      const [userResult, reportsResult, recoveriesResult] = await Promise.allSettled([
+        apiClient.getCurrentUser(),
+        apiClient.getMyReports(),
+        apiClient.getMyRecoveryHistory(),
+      ]);
+
+      if (!isMounted) return;
+
+      if (userResult.status === 'fulfilled' && userResult.value) {
+        const user = userResult.value?.user || userResult.value;
+        setProfile({
+          fullName: user.fullName || '',
+          registrationNumber: user.registrationNumber || '',
+          email: user.email || '',
+          phone: user.phone ?? '',
+        });
+        setProfileLoaded(true);
+      } else {
+        setProfileError('Your profile could not be loaded. Refresh the page and try again.');
+      }
+
+      const reportsLoaded = reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value);
+      const recoveriesLoaded = recoveriesResult.status === 'fulfilled' && Array.isArray(recoveriesResult.value);
+      setReportCount(reportsLoaded ? reportsResult.value.length : null);
+      setRecoveryCount(recoveriesLoaded ? recoveriesResult.value.length : null);
+      if (!reportsLoaded || !recoveriesLoaded) {
+        setSummaryError('Some profile activity could not be loaded.');
+      }
+
+      setLoading(false);
+      setSummaryLoading(false);
+    }
+
+    void loadProfileAndSummary();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -84,14 +110,14 @@ export default function StudentProfilePage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-[#FFF1E6] border border-[#F58220]/30 text-[#F58220] flex items-center justify-center text-xl font-black">
-              {profile.fullName.slice(0, 2).toUpperCase()}
+              {profile.fullName.trim().slice(0, 2).toUpperCase() || '—'}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-[#283442]">{profile.fullName}</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
                   <ShieldCheck className="w-3 h-3" />
-                  Verified Campus User
+                  Campus Account
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">
@@ -105,12 +131,16 @@ export default function StudentProfilePage() {
 
           <div className="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-6 text-xs text-slate-500">
             <div>
-              <span className="block font-bold text-slate-800 text-sm">3</span>
-              <span>Reports Filed</span>
+              <span className="block font-bold text-slate-800 text-sm">
+                {summaryLoading ? '...' : reportCount ?? '—'}
+              </span>
+              <span>Active Reports</span>
             </div>
             <div className="h-8 w-px bg-slate-200 mx-2" />
             <div>
-              <span className="block font-bold text-slate-800 text-sm">2</span>
+              <span className="block font-bold text-slate-800 text-sm">
+                {summaryLoading ? '...' : recoveryCount ?? '—'}
+              </span>
               <span>Recoveries</span>
             </div>
           </div>
@@ -125,6 +155,11 @@ export default function StudentProfilePage() {
         {profileError && (
           <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-800 text-xs font-semibold">
             {profileError}
+          </div>
+        )}
+        {summaryError && (
+          <div role="status" className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold">
+            {summaryError}
           </div>
         )}
 
@@ -145,8 +180,8 @@ export default function StudentProfilePage() {
                 <input
                   type="text"
                   value={profile.fullName}
-                  onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-[#F5F5F5] pl-10 pr-4 py-2.5 text-xs font-medium text-[#17243B] focus:bg-white focus:border-[#F58220] focus:outline-none"
+                  readOnly
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 pl-10 pr-4 py-2.5 text-xs font-medium text-slate-600"
                 />
               </div>
             </div>
@@ -200,31 +235,10 @@ export default function StudentProfilePage() {
             </div>
           </div>
 
-          {/* Recovery Notifications Settings */}
-          <div className="pt-4 border-t border-slate-100 space-y-3">
-            <h4 className="text-xs font-bold text-[#283442] uppercase tracking-wider">
-              Lost &amp; Found Alert Preferences
-            </h4>
-
-
-            <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-[#F5F5F5] cursor-pointer transition-colors">
-              <input
-                type="checkbox"
-                checked={profile.notifyOtp}
-                onChange={(e) => setProfile({ ...profile, notifyOtp: e.target.checked })}
-                className="mt-0.5 w-4 h-4 rounded text-[#F58220] focus:ring-[#F58220]"
-              />
-              <div className="text-xs">
-                <span className="font-bold text-[#283442] block">Claim Approval &amp; Handover OTP Alerts</span>
-                <span className="text-slate-500">Send an instant notification when a security officer approves my claim and generates a single-use release OTP.</span>
-              </div>
-            </label>
-          </div>
-
           <div className="pt-4 flex justify-end">
             <button
               type="submit"
-              disabled={loading || saving}
+              disabled={loading || saving || !profileLoaded}
               className="inline-flex items-center gap-2 rounded-xl lpu-btn-primary px-5 py-2.5 text-xs font-bold shadow-xs hover:bg-[#E66F00] transition-colors disabled:opacity-60"
             >
               <Save className="w-4 h-4" />

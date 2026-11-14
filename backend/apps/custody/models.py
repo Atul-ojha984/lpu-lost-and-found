@@ -9,7 +9,6 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from django.db.models.functions import Lower
 from apps.items.models import Item
 
 class CustodyLocation(models.Model):
@@ -17,6 +16,9 @@ class CustodyLocation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=50, unique=True, db_index=True)
     name = models.CharField(max_length=150)
+    # Materialized case-folded key replaces the functional Lower(name) unique
+    # constraint, which Django MongoDB Backend 5.2 cannot create.
+    name_key = models.CharField(max_length=150, unique=True, editable=False, default='')
     description = models.TextField(max_length=500, blank=True, default='')
     is_active = models.BooleanField(default=True, db_index=True)
     created_by = models.ForeignKey(
@@ -38,9 +40,10 @@ class CustodyLocation(models.Model):
 
     class Meta:
         ordering = ['name', 'code']
-        constraints = [
-            models.UniqueConstraint(Lower('name'), name='custody_location_name_ci_unique'),
-        ]
+
+    def save(self, *args, **kwargs):
+        self.name_key = self.name.strip().lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.name} ({self.code})'

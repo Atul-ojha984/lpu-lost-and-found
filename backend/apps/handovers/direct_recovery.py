@@ -2,7 +2,7 @@
 
 import logging
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -12,6 +12,12 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import UserRole
 from apps.accounts.permissions import IsSecurityOrAdmin, IsStudentOrStaff
+from apps.core.workflow_concurrency import (
+    CUSTODY_INVENTORY_SCOPE,
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 from apps.audit.models import AuditAction, AuditEntry
 from apps.claims.models import Claim, ClaimStatus
 from apps.custody.models import CustodyAction, CustodyLocation, CustodyRecord, Locker
@@ -257,6 +263,7 @@ class DirectRecoveryListCreateAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
+    @retry_transient_mongo_transaction()
     def post(self, request):
         serializer = DirectRecoveryIntakeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -268,9 +275,15 @@ class DirectRecoveryListCreateAPIView(APIView):
             return Response({'message': 'Confirm that the physical item has been received into security custody.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            with transaction.atomic():
+            with workflow_transaction(item_scope(values['reportId']), CUSTODY_INVENTORY_SCOPE):
+                # The submitted location may have been disabled after the
+                # serializer preflight. Revalidate it while sharing the same
+                # configuration gate as admin enable/disable operations.
+                physical_desk_location, location_error = _resolve_custody_desk(values)
+                if location_error:
+                    return location_error
                 try:
-                    item = Item.objects.select_for_update().select_related('reported_by').get(
+                    item = Item.objects.select_related('reported_by').get(
                         pk=values['reportId'], is_archived=False
                     )
                 except Item.DoesNotExist:
@@ -333,6 +346,7 @@ class DirectRecoveryReviewAPIView(APIView):
     """Require independent ownership verification and review before issuing a direct OTP."""
     permission_classes = [IsSecurityOrAdmin]
 
+    @retry_transient_mongo_transaction()
     def patch(self, request, direct_recovery_id):
         serializer = DirectRecoveryReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -342,10 +356,10 @@ class DirectRecoveryReviewAPIView(APIView):
         except (DirectRecovery.DoesNotExist, ValueError, TypeError):
             return Response({'message': 'Direct recovery not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        with transaction.atomic():
+        with workflow_transaction(item_scope(item_id), CUSTODY_INVENTORY_SCOPE):
             try:
-                item = Item.objects.select_for_update().get(pk=item_id)
-                record = DirectRecovery.objects.select_for_update().select_related(
+                item = Item.objects.get(pk=item_id)
+                record = DirectRecovery.objects.select_related(
                     'recipient', 'intake_officer'
                 ).get(pk=direct_recovery_id, item_id=item.pk)
             except (Item.DoesNotExist, DirectRecovery.DoesNotExist):
@@ -453,6 +467,7 @@ class DirectRecoveryVerifyOtpAPIView(APIView):
     """Verify the claimant OTP and atomically record actual direct property handover."""
     permission_classes = [IsSecurityOrAdmin]
 
+    @retry_transient_mongo_transaction()
     def post(self, request, direct_recovery_id):
         serializer = DirectRecoveryVerifyOtpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -465,10 +480,13 @@ class DirectRecoveryVerifyOtpAPIView(APIView):
         except (DirectRecovery.DoesNotExist, ValueError, TypeError):
             return Response({'message': 'Direct recovery not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        with transaction.atomic():
+        with workflow_transaction(item_scope(item_id), CUSTODY_INVENTORY_SCOPE):
+            physical_desk_location, location_error = _resolve_custody_desk(values)
+            if location_error:
+                return location_error
             try:
-                item = Item.objects.select_for_update().get(pk=item_id)
-                record = DirectRecovery.objects.select_for_update().select_related(
+                item = Item.objects.get(pk=item_id)
+                record = DirectRecovery.objects.select_related(
                     'recipient', 'reviewed_by', 'intake_officer'
                 ).get(pk=direct_recovery_id, item_id=item.pk)
             except (Item.DoesNotExist, DirectRecovery.DoesNotExist):
@@ -516,7 +534,7 @@ class DirectRecoveryVerifyOtpAPIView(APIView):
                 remaining = max(0, 5 - record.otp_attempts_count)
                 return Response({'message': f'Invalid direct handover OTP. {remaining} attempt(s) remain.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            locker = Locker.objects.select_for_update().filter(current_item=item).first()
+            locker = Locker.objects.filter(current_item=item).first()
             previous_locker = locker.locker_number if locker else item.locker_storage_reference
             if locker:
                 locker.current_item = None

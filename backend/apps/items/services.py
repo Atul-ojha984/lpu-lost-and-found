@@ -11,10 +11,14 @@ from pathlib import Path
 from io import BytesIO
 from PIL import Image
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone as django_timezone
 from rest_framework.exceptions import ValidationError
 from apps.accounts.models import UserRole, UserType
+from apps.core.workflow_concurrency import (
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 from .models import Item, ItemStatus, ItemType
 
 ALLOWED_MIME_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
@@ -85,6 +89,7 @@ def get_student_daily_lost_report_allowance(user, now=None) -> dict:
     }
 
 
+@retry_transient_mongo_transaction()
 def expire_overdue_student_lost_reports(now=None) -> dict:
     """Archive eligible student LOST reports once they reach their 30-day age.
 
@@ -133,8 +138,8 @@ def expire_overdue_student_lost_reports(now=None) -> dict:
             break
 
         for item_id in item_ids:
-            with transaction.atomic():
-                item = Item.objects.select_for_update().filter(pk=item_id).first()
+            with workflow_transaction(item_scope(item_id)):
+                item = Item.objects.filter(pk=item_id).first()
                 if (
                     not item
                     or item.is_archived

@@ -206,6 +206,7 @@ class TestModelConstraintsSuite:
         """Custody records form an append-only timeline ordered by timestamp descending."""
         item = test_setup['item']
         officer = test_setup['security_officer']
+        first_timestamp = datetime.now(timezone.utc)
 
         r1 = CustodyRecord.objects.create(
             item=item,
@@ -213,6 +214,7 @@ class TestModelConstraintsSuite:
             to_location='Block 34 Security Desk',
             handled_by=officer,
             remarks='Intake from finder',
+            timestamp=first_timestamp,
         )
         r2 = CustodyRecord.objects.create(
             item=item,
@@ -221,6 +223,7 @@ class TestModelConstraintsSuite:
             to_location='Central Strongroom Locker 14B',
             handled_by=officer,
             remarks='Secured in strongroom locker',
+            timestamp=first_timestamp + timedelta(seconds=1),
         )
 
         records = list(CustodyRecord.objects.filter(item=item))

@@ -4,7 +4,8 @@ import logging
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from apps.core.db_transactions import transaction
+from django.db import DatabaseError
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -64,8 +65,23 @@ def _save_notifications(entry, events):
                 message=message,
                 target_path=target_path,
             ))
-    if notifications:
-        Notification.objects.bulk_create(notifications, ignore_conflicts=True)
+    for notification in notifications:
+        try:
+            # A unique partial index is the concurrency-safe idempotency guard.
+            # Django MongoDB Backend 5.2 doesn't support bulk_create's
+            # ignore_conflicts option, so insert individually and recognize
+            # only an already-persisted (recipient, source event) duplicate.
+            notification.save(force_insert=True)
+        except DatabaseError:
+            if (
+                notification.source_audit_entry_id
+                and Notification.objects.filter(
+                    recipient_id=notification.recipient_id,
+                    source_audit_entry_id=notification.source_audit_entry_id,
+                ).exists()
+            ):
+                continue
+            raise
 
 
 def _send_for_audit_entry(audit_entry_id):

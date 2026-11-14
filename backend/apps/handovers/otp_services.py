@@ -3,11 +3,16 @@
 import logging
 from datetime import timedelta
 
-from django.db import transaction
 from django.utils import timezone
 
 from apps.claims.services import generate_secure_numeric_otp
 from apps.items.models import Item, ItemStatus
+from apps.core.workflow_concurrency import (
+    CUSTODY_INVENTORY_SCOPE,
+    item_scope,
+    retry_transient_mongo_transaction,
+    workflow_transaction,
+)
 
 from .models import DirectRecovery, DirectRecoveryStatus
 
@@ -25,6 +30,7 @@ def set_direct_recovery_otp(record: DirectRecovery, generated_at=None) -> None:
     record.otp_attempts_count = 0
 
 
+@retry_transient_mongo_transaction()
 def renew_expired_direct_recovery_otp(direct_recovery_id, now=None):
     """Renew an expired pending OTP under the same item/record lock order as handover."""
     now = now or timezone.now()
@@ -33,10 +39,10 @@ def renew_expired_direct_recovery_otp(direct_recovery_id, now=None):
     except (DirectRecovery.DoesNotExist, ValueError, TypeError):
         return None, False
 
-    with transaction.atomic():
+    with workflow_transaction(item_scope(item_id), CUSTODY_INVENTORY_SCOPE):
         try:
-            item = Item.objects.select_for_update().get(pk=item_id)
-            record = DirectRecovery.objects.select_for_update().get(pk=direct_recovery_id, item_id=item.pk)
+            item = Item.objects.get(pk=item_id)
+            record = DirectRecovery.objects.get(pk=direct_recovery_id, item_id=item.pk)
         except (Item.DoesNotExist, DirectRecovery.DoesNotExist):
             return None, False
 

@@ -8,7 +8,6 @@ Claims App Views
 import os
 import uuid
 from django.conf import settings
-from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from rest_framework.views import APIView
@@ -22,6 +21,7 @@ from apps.accounts.permissions import IsSecurityOrAdmin
 from apps.audit.models import AuditEntry, AuditAction
 from apps.items.models import Item
 from apps.handovers.models import Handover
+from apps.core.workflow_concurrency import item_scope, workflow_transaction
 from .models import Claim, ClaimStatus
 from .serializers import (
     SubmitClaimSerializer,
@@ -148,7 +148,7 @@ class PendingClaimsQueueAPIView(APIView):
             term = search_param.strip()
             # If search term has CLM- prefix, strip it to search UUID
             raw_term = term[4:] if term.upper().startswith('CLM-') else term
-            queryset = queryset.filter(
+            search_query = (
                 Q(statement__icontains=term) |
                 Q(item__title__icontains=term) |
                 Q(item__reference_number__icontains=term) |
@@ -156,9 +156,13 @@ class PendingClaimsQueueAPIView(APIView):
                 Q(claimant__registration_number__icontains=term) |
                 Q(claimant__email__icontains=term) |
                 Q(review_notes__icontains=term) |
-                Q(rejection_reason__icontains=term) |
-                Q(id__icontains=raw_term)
+                Q(rejection_reason__icontains=term)
             )
+            try:
+                search_query |= Q(pk=uuid.UUID(raw_term))
+            except (ValueError, AttributeError, TypeError):
+                pass
+            queryset = queryset.filter(search_query)
 
         queryset = queryset.distinct().order_by('-created_at')
         serializer = ClaimSerializer(queryset, many=True, context={'request': request})
@@ -220,13 +224,20 @@ class ClaimEvidenceUploadAPIView(APIView):
     def post(self, request, pk):
         target_path = None
         try:
-            with transaction.atomic():
-                # Match the item -> claim lock order used by supervised handover
-                # so uploads cannot race a successful recovery transaction.
+            try:
+                claim_seed = Claim.objects.only('item_id').get(pk=pk)
+            except (Claim.DoesNotExist, ValueError):
+                return Response(
+                    {'success': False, 'statusCode': 404, 'error': {'code': 'NOT_FOUND', 'message': 'Claim not found.'}},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            with workflow_transaction(item_scope(claim_seed.item_id)):
+                # Share the item's workflow gate with claim adjudication and
+                # handover so uploads cannot race successful recovery.
                 try:
-                    claim_seed = Claim.objects.only('item_id').get(pk=pk)
-                    Item.objects.select_for_update().get(pk=claim_seed.item_id)
-                    claim = Claim.objects.select_for_update().get(pk=pk)
+                    Item.objects.get(pk=claim_seed.item_id)
+                    claim = Claim.objects.get(pk=pk)
                 except (Claim.DoesNotExist, Item.DoesNotExist, ValueError):
                     return Response(
                         {'success': False, 'statusCode': 404, 'error': {'code': 'NOT_FOUND', 'message': 'Claim not found.'}},

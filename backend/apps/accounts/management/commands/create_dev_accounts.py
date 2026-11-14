@@ -9,7 +9,8 @@ or exposing sensitive data.
 """
 
 import os
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from apps.accounts.models import User, UserRole, UserType
 
 class Command(BaseCommand):
@@ -48,6 +49,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if settings.IS_PRODUCTION:
+            raise CommandError(
+                'Development account creation is disabled in production.'
+            )
+
         self.stdout.write(self.style.NOTICE('Initializing local development account verification...'))
 
         target_role = options['role']

@@ -100,3 +100,8 @@ ehthumbs.db
 *.swp
 *.swo
 *~
+
+# Database Backups and Dumps (NEVER COMMIT DUMPS)
+database-backups/
+*.bson
+dump/

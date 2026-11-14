@@ -42,7 +42,11 @@ export async function connectDatabase(): Promise<boolean> {
 
     logger.info('Connecting to MongoDB database...');
     await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+      dbName: env.MONGODB_DATABASE,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 20,
+      minPoolSize: 2,
       autoIndex: env.NODE_ENV !== 'production',
     });
 

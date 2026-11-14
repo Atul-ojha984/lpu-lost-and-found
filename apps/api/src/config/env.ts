@@ -11,6 +11,7 @@ const envSchema = z.object({
   API_PREFIX: z.string().default('/api/v1'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   MONGODB_URI: z.string().default('mongodb://127.0.0.1:27017/lpu_lost_found'),
+  MONGODB_DATABASE: z.string().default('lpu_lost_found'),
   JWT_SECRET: z.string().min(16).default('lpu_lost_found_dev_secret_key_minimum_32_characters_long!'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   COOKIE_SECRET: z.string().min(16).default('lpu_cookie_signing_dev_secret_32_chars!'),

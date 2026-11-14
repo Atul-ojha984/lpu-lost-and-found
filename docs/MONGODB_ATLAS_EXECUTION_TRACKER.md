@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 5 - PostgreSQL-to-MongoDB migration tool: IN PROGRESS.** Phases 0-4 have been implemented and locally validated; Phase 4 is not an Atlas or production cutover approval.
+**Phase 5 - PostgreSQL-to-MongoDB migration tool: BLOCKED.** The guarded importer, checkpoint/resume handling, source snapshot, and local Mongo tests are implemented. Source PostgreSQL integration and Atlas validation cannot run because no isolated PostgreSQL source or Atlas staging connection is available. Independent documentation and regression phases may proceed; no data import or cutover has occurred.
 
 ## Phase status
 
@@ -18,8 +18,8 @@
 | 2 - MongoDB database architecture | COMPLETED | Proposed reference-first document mapping and candidate indexes documented; Atlas-generated indexes and runtime behavior remain unverified. |
 | 3 - Critical business logic redesign | VERIFIED | Backend-aware transactions, workflow mutexes, conflict retry, and Mongo call-site refactors pass real local replica-set integration and full application Mongo tests. Commit: `dad6edb`. Atlas staging and operation-specific concurrency stress remain release gates. |
 | 4 - Backend database migration | COMPLETED | Opt-in Mongo settings, ObjectId contrib migration graph, domain snapshots, required schema adaptations, and pinned backend locally migrate and pass the application suite. PostgreSQL remains default; Atlas is not configured. |
-| 5 - PostgreSQL-to-MongoDB data migration tool | NOT STARTED | Imports must remain explicit and guarded; production data must remain unchanged. |
-| 6 - Automated testing | NOT STARTED | Requires isolated MongoDB replica-set integration/concurrency environment. |
+| 5 - PostgreSQL-to-MongoDB data migration tool | BLOCKED | Importer implemented and focused tests pass. Actual PostgreSQL source, copy, resume, and reconciliation integration remains unverified; isolated PostgreSQL source and Atlas access are unavailable. |
+| 6 - Automated testing | NOT STARTED | Local Mongo replica-set and SQLite suites exist; Atlas-specific integration/concurrency remains an external gate. |
 | 7 - Frontend/API regression | NOT STARTED | Preserve `/api/v1` contracts and current UI. |
 | 8 - Deployment preparation | NOT STARTED | No Render/Vercel service or environment changes made. |
 | 9 - Rollback and recovery | NOT STARTED | Must address writes made after any future cutover. |
@@ -209,10 +209,48 @@ These were present before this migration implementation and must not be discarde
 
 ### Commit
 
-- Phase 4 implementation is pending final diff review and commit.
+- `f7610c8 feat: configure opt-in Django MongoDB backend`.
+
+## Phase 5 - PostgreSQL-to-MongoDB data migration tool
+
+### Implemented
+
+- Added `migrate_postgres_to_mongodb`, a separate command that does not replace or modify the prior MongoDB-to-PostgreSQL importer.
+- Dry-run is read-only by default; validation-only compares row fingerprints and collection counts; import is explicit, additive, idempotent, per-batch transactional, and resumable through an atomically written checkpoint.
+- Uses the PostgreSQL migration history to build source-side model state, maps UUID IDs directly and SQL auto IDs deterministically to Mongo ObjectIds, resolves Django content types/permissions/groups by natural keys, and checks foreign references before dependent inserts.
+- Reads the PostgreSQL side from one repeatable-read, read-only snapshot. Each Mongo batch commits separately; partial imports are retained and resumed, never cleared.
+- Endpoint fingerprints in the checkpoint are hashes. Credentials and row contents are not written to reports. Sensitive audit metadata is sanitized, and bulk inserts avoid firing notification/audit post-save signals.
+- Session documents and transient workflow mutexes are intentionally excluded. Media/evidence bytes are not copied by this command.
+- Production-labelled endpoints require the explicit production guard; remote endpoints require environment classification. No import was executed.
+- Added `docs/MONGODB_ATLAS_DATA_MIGRATION_GUIDE.md`.
+
+### Files added or modified for Phase 5
+
+- Added `backend/apps/core/management/commands/migrate_postgres_to_mongodb.py`.
+- Added `backend/tests/test_postgres_to_mongodb_migration.py`.
+- Added `docs/MONGODB_ATLAS_DATA_MIGRATION_GUIDE.md`.
+- Updated this tracker and `docs/MONGODB_ATLAS_DATA_MAPPING.md`.
+
+### Verification
+
+| Validation | Result |
+|---|---|
+| Python 3.12 `py_compile` for importer and tests | PASS. |
+| Mongo-configured `manage.py check` | PASS - 0 issues. |
+| Importer command help/argument registration | PASS. |
+| `tests/test_postgres_to_mongodb_migration.py` on disposable local Mongo replica set | PASS - 10 passed. Includes model graph/field mapping, ObjectId determinism, UUID preservation, audit redaction/no signal side effects, checkpoint atomicity, required source URL, and remote/production guard checks. |
+| Mongo `makemigrations --check --dry-run` | PASS - no changes detected. |
+| `git diff --check` | PASS; only Git line-ending notices for unrelated pre-existing files. |
+| PostgreSQL-source connection, import/resume, target reconciliation | BLOCKED - no isolated PostgreSQL source is installed/configured. |
+| Atlas schema/index/transaction validation | BLOCKED - no Atlas staging URI/access. |
+
+### Known risks and next action
+
+- A real source-to-target rehearsal is still required before this tool can be marked VERIFIED. Run it on an isolated PostgreSQL copy and dedicated Atlas staging database, then validate every retained model and related workflow.
+- The source snapshot is held for the full run; long imports may retain PostgreSQL MVCC history, so operational duration must be monitored.
+- Active claim approval OTP remains in the legacy plaintext `Claim.handover_otp` field in the current application model. The importer never logs it, but encryption-path compatibility and a separately reviewed handling policy remain cutover security gates.
+- Reconciliation expects the destination model collections to contain exactly the corresponding source records; independent destination rows must be reviewed, not silently merged.
 
 ## Current outstanding work and next action
 
-Start Phase 5 by implementing a distinct PostgreSQL-to-MongoDB migration command with dry-run, validation-only, import, resume/checkpoint, retries, duplicate detection, relationship resolution, and count reconciliation. It must never select production automatically. Preserve the existing prior Mongo-to-PostgreSQL importer and its user changes.
-
-The last completed task is the local Mongo schema migration and complete Mongo/default regression suites. The next task is Phase 5 design/implementation; following that, continue Phases 6-10 sequentially.
+Continue Phase 6 test/report consolidation using the existing isolated Mongo replica-set and SQLite suites. Keep all environment-dependent source-to-Atlas and production operations marked BLOCKED/NOT TESTED until suitable staging infrastructure and explicit approval exist.

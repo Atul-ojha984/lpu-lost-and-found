@@ -50,7 +50,8 @@ The custom domain user is UUID-based, but Django contrib framework models and im
 | `auth.Permission` | Recreate/map by `(content_type app_label, model, codename)`. | Permission IDs are internal; verify codename and object-level permission behavior after migration. |
 | `contenttypes.ContentType` | Recreate/map by `(app_label, model)`. | Do not carry old integer PK as an ObjectId; resolve all group/user permission relations by natural key. |
 | `admin.LogEntry` | Preserve only if Django admin history is in operational scope; otherwise retain/export separately with documented policy. | It references content type and user. Migrate after both references are mapped. It is not the application's append-only `AuditEntry`. |
-| `django_session` | Do not assume sessions can be copied. Plan controlled session invalidation at cutover unless session values are explicitly migrated and verified. | JWT sessions and Django admin sessions have separate behavior; user account records and tokens must not be copied from a live browser. |
+| `django_session` | Excluded by the Phase 5 importer. Users must establish fresh sessions after any later cutover. | JWT sessions and Django admin sessions have separate behavior; session rows and browser tokens are not copied. |
+| `core.WorkflowMutex` | Excluded by the Phase 5 importer. | These are transient concurrency coordination records, not business history; importing revisions could preserve stale workflow state. |
 | Automatic M2M junctions | Recreate using Mongo backend-supported generated identifiers/relationships. | Resolve users/groups/permissions through natural keys and test both `groups` and `user_permissions`; no role escalation. |
 | `django_migrations` / migration state | Use backend-specific migration modules/state. | MongoDB does not support all standard SQL migration assumptions; do not rely on `dumpdata`, `loaddata`, or `inspectdb` for this transfer. |
 

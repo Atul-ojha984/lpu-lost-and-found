@@ -299,6 +299,16 @@ class Command(BaseCommand):
                 "destination configuration when non-key fields differ."
             ),
         )
+        parser.add_argument(
+            "--skip-orphans",
+            action="store_true",
+            help="Skip legacy records with dangling references rather than failing the entire import.",
+        )
+        parser.add_argument(
+            "--batch-transactions",
+            action="store_true",
+            help="Commit in batches of 25 to avoid MongoDB Atlas 60-second transaction timeouts.",
+        )
 
     def handle(self, *args, **options):
         do_import = bool(options["do_import"])
@@ -314,6 +324,8 @@ class Command(BaseCommand):
         if not database:
             raise CommandError("A source MongoDB database name is required.")
         self.reuse_existing_references = options["reuse_existing_references"]
+        self.skip_orphans = options.get("skip_orphans", False)
+        self.dry_run = dry_run
         self.reference_warnings = []
 
         if options["input_dir"]:
@@ -384,10 +396,13 @@ class Command(BaseCommand):
         id_maps = {collection: {} for collection in SOURCE_COLLECTIONS}
         try:
             with _suppress_historical_notification_signals():
-                with transaction.atomic():
-                    self._import_all(data, database, source_key, id_maps, stats)
-                    if dry_run:
-                        transaction.set_rollback(True)
+                if options.get("batch_transactions"):
+                    self._import_all_batched(data, database, source_key, id_maps, stats, dry_run=dry_run)
+                else:
+                    with transaction.atomic():
+                        self._import_all(data, database, source_key, id_maps, stats)
+                        if dry_run:
+                            transaction.set_rollback(True)
         except CommandError:
             raise
         except Exception as exc:
@@ -586,13 +601,31 @@ class Command(BaseCommand):
                     )
 
         if unresolved:
-            preview = "; ".join(unresolved[:10])
-            remainder = len(unresolved) - min(len(unresolved), 10)
-            suffix = f"; and {remainder} more" if remainder else ""
-            raise CommandError(
-                f"Source referential integrity check found {len(unresolved)} unresolved "
-                f"relationship(s): {preview}{suffix}. No import was run."
+            if not getattr(self, "skip_orphans", False):
+                preview = "; ".join(unresolved[:10])
+                remainder = len(unresolved) - min(len(unresolved), 10)
+                suffix = f"; and {remainder} more" if remainder else ""
+                raise CommandError(
+                    f"Source referential integrity check found {len(unresolved)} unresolved "
+                    f"relationship(s): {preview}{suffix}. No import was run. Pass --skip-orphans to skip dangling records."
+                )
+            # Safely prune records with broken references so valid historical data imports cleanly
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Notice: Pruning {len(unresolved)} orphan record(s) referencing deleted items/claims before import."
+                )
             )
+            for collection, field, target in relationships:
+                data[collection] = [
+                    doc for doc in data[collection]
+                    if not (_reference_id(doc.get(field)) and _reference_id(doc.get(field)) not in source_ids[target])
+                ]
+            for claim in data["claims"]:
+                if claim.get("challengeAnswers"):
+                    claim["challengeAnswers"] = [
+                        ans for ans in claim["challengeAnswers"]
+                        if not (_reference_id(ans.get("challenge")) and _reference_id(ans.get("challenge")) not in source_ids["verificationchallenges"])
+                    ]
 
     def _destination_counts(self):
         return {name: model._base_manager.count() for name, model in COUNT_MODELS.items()}
@@ -704,6 +737,55 @@ class Command(BaseCommand):
         except SourceDataError:
             raise
 
+    def _import_all_batched(self, data, database, source_key, id_maps, stats, batch_size=25, dry_run=False):
+        handlers = {
+            "itemcategories": self._import_category,
+            "locations": self._import_location,
+            "users": self._import_user,
+            "items": self._import_item,
+            "privatedetails": self._import_private_detail,
+            "verificationchallenges": self._import_challenge,
+            "claims": self._import_claim,
+            "matchsuggestions": self._import_match,
+            "custodyrecords": self._import_custody,
+            "handovers": self._import_handover,
+            "disposalrecords": self._import_disposal,
+            "auditentries": self._import_audit,
+        }
+        for collection in SOURCE_COLLECTIONS:
+            docs = data[collection]
+            total_docs = len(docs)
+            for chunk_start in range(0, max(total_docs, 1), batch_size):
+                chunk = docs[chunk_start:chunk_start + batch_size]
+                if not chunk:
+                    continue
+                with transaction.atomic():
+                    for document in chunk:
+                        try:
+                            instance = handlers[collection](
+                                document, database, source_key, id_maps, stats
+                            )
+                            id_maps[collection][_source_id(document)] = instance
+                        except CommandError:
+                            raise
+                        except SourceDataError as exc:
+                            raise CommandError(
+                                f"{collection} record {_source_id(document)}: {exc}. "
+                                "The destination transaction was rolled back."
+                            ) from None
+                        except IntegrityError:
+                            raise CommandError(
+                                f"{collection} record {_source_id(document)} conflicts with a destination "
+                                "database constraint. The destination transaction was rolled back."
+                            ) from None
+                        except Exception as exc:
+                            raise CommandError(
+                                f"{collection} record {_source_id(document)} failed ({type(exc).__name__}: {exc}). "
+                                "Record values were not logged and the destination transaction was rolled back."
+                            ) from exc
+                    if dry_run:
+                        transaction.set_rollback(True)
+
     def _import_all(self, data, database, source_key, id_maps, stats):
         handlers = {
             "itemcategories": self._import_category,
@@ -740,9 +822,9 @@ class Command(BaseCommand):
                     ) from None
                 except Exception as exc:
                     raise CommandError(
-                        f"{collection} record {_source_id(document)} failed ({type(exc).__name__}). "
+                        f"{collection} record {_source_id(document)} failed ({type(exc).__name__}: {exc}). "
                         "Record values were not logged and the destination transaction was rolled back."
-                    ) from None
+                    ) from exc
 
     def _import_category(self, doc, database, source_key, id_maps, stats):
         code = self._required_text(doc, "code").upper()

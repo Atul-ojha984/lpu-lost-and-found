@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 10 - Final production readiness review: IN PROGRESS.** Phases 8 and 9 are committed; the final review is documenting local evidence and external blockers. No production import, deployment, or cutover has occurred.
+**Phase 10 - Final production readiness review: BLOCKED.** The local readiness review is recorded, but Atlas/source-database integration and the release gates below are not verified. No production import, deployment, or cutover has occurred.
 
 ## Phase status
 
@@ -411,7 +411,7 @@ At the Phase 10 review, these pre-existing user changes remained untouched and u
 
 ## Supplemental workstream - project cleanup and production hardening (2026-11-14)
 
-**Status: IN PROGRESS / PARTIALLY COMPLETED.** This workstream responds to the additional cleanup instruction. It does not change the Phase 10 MongoDB cutover status: that phase remains BLOCKED, PostgreSQL remains the active production database, and no deployment or production data operation was performed.
+**Status: PARTIALLY COMPLETED.** The verified cleanup subset is committed as `c90e948` (`chore: remove fabricated data and harden dashboard states`). This workstream does not change the Phase 10 MongoDB cutover status: that phase remains BLOCKED, PostgreSQL remains the active production database, and no deployment or production data operation was performed.
 
 ### Completed
 
@@ -471,4 +471,8 @@ Pre-existing user changes in `PROJECT_PROGRESS.md`, `backend/apps/core/managemen
 
 ### Next action
 
-Review this supplemental report and the scoped diff, then make a cleanup-only commit containing only this workstream's files. Keep pre-existing user modifications unstaged. Do not push or deploy as part of cleanup verification.
+- Keep PostgreSQL live and preserve the MongoDB release blockers above.
+- Continue the broader repository cleanup only with additional, evidence-based scopes; do not introduce a structural rewrite without a demonstrated need.
+- Resolve the recorded dependency advisories in separately scoped, compatible changes, including the legacy-service boundary.
+- Complete browser/responsive checks and isolated Atlas staging verification before claiming overall cleanup or migration readiness.
+- No push or deployment was performed as part of this cleanup workstream.

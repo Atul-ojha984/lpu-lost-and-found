@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 7 - Frontend/API regression: IN PROGRESS.** Phase 5's importer is implemented but source PostgreSQL integration remains BLOCKED; Phase 6 local suites are VERIFIED. No production import, deployment, or cutover has occurred.
+**Phase 8 - Deployment preparation: IN PROGRESS.** Phase 5's importer is implemented but source PostgreSQL integration remains BLOCKED; Phases 6 and 7 are locally VERIFIED. No production import, deployment, or cutover has occurred.
 
 ## Phase status
 
@@ -20,8 +20,8 @@
 | 4 - Backend database migration | COMPLETED | Opt-in Mongo settings, ObjectId contrib migration graph, domain snapshots, required schema adaptations, and pinned backend locally migrate and pass the application suite. PostgreSQL remains default; Atlas is not configured. |
 | 5 - PostgreSQL-to-MongoDB data migration tool | BLOCKED | Importer implemented and focused tests pass. Actual PostgreSQL source, copy, resume, and reconciliation integration remains unverified; isolated PostgreSQL source and Atlas access are unavailable. |
 | 6 - Automated testing | VERIFIED | Full local Mongo and SQLite backend suites, frontend unit/type/lint/build checks pass; exact results in `MONGODB_ATLAS_TEST_REPORT.md`. Atlas and PostgreSQL-source tests remain external gates. |
-| 7 - Frontend/API regression | IN PROGRESS | Existing `/api/v1` response contract and frontend routes compile; full local frontend checks are being recorded. Production browser/API testing is not available from this environment. |
-| 8 - Deployment preparation | NOT STARTED | No Render/Vercel service or environment changes made. |
+| 7 - Frontend/API regression | VERIFIED | Shared API client uses `NEXT_PUBLIC_API_URL`, preserves `/api/v1`, handles Bearer refresh/errors, and does not fall back to localhost outside development. Frontend checks/build and backend API suite pass; live production browser/API integration was not run. |
+| 8 - Deployment preparation | IN PROGRESS | Prepare written Render/Vercel/Atlas instructions only. No service configuration, environment values, deployment, or paid infrastructure changes. |
 | 9 - Rollback and recovery | NOT STARTED | Must address writes made after any future cutover. |
 | 10 - Final production readiness review | NOT STARTED | Production cutover remains disabled pending explicit approval. |
 
@@ -278,8 +278,27 @@ These were present before this migration implementation and must not be discarde
 
 ### Commit
 
-- Phase 6 implementation and report are pending review and commit.
+- `f78f313 test: add MongoDB migration verification report`.
+
+## Phase 7 - Frontend/API regression
+
+### Verification completed
+
+- Reviewed the active Next.js API client at `apps/web/src/lib/api-client.ts`. It keeps the existing Django `/api/v1` route structure, consumes `NEXT_PUBLIC_API_URL`, only uses `http://localhost:8000/api/v1` when `NODE_ENV` is development, preserves Bearer access-token handling and refresh behavior, includes cookies for existing session support, and returns a clear configuration error when the production API variable is missing.
+- The current frontend API client, pages, role dashboards, and response contracts were not changed for the migration.
+- Frontend contract/unit checks: **11 passed**. TypeScript passed. ESLint passed with one pre-existing warning at the login page. Next production build passed and enumerated all 27 application routes.
+- The complete backend Mongo suite passed **186 tests**, and the default SQLite suite passed **181 tests**, providing local endpoint/serializer/authentication/permission coverage against the unchanged `/api/v1` contract.
+- No localhost fallback is used in a non-development production build. The local `.env.local` file was not read or printed.
+
+### Limits
+
+- This is local source/build and backend API regression verification. No live Vercel-to-Render request, production login, browser session, or file upload was performed.
+- The production API and frontend environment must be configured separately in Vercel/Render; environment changes are not made here.
+
+### Commit
+
+- Phase 7 verification record is pending review and commit.
 
 ## Current outstanding work and next action
 
-Complete Phase 7 frontend/API regression documentation. Then prepare Render/Vercel/Atlas deployment and rollback guides, keeping Atlas/production configuration and imports untouched until staging infrastructure and explicit approval are available.
+Prepare Phase 8 Render/Vercel/Atlas deployment documentation only. Do not modify service configuration, environment variables, production database settings, or traffic until staging verification and explicit approval.

@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 8 - Deployment preparation: IN PROGRESS.** Render/Vercel/Atlas staging instructions and explicit settings-selection tests are being completed. Phase 5 source PostgreSQL integration remains BLOCKED; Phases 6 and 7 are locally VERIFIED. No production import, deployment, or cutover has occurred.
+**Phase 9 - Rollback and recovery: IN PROGRESS.** Phase 8 staging guidance and explicit Mongo settings-selection tests are complete locally. The rollback plan documents the post-write data-divergence blocker. No production import, deployment, or cutover has occurred.
 
 ## Phase status
 
@@ -21,8 +21,8 @@
 | 5 - PostgreSQL-to-MongoDB data migration tool | BLOCKED | Importer implemented and focused tests pass. Actual PostgreSQL source, copy, resume, and reconciliation integration remains unverified; isolated PostgreSQL source and Atlas access are unavailable. |
 | 6 - Automated testing | VERIFIED | Full local Mongo and SQLite backend suites, frontend unit/type/lint/build checks pass; exact results in `MONGODB_ATLAS_TEST_REPORT.md`. Atlas and PostgreSQL-source tests remain external gates. |
 | 7 - Frontend/API regression | VERIFIED | Shared API client uses `NEXT_PUBLIC_API_URL`, preserves `/api/v1`, handles Bearer refresh/errors, and does not fall back to localhost outside development. Frontend checks/build and backend API suite pass; live production browser/API integration was not run. |
-| 8 - Deployment preparation | COMPLETED | Added staging-only Render/Vercel/Atlas instructions, sanitized local Mongo env template, and explicit settings-selection regression coverage. Cloud staging, Atlas access, import, and cutover remain external gates; no service was changed or created. |
-| 9 - Rollback and recovery | NOT STARTED | Must address writes made after any future cutover. |
+| 8 - Deployment preparation | COMPLETED | Added staging-only Render/Vercel/Atlas instructions, sanitized local Mongo env template, and explicit settings-selection regression coverage. Commit `be6086e`. Cloud staging, Atlas access, import, and cutover remain external gates; no service was changed or created. |
+| 9 - Rollback and recovery | IN PROGRESS | Documenting safe pre-write rollback and explicitly blocking a blind post-write switch to stale PostgreSQL. |
 | 10 - Final production readiness review | NOT STARTED | Production cutover remains disabled pending explicit approval. |
 
 ## Phase 0 - Completed tasks
@@ -340,8 +340,8 @@ These were present before this migration implementation and must not be discarde
 
 ### Commit
 
-- Phase 8 files are prepared for review and commit; no deployment was performed.
+- Phase 8 preparation is committed in `be6086e`; no deployment was performed.
 
 ## Current outstanding work and next action
 
-Phase 8 deployment preparation is documented and locally verified. Continue with Phase 9 rollback/recovery, then Phase 10 readiness gates. Do not modify service configuration, environment variables, production database settings, or traffic until staging verification and explicit approval.
+Complete and commit Phase 9 rollback/recovery documentation, then assess Phase 10 readiness gates. Do not modify service configuration, environment variables, production database settings, or traffic until staging verification and explicit approval.

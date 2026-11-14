@@ -1,12 +1,13 @@
-# LPU Logo Asset Directory
+# Application Logo Assets
 
-Place the authentic Lovely Professional University logo at this exact location:
-`apps/web/public/images/lpu-logo.png`
+The application uses its own Lost & Found identity. Do not replace it with an
+official university logo or generate a substitute university mark.
 
-### Asset Requirements:
-- **Filename:** `lpu-logo.png`
-- **Format:** Transparent PNG (or high-resolution SVG converted to PNG)
-- **Dimensions:** At least 400x120px with preserved aspect ratio
-- **Usage:** Rendered with `object-contain` across the navigation header, authentication forms, and dashboard sidebars.
+- `lost-and-found-logo.svg` is rendered by the shared branding component and
+  used for page metadata.
+- `lost-and-found-logo.png` is retained for the repository README preview and
+  the asset integrity check.
 
-*Note: Per project policy, never draw or invent a fake LPU logo. If this file is missing, the application automatically displays a clearly labeled temporary placeholder.*
+The unused `lpu-logo.png` asset and its generator were removed because the
+generator drew a university-style mark that could be mistaken for official
+branding.

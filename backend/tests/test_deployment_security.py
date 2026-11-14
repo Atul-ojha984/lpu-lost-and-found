@@ -48,3 +48,9 @@ def test_demo_seed_command_refuses_to_run_in_production():
     with patch('apps.core.management.commands.seed_demo_data.settings.IS_PRODUCTION', True):
         with pytest.raises(CommandError, match='disabled in production'):
             call_command('seed_demo_data')
+
+
+def test_development_accounts_command_refuses_to_run_in_production():
+    with patch('apps.accounts.management.commands.create_dev_accounts.settings.IS_PRODUCTION', True):
+        with pytest.raises(CommandError, match='disabled in production'):
+            call_command('create_dev_accounts')

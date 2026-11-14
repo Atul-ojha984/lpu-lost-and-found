@@ -43,6 +43,8 @@ export default function AdminOverviewPage() {
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
+  const [auditLoaded, setAuditLoaded] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -52,13 +54,18 @@ export default function AdminOverviewPage() {
           apiClient.getAdminAuditLogs({ limit: 5 }),
         ]);
 
-        if (statsData.status === 'fulfilled' && statsData.value?.overview) {
+        const hasAnalytics = statsData.status === 'fulfilled' && Boolean(statsData.value?.overview);
+        const hasAudit = logsData.status === 'fulfilled' && Array.isArray(logsData.value);
+        setAnalyticsLoaded(hasAnalytics);
+        setAuditLoaded(hasAudit);
+
+        if (hasAnalytics) {
           setAnalytics(statsData.value.overview);
         } else {
           setAnalytics(null);
         }
 
-        if (logsData.status === 'fulfilled' && Array.isArray(logsData.value)) {
+        if (hasAudit) {
           setAuditLogs(logsData.value);
         } else {
           setAuditLogs([]);
@@ -66,6 +73,8 @@ export default function AdminOverviewPage() {
       } catch {
         setAnalytics(null);
         setAuditLogs([]);
+        setAnalyticsLoaded(false);
+        setAuditLoaded(false);
       } finally {
         setLoading(false);
       }
@@ -87,10 +96,12 @@ export default function AdminOverviewPage() {
             Total Logged Property
           </span>
           <p className="mt-2 text-2xl font-black text-[#283442]">
-            {loading ? '...' : analytics?.totalReports ?? 0}
+            {loading ? '...' : analyticsLoaded && analytics ? analytics.totalReports : '—'}
           </p>
           <span className="text-[11px] text-slate-500 font-medium">
-            {analytics?.totalLost ?? 0} Lost • {analytics?.totalFound ?? 0} Found
+            {analyticsLoaded && analytics
+              ? `${analytics.totalLost} Lost • ${analytics.totalFound} Found`
+              : '— Lost • — Found'}
           </span>
         </div>
 
@@ -99,11 +110,11 @@ export default function AdminOverviewPage() {
             Successful Return Rate
           </span>
           <p className="mt-2 text-2xl font-black text-emerald-700">
-            {loading ? '...' : `${analytics?.returnRatePercent ?? 0}%`}
+            {loading ? '...' : analyticsLoaded && analytics ? `${analytics.returnRatePercent}%` : '—'}
           </p>
           <div className="flex items-center gap-1 text-[11px] text-emerald-700 font-semibold">
             <TrendingUp className="h-3.5 w-3.5" />
-            <span>{analytics?.itemsReturned ?? 0} items returned to owners</span>
+            <span>{analyticsLoaded && analytics ? analytics.itemsReturned : '—'} items returned to owners</span>
           </div>
         </div>
 
@@ -112,7 +123,7 @@ export default function AdminOverviewPage() {
             Secure Custody Items
           </span>
           <p className="mt-2 text-2xl font-black text-[#356DE8]">
-            {loading ? '...' : analytics?.totalUnclaimedInCustody ?? 0}
+            {loading ? '...' : analyticsLoaded && analytics ? analytics.totalUnclaimedInCustody : '—'}
           </p>
           <span className="text-[11px] text-[#356DE8] font-medium">Under campus security custody</span>
         </div>
@@ -122,13 +133,23 @@ export default function AdminOverviewPage() {
             Pending Claims in Review
           </span>
           <p className="mt-2 text-2xl font-black text-[#F58220]">
-            {loading ? '...' : `${analytics?.pendingClaims ?? 0}`}
+            {loading ? '...' : analyticsLoaded && analytics ? analytics.pendingClaims : '—'}
           </p>
           <span className="text-[11px] text-[#E66F00] font-medium">
-            {analytics?.totalVerificationFailures ?? 0} verification attempts flagged
+            {analyticsLoaded && analytics ? analytics.totalVerificationFailures : '—'} verification attempts flagged
           </span>
         </div>
       </div>
+
+      {!loading && (!analyticsLoaded || !auditLoaded) && (
+        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+          {!analyticsLoaded && !auditLoaded
+            ? 'Dashboard analytics and recent activity could not be loaded.'
+            : !analyticsLoaded
+              ? 'Dashboard analytics could not be loaded.'
+              : 'Recent system activity could not be loaded.'}
+        </div>
+      )}
 
       {/* Governance Hub Navigation Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -325,7 +346,13 @@ export default function AdminOverviewPage() {
         </div>
 
         <div className="divide-y divide-slate-100 mt-2">
-          {auditLogs.length > 0 ? (
+          {loading ? (
+            <div className="py-4 text-xs text-slate-500 text-center">Loading recent system activity...</div>
+          ) : !auditLoaded ? (
+            <div role="alert" className="py-4 text-xs text-amber-800 text-center">
+              Recent system activity could not be loaded.
+            </div>
+          ) : auditLogs.length > 0 ? (
             auditLogs.map((log) => (
               <div key={log._id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs gap-2">
                 <div>
@@ -345,7 +372,7 @@ export default function AdminOverviewPage() {
             ))
           ) : (
             <div className="py-4 text-xs text-slate-500 text-center">
-              Audit ledger running in verified mode. No security exceptions recorded.
+              No recent system activity has been recorded.
             </div>
           )}
         </div>

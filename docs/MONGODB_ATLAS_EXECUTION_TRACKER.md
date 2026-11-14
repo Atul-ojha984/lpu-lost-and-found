@@ -408,3 +408,67 @@ Phase 10 readiness review is recorded; staging and production readiness remain B
 ## Current uncommitted user changes preserved
 
 At the Phase 10 review, these pre-existing user changes remained untouched and unstaged: `PROJECT_PROGRESS.md`, `backend/apps/core/management/commands/import_mongo_data.py`, `backend/tests/test_mongo_import.py`, and `MONGODB_TO_POSTGRESQL_MIGRATION_REPORT.md`. Only migration-task files are staged/committed in this branch.
+
+## Supplemental workstream - project cleanup and production hardening (2026-11-14)
+
+**Status: IN PROGRESS / PARTIALLY COMPLETED.** This workstream responds to the additional cleanup instruction. It does not change the Phase 10 MongoDB cutover status: that phase remains BLOCKED, PostgreSQL remains the active production database, and no deployment or production data operation was performed.
+
+### Completed
+
+- Reviewed active workspace scripts, package manifests and dependency trees, frontend routes and shared API client usage, changed dashboard/profile flows, project asset references, developer seed commands, and environment/example file names without reading or printing secret values.
+- Changed the student, admin, and security dashboards to distinguish successful empty/zero API data from failed API requests. Error states are now visible instead of representing a failed request as an empty dashboard.
+- Removed fabricated retention-queue items/counts from the Admin inventory lifecycle page. Admin user management and analytics now show unavailable/error states when their APIs fail instead of presenting a false empty list or zero metrics.
+- Changed student and security profile pages to use the authenticated user and existing profile phone-update API. Removed seeded profile identities, unsupported profile edits, non-persisted notification/station controls, fabricated activity totals, and the invented vault-authorization description. Phone updates use the already present Indian mobile input normalizer.
+- Added regression assertions to `scripts/frontend-unit-test.mjs` for profile/API behavior, dashboard failure-vs-empty handling, and application logo references.
+- Guarded `create_dev_accounts` against production use and added a regression test. Development-only demo seeding remains intentional and already has its own production guard.
+- Removed the confirmed unused generated university-style logo and its unused generator; kept the application's actual Lost & Found logo. Updated asset and repository documentation.
+- Added the historical-audit notice to `docs/cleanup-report.md`; its old assertions are not current verification evidence.
+- No dependencies or database schema were changed. A dry-run dependency remediation would move the frontend ESLint/toolchain to ESLint 10 with peer-resolution overrides, so it was not applied.
+
+### Files changed by this workstream
+
+- `README.md`
+- `apps/web/public/images/README.md`
+- `apps/web/src/app/admin/page.tsx`
+- `apps/web/src/app/admin/analytics/page.tsx`
+- `apps/web/src/app/admin/items/page.tsx`
+- `apps/web/src/app/admin/users/page.tsx`
+- `apps/web/src/app/dashboard/page.tsx`
+- `apps/web/src/app/dashboard/profile/page.tsx`
+- `apps/web/src/app/security/page.tsx`
+- `apps/web/src/app/security/profile/page.tsx`
+- `backend/apps/accounts/management/commands/create_dev_accounts.py`
+- `backend/tests/test_deployment_security.py`
+- `docs/cleanup-report.md`
+- `scripts/frontend-unit-test.mjs`
+- Deleted confirmed-unused `apps/web/public/images/lpu-logo.png` and `scripts/generate-logo.js`.
+- `docs/PROJECT_CLEANUP_REPORT.md` (this workstream's audit report).
+
+Pre-existing user changes in `PROJECT_PROGRESS.md`, `backend/apps/core/management/commands/import_mongo_data.py`, `backend/tests/test_mongo_import.py`, and `MONGODB_TO_POSTGRESQL_MIGRATION_REPORT.md` are preserved and excluded from this workstream.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Frontend unit/regression suite | PASS - 17 tests. |
+| Frontend TypeScript check | PASS. |
+| Frontend ESLint | PASS - zero errors; one pre-existing `react-hooks/set-state-in-effect` warning remains in login. |
+| Next.js production build | PASS - Next.js 16.4.2 generated all 27 routes. |
+| Focused Django deployment-security and authentication tests | PASS - 26 tests. |
+| Full Django suite under local SQLite | PASS - 184 passed, 6 skipped. |
+| Django system checks, `pip check`, and default `makemigrations --check --dry-run` | PASS - no system issues, dependency conflicts, or model/migration drift. |
+| `git diff --check` | PASS. |
+| Full npm audit | FINDINGS - seven moderate frontend dev-toolchain advisories and one high Mongoose advisory in the legacy `apps/api` workspace. `apps/web` production dependency audit reported zero vulnerabilities. |
+| MongoDB Atlas integration, live production API, provider deployment, and browser visual/responsive audit | NOT VERIFIED - no isolated Atlas/PostgreSQL pair or production actions; no browser visual run was performed. |
+
+### Remaining cleanup scope and risks
+
+- Broad component/service/backend restructuring and a claim that every feature has been end-to-end tested are intentionally not made: this audit found focused defects and did not justify a system-wide rewrite.
+- `apps/api` remains untouched per the migration boundary; its high-severity Mongoose audit finding requires a separately authorized legacy-service maintenance change.
+- Frontend dev dependency audit retains moderate `minimatch` findings; the non-mutating npm remediation preview proposed incompatible/peer-overridden lint tooling, so no dependency update was applied.
+- UI CSS was not changed; visual alignment is preserved at source level, but desktop/tablet/mobile screenshot comparison was NOT RUN.
+- MongoDB Atlas production readiness remains BLOCKED by the Phase 10 release gates above.
+
+### Next action
+
+Review this supplemental report and the scoped diff, then make a cleanup-only commit containing only this workstream's files. Keep pre-existing user modifications unstaged. Do not push or deploy as part of cleanup verification.

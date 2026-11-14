@@ -72,9 +72,10 @@ lpu-lost-and-found/
 │   ├── web/                    # Next.js 16 App Router Frontend
 │   │   ├── public/
 │   │   │   └── images/
-│   │   │       └── lpu-logo.png # Authentic LPU campus logo
+│   │   │       ├── lost-and-found-logo.svg # Application identity used by the UI
+│   │   │       └── lost-and-found-logo.png # README preview and asset integrity check
 │   │   ├── src/
-│   │   │   ├── app/            # 19 App Router pages (public, student, security, admin)
+│   │   │   ├── app/            # App Router pages (public, student, security, admin)
 │   │   │   ├── components/     # UI design system, modals, navigation, cards
 │   │   │   ├── lib/            # Typed API client, session context, storage helpers
 │   │   │   └── types/          # Shared frontend data models

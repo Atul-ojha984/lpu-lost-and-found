@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ShieldCheck, 
   Search,
@@ -55,6 +55,8 @@ const EMPTY_NEW_USER = {
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<CampusUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usersLoadError, setUsersLoadError] = useState('');
+  const loadRequestId = useRef(0);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [selectedUser, setSelectedUser] = useState<CampusUser | null>(null);
@@ -76,58 +78,39 @@ export default function AdminUsersPage() {
   const [deletingUserId, setDeletingUserId] = useState('');
   const [listFeedback, setListFeedback] = useState('');
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
+    setUsersLoadError('');
     try {
       const res = await apiClient.getAdminUsers({
         role: roleFilter !== 'ALL' ? roleFilter : undefined,
         search: search.trim() || undefined,
       });
+      if (requestId !== loadRequestId.current) return;
 
       if (Array.isArray(res)) {
         setUsers(res);
       } else {
         setUsers([]);
+        setUsersLoadError('User accounts could not be loaded. Refresh and try again.');
       }
     } catch {
+      if (requestId !== loadRequestId.current) return;
       setUsers([]);
+      setUsersLoadError('User accounts could not be loaded. Refresh and try again.');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
-  }
+  }, [roleFilter, search]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function fetchUsers() {
-      try {
-        const res = await apiClient.getAdminUsers({
-          role: roleFilter !== 'ALL' ? roleFilter : undefined,
-          search: search.trim() || undefined,
-        });
-
-        if (isMounted) {
-          if (Array.isArray(res)) {
-            setUsers(res);
-          } else {
-            setUsers([]);
-          }
-        }
-      } catch {
-        // Safe fallback
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchUsers();
-
+    const request = window.setTimeout(() => void loadUsers(), 0);
     return () => {
-      isMounted = false;
+      window.clearTimeout(request);
+      loadRequestId.current += 1;
     };
-  }, [roleFilter, search]);
+  }, [loadUsers]);
 
   useEffect(() => {
     let active = true;
@@ -326,6 +309,7 @@ export default function AdminUsersPage() {
       </div>
 
       {listFeedback && <div role="status" className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700">{listFeedback}</div>}
+      {usersLoadError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">{usersLoadError}</div>}
 
       {/* Users Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
@@ -345,6 +329,12 @@ export default function AdminUsersPage() {
               <tr>
                 <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
                   Loading campus user accounts...
+                </td>
+              </tr>
+            ) : usersLoadError ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-amber-800">
+                  User accounts are unavailable. Use the Filter button to retry.
                 </td>
               </tr>
             ) : users.length === 0 ? (
@@ -370,7 +360,7 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3 font-mono text-slate-600">{user.email}</td>
                     <td className="px-4 py-3">
                       <span className="text-slate-800 font-medium block">
-                        {user.securityPost || user.department || 'General Campus'}
+                        {user.securityPost || user.department || 'Not assigned'}
                       </span>
                       {user.securityPost && (
                         <span className="text-[10px] text-blue-700 font-semibold">

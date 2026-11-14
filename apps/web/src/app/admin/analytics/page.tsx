@@ -80,6 +80,7 @@ interface AnalyticsData {
 export default function AdminAnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     async function loadAnalytics() {
@@ -87,11 +88,14 @@ export default function AdminAnalyticsPage() {
         const res = await apiClient.getAdminAnalytics();
         if (res && res.overview) {
           setData(res);
+          setLoadError('');
         } else {
           setData(null);
+          setLoadError('Analytics data is unavailable. Refresh the page and try again.');
         }
       } catch {
         setData(null);
+        setLoadError('Analytics data could not be loaded. Refresh the page and try again.');
       } finally {
         setLoading(false);
       }
@@ -110,6 +114,12 @@ export default function AdminAnalyticsPage() {
       subtitle="Calculated strictly from live database records • Verified return velocity, custody breakdown, and ageing queues."
       role="CAMPUS_ADMIN"
     >
+      {loadError && (
+        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          {loadError}
+        </div>
+      )}
+
       {/* Primary Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Total Reports */}
@@ -121,12 +131,12 @@ export default function AdminAnalyticsPage() {
             <Layers className="h-4 w-4 text-slate-400" />
           </div>
           <p className="mt-2 text-3xl font-extrabold text-slate-900">
-            {loading ? '...' : data?.overview.totalReports ?? 0}
+            {loading ? '...' : data ? data.overview.totalReports : '—'}
           </p>
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-            <span className="text-red-700 font-semibold">{data?.overview.totalLost ?? 0} Lost</span>
+            <span className="text-red-700 font-semibold">{data ? data.overview.totalLost : '—'} Lost</span>
             <span>•</span>
-            <span className="text-blue-700 font-semibold">{data?.overview.totalFound ?? 0} Found</span>
+            <span className="text-blue-700 font-semibold">{data ? data.overview.totalFound : '—'} Found</span>
           </div>
         </div>
 
@@ -139,10 +149,10 @@ export default function AdminAnalyticsPage() {
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           </div>
           <p className="mt-2 text-3xl font-extrabold text-emerald-700">
-            {loading ? '...' : `${data?.returnMetrics.returnRatePercent ?? 0}%`}
+            {loading ? '...' : data ? `${data.returnMetrics.returnRatePercent}%` : '—'}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            {data?.returnMetrics.itemsReturned ?? 0} items returned to owners
+            {data ? data.returnMetrics.itemsReturned : '—'} items returned to owners
           </p>
         </div>
 
@@ -155,10 +165,10 @@ export default function AdminAnalyticsPage() {
             <Clock className="h-4 w-4 text-blue-600" />
           </div>
           <p className="mt-2 text-3xl font-extrabold text-slate-900">
-            {loading ? '...' : `${data?.returnMetrics.medianTimeToReturnDays ?? 0} Days`}
+            {loading ? '...' : data ? `${data.returnMetrics.medianTimeToReturnDays} Days` : '—'}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            ~{data?.returnMetrics.medianTimeToReturnHours ?? 0} hours intake-to-handover
+            ~{data ? data.returnMetrics.medianTimeToReturnHours : '—'} hours intake-to-handover
           </p>
         </div>
 
@@ -171,10 +181,10 @@ export default function AdminAnalyticsPage() {
             <AlertOctagon className="h-4 w-4 text-amber-600" />
           </div>
           <p className="mt-2 text-3xl font-extrabold text-amber-700">
-            {loading ? '...' : `${data?.verificationMetrics.pendingClaims ?? 0} Active`}
+            {loading ? '...' : data ? `${data.verificationMetrics.pendingClaims} Active` : '—'}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            {data?.verificationMetrics.totalVerificationFailures ?? 0} failed challenges/OTPs
+            {data ? data.verificationMetrics.totalVerificationFailures : '—'} failed challenges/OTPs
           </p>
         </div>
       </div>
@@ -240,6 +250,9 @@ export default function AdminAnalyticsPage() {
                 </div>
               );
             })}
+            {data && data.categoryDistribution.length === 0 && (
+              <p className="py-4 text-center text-xs text-slate-400">No category report data is available.</p>
+            )}
           </div>
         </div>
 
@@ -249,7 +262,7 @@ export default function AdminAnalyticsPage() {
             <div>
               <h3 className="text-sm font-bold text-slate-900">Custody by Security Desk</h3>
               <p className="text-xs text-slate-500">
-                Physical repository distribution ({data?.custodyInventory.totalInCustody ?? 0} items currently held).
+                Physical repository distribution ({data ? data.custodyInventory.totalInCustody : '—'} items currently held).
               </p>
             </div>
             <Building2 className="h-4 w-4 text-slate-400" />
@@ -264,7 +277,7 @@ export default function AdminAnalyticsPage() {
                 </span>
               </div>
             ))}
-            {(!data?.custodyInventory.byLocation || data.custodyInventory.byLocation.length === 0) && (
+            {data && data.custodyInventory.byLocation.length === 0 && (
               <p className="py-4 text-center text-xs text-slate-400">No items currently in custody</p>
             )}
           </div>
@@ -297,6 +310,9 @@ export default function AdminAnalyticsPage() {
                 </div>
               </div>
             ))}
+            {data && data.hotspots.locations.length === 0 && (
+              <p className="py-4 text-center text-xs text-slate-400">No report location data is available.</p>
+            )}
           </div>
         </div>
 
@@ -334,6 +350,9 @@ export default function AdminAnalyticsPage() {
               );
             })}
           </div>
+          {data && data.hotspots.hourly.length === 0 && (
+            <p className="text-center text-xs text-slate-400">No hourly report data is available.</p>
+          )}
           <div className="flex justify-between text-[10px] text-slate-400 font-mono pt-1">
             <span>00:00 (Midnight)</span>
             <span>12:00 (Noon)</span>
@@ -350,7 +369,7 @@ export default function AdminAnalyticsPage() {
             <p className="text-xs text-slate-500">{data?.ageing.ageingDefinition}</p>
           </div>
           <span className="text-xs font-bold text-red-700">
-            Statutory Period: {data?.ageing.statutoryRetentionPeriodDays ?? 90} Days
+            Statutory Period: {data ? data.ageing.statutoryRetentionPeriodDays : '—'} Days
           </span>
         </div>
 
@@ -360,7 +379,7 @@ export default function AdminAnalyticsPage() {
               0 – 30 Days (Recent)
             </span>
             <p className="mt-2 text-2xl font-extrabold text-slate-900">
-              {data?.ageing.brackets.under30Days ?? 0} Items
+              {data ? data.ageing.brackets.under30Days : '—'} Items
             </p>
             <span className="text-[10px] text-slate-400">Active public board discovery window</span>
           </div>
@@ -370,7 +389,7 @@ export default function AdminAnalyticsPage() {
               31 – 60 Days (Medium)
             </span>
             <p className="mt-2 text-2xl font-extrabold text-blue-900">
-              {data?.ageing.brackets.from31To60Days ?? 0} Items
+              {data ? data.ageing.brackets.from31To60Days : '—'} Items
             </p>
             <span className="text-[10px] text-blue-600">Secure locker storage placement</span>
           </div>
@@ -380,7 +399,7 @@ export default function AdminAnalyticsPage() {
               61 – 90 Days (Mature)
             </span>
             <p className="mt-2 text-2xl font-extrabold text-amber-900">
-              {data?.ageing.brackets.from61To90Days ?? 0} Items
+              {data ? data.ageing.brackets.from61To90Days : '—'} Items
             </p>
             <span className="text-[10px] text-amber-700">Approaching statutory retention expiry</span>
           </div>
@@ -390,7 +409,7 @@ export default function AdminAnalyticsPage() {
               &gt;90 Days (Overdue Queue)
             </span>
             <p className="mt-2 text-2xl font-extrabold text-rose-800">
-              {data?.ageing.brackets.over90Days ?? 0} Items
+              {data ? data.ageing.brackets.over90Days : '—'} Items
             </p>
             <span className="text-[10px] text-rose-700 font-medium">
               Eligible for committee disposal review

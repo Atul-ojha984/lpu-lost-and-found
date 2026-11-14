@@ -179,6 +179,66 @@ test('Login page contains split-screen branding, error alert, and show/hide pass
   assert.ok(apiClient.includes('res.accessToken || res.token'), 'Login must accept the access-token response fields');
 });
 
+test('Profile pages use authenticated records and persist only supported profile updates', () => {
+  const studentProfile = readFileSync(resolve(rootDir, 'apps/web/src/app/dashboard/profile/page.tsx'), 'utf8');
+  const securityProfile = readFileSync(resolve(rootDir, 'apps/web/src/app/security/profile/page.tsx'), 'utf8');
+
+  for (const demoValue of ["fullName: 'Aarav Sharma'", "registrationNumber: '12108801'", "fullName: 'Rajesh Verma'", "badgeId: 'LPU-SEC-001'"]) {
+    assert.ok(!studentProfile.includes(demoValue) && !securityProfile.includes(demoValue), `Profiles must not contain seeded value ${demoValue}`);
+  }
+  assert.ok(!securityProfile.includes('>48</span>') && !securityProfile.includes('>34</span>'), 'Officer activity totals must not be fabricated');
+  assert.ok(studentProfile.includes('apiClient.getCurrentUser()'), 'Student identity must come from the authenticated profile API');
+  assert.ok(studentProfile.includes('apiClient.getMyReports()') && studentProfile.includes('apiClient.getMyRecoveryHistory()'), 'Student activity counts must come from persisted records');
+  assert.ok(studentProfile.includes('apiClient.updateCurrentUserProfile(normalizedPhone)'), 'Student save must use the existing phone update API');
+  assert.ok(studentProfile.includes('readOnly') && !studentProfile.includes('notifyOtp'), 'Unsupported name edits and non-persisted notification toggles must not be presented as working controls');
+  assert.ok(securityProfile.includes('apiClient.updateCurrentUserProfile(normalizedPhone)'), 'Security profile save must persist through the existing profile endpoint');
+  assert.ok(securityProfile.includes('normalizeIndianMobileInput'), 'Security contact changes must use existing mobile input validation');
+  assert.ok(!securityProfile.includes('stationExtension') && !securityProfile.includes('Update Station Details'), 'Unsupported station-extension editing must not show a false success path');
+});
+
+test('Dashboard API failures are distinguished from real zero and empty results', () => {
+  const studentDashboard = readFileSync(resolve(rootDir, 'apps/web/src/app/dashboard/page.tsx'), 'utf8');
+  const adminDashboard = readFileSync(resolve(rootDir, 'apps/web/src/app/admin/page.tsx'), 'utf8');
+  const securityDashboard = readFileSync(resolve(rootDir, 'apps/web/src/app/security/page.tsx'), 'utf8');
+
+  assert.ok(studentDashboard.includes('reportsLoaded') && studentDashboard.includes('dashboardLoadError'), 'Student dashboard must track report availability and surface partial API failures');
+  assert.ok(adminDashboard.includes('analyticsLoaded') && adminDashboard.includes('auditLoaded'), 'Admin metrics and activity must distinguish a failed request from an empty response');
+  assert.ok(adminDashboard.includes('No recent system activity has been recorded.'), 'Admin empty state must describe the actual activity feed');
+  assert.ok(securityDashboard.includes('stats?.inCustodyCount') && securityDashboard.includes('Recent custody activity could not be loaded.'), 'Security dashboard must distinguish a real zero from unavailable data');
+  for (const page of [studentDashboard, adminDashboard, securityDashboard]) {
+    assert.ok(page.includes('role="alert"'), 'Dashboard API failures must be announced accessibly');
+  }
+});
+
+test('Admin retention queue shows API failures instead of fabricated inventory', () => {
+  const page = readFileSync(resolve(rootDir, 'apps/web/src/app/admin/items/page.tsx'), 'utf8');
+  assert.ok(!page.includes('item-demo-') && !page.includes('Honda Motorcycle Smart Key'), 'Retention queue must not synthesize property records');
+  assert.ok(page.includes('queueLoadError') && page.includes('categoriesLoadError'), 'Queue and category API failures must be visible');
+  assert.ok(page.includes('queueLoaded ? items.length :'), 'The item count must distinguish unavailable data from a successful empty result');
+  assert.ok(page.includes("item.currentCustodyDesk || 'Not recorded'"), 'Missing source data must not be replaced with a fabricated custody location');
+});
+
+test('Admin user list distinguishes failed loading from a genuinely empty account list', () => {
+  const page = readFileSync(resolve(rootDir, 'apps/web/src/app/admin/users/page.tsx'), 'utf8');
+  assert.ok(page.includes('usersLoadError'), 'User-list API errors must be visible');
+  assert.ok(page.includes('User accounts are unavailable.'), 'Unavailable users must not be shown as an empty result');
+  assert.ok(!page.includes('General Campus'), 'Unassigned organization data must not be invented');
+});
+
+test('Admin analytics does not render zero-valued reports when the analytics API fails', () => {
+  const page = readFileSync(resolve(rootDir, 'apps/web/src/app/admin/analytics/page.tsx'), 'utf8');
+  assert.ok(page.includes('loadError') && page.includes('role="alert"'), 'Analytics API failures must be visible');
+  assert.ok(page.includes("data ? data.overview.totalReports : '—'"), 'Unavailable totals must not be presented as zero');
+  assert.ok(page.includes("data ? data.ageing.statutoryRetentionPeriodDays : '—'"), 'The configured retention period must come from the API');
+});
+
+test('Only the application logo is used; the generated university-style placeholder is removed', () => {
+  const branding = readFileSync(resolve(rootDir, 'apps/web/src/components/branding/LPULogo.tsx'), 'utf8');
+  assert.ok(branding.includes('/images/lost-and-found-logo.svg'), 'Shared branding must render the application identity');
+  assert.ok(!existsSync(resolve(rootDir, 'apps/web/public/images/lpu-logo.png')), 'Unused generated university-style image must be removed');
+  assert.ok(!existsSync(resolve(rootDir, 'scripts/generate-logo.js')), 'The fake university-style logo generator must be removed');
+});
+
 // -----------------------------------------------------------------------------
 // 8. CI Workflow Configuration
 // -----------------------------------------------------------------------------

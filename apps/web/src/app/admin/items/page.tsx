@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Search, 
   Archive, 
@@ -42,14 +42,19 @@ export default function AdminItemsPage() {
   const [items, setItems] = useState<AgeingItem[]>([]);
   const [categories, setCategories] = useState<ItemCategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [queueLoaded, setQueueLoaded] = useState(false);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [queueLoadError, setQueueLoadError] = useState('');
+  const [categoriesLoadError, setCategoriesLoadError] = useState('');
+  const loadRequestId = useRef(0);
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<string>('ALL');
-  const [countsByState, setCountsByState] = useState({
-    inRetention: 0,
-    noticePeriod: 0,
-    disposalPending: 0,
-    disposed: 0,
-  });
+  const [countsByState, setCountsByState] = useState<{
+    inRetention: number;
+    noticePeriod: number;
+    disposalPending: number;
+    disposed: number;
+  } | null>(null);
 
   // Disposal Modal state
   const [selectedItemForDisposal, setSelectedItemForDisposal] = useState<AgeingItem | null>(null);
@@ -66,8 +71,11 @@ export default function AdminItemsPage() {
   const [editingCategory, setEditingCategory] = useState<ItemCategoryRecord | null>(null);
   const [catRetentionDays, setCatRetentionDays] = useState(90);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
+    setQueueLoadError('');
+    setCategoriesLoadError('');
     try {
       const [queueRes, catRes] = await Promise.allSettled([
         apiClient.getAdminAgeingQueue({
@@ -76,117 +84,52 @@ export default function AdminItemsPage() {
         }),
         apiClient.getAdminCategories(true),
       ]);
+      if (requestId !== loadRequestId.current) return;
 
-      if (queueRes.status === 'fulfilled' && queueRes.value?.items) {
+      if (queueRes.status === 'fulfilled' && Array.isArray(queueRes.value?.items)) {
         setItems(queueRes.value.items);
-        if (queueRes.value.countsByState) {
+        setQueueLoaded(true);
+        if (queueRes.value.countsByState && typeof queueRes.value.countsByState === 'object') {
           setCountsByState(queueRes.value.countsByState);
+        } else {
+          setCountsByState(null);
         }
       } else {
         setItems([]);
-        setCountsByState({ inRetention: 0, noticePeriod: 0, disposalPending: 0, disposed: 0 });
+        setCountsByState(null);
+        setQueueLoaded(false);
+        setQueueLoadError('The property ageing queue could not be loaded. Refresh and try again.');
       }
 
       if (catRes.status === 'fulfilled' && Array.isArray(catRes.value)) {
         setCategories(catRes.value);
+        setCategoriesLoaded(true);
+      } else {
+        setCategories([]);
+        setCategoriesLoaded(false);
+        setCategoriesLoadError('Category retention rules could not be loaded. Refresh and try again.');
       }
     } catch {
+      if (requestId !== loadRequestId.current) return;
       setItems([]);
-      setCountsByState({ inRetention: 0, noticePeriod: 0, disposalPending: 0, disposed: 0 });
+      setCountsByState(null);
+      setQueueLoaded(false);
+      setCategories([]);
+      setCategoriesLoaded(false);
+      setQueueLoadError('The property ageing queue could not be loaded. Refresh and try again.');
+      setCategoriesLoadError('Category retention rules could not be loaded. Refresh and try again.');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
-  }
+  }, [search, stateFilter]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function fetchData() {
-      try {
-        const [queueRes, catRes] = await Promise.allSettled([
-          apiClient.getAdminAgeingQueue({
-            escalationState: stateFilter !== 'ALL' ? stateFilter : undefined,
-            search: search.trim() || undefined,
-          }),
-          apiClient.getAdminCategories(true),
-        ]);
-
-        if (isMounted) {
-          if (queueRes.status === 'fulfilled' && queueRes.value?.items) {
-            setItems(queueRes.value.items);
-            if (queueRes.value.countsByState) {
-              setCountsByState(queueRes.value.countsByState);
-            }
-          } else {
-            setItems([
-              {
-                _id: 'item-demo-1',
-                referenceNumber: 'LPU-2026-F0080',
-                title: 'Honda Motorcycle Smart Key',
-                status: 'IN_CUSTODY',
-                eventDate: new Date(Date.now() - 15 * 86400000).toISOString(),
-                retentionExpiresAt: new Date(Date.now() + 75 * 86400000).toISOString(),
-                currentCustodyDesk: 'Central Security Repository',
-                daysElapsed: 15,
-                daysUntilExpiry: 75,
-                isRetentionExpired: false,
-                escalationState: 'IN_RETENTION',
-                category: { _id: 'c1', name: 'Keys & Fobs', code: 'KEYS', defaultRetentionDays: 90 },
-                location: { _id: 'l1', name: 'Uni-Mall Basement Parking', campusZone: 'Central Zone' },
-              },
-              {
-                _id: 'item-demo-2',
-                referenceNumber: 'LPU-2026-F0095',
-                title: 'Yonex Badminton Racket with Cover',
-                status: 'IN_CUSTODY',
-                eventDate: new Date(Date.now() - 85 * 86400000).toISOString(),
-                retentionExpiresAt: new Date(Date.now() + 5 * 86400000).toISOString(),
-                currentCustodyDesk: 'Sports Complex Desk',
-                daysElapsed: 85,
-                daysUntilExpiry: 5,
-                isRetentionExpired: false,
-                escalationState: 'NOTICE_PERIOD',
-                category: { _id: 'c2', name: 'Sports Gear', code: 'SPORTS', defaultRetentionDays: 90 },
-                location: { _id: 'l2', name: 'Shanti Devi Sports Complex', campusZone: 'South Sports Sector' },
-              },
-              {
-                _id: 'item-demo-3',
-                referenceNumber: 'LPU-2026-F0042',
-                title: 'Campus Laboratory Coat with Chemistry Notes',
-                status: 'UNCLAIMED_EXPIRED',
-                eventDate: new Date(Date.now() - 110 * 86400000).toISOString(),
-                retentionExpiresAt: new Date(Date.now() - 20 * 86400000).toISOString(),
-                currentCustodyDesk: 'Block 34 Security Desk',
-                daysElapsed: 110,
-                daysUntilExpiry: -20,
-                isRetentionExpired: true,
-                escalationState: 'DISPOSAL_PENDING',
-                category: { _id: 'c3', name: 'Apparel & Lab Gear', code: 'APPAREL', defaultRetentionDays: 90 },
-                location: { _id: 'l3', name: 'Block 34 Chemistry Lab', campusZone: 'North Academic Sector' },
-              },
-            ]);
-            setCountsByState({ inRetention: 1, noticePeriod: 1, disposalPending: 1, disposed: 0 });
-          }
-
-          if (catRes.status === 'fulfilled' && Array.isArray(catRes.value)) {
-            setCategories(catRes.value);
-          }
-        }
-      } catch {
-        // Safe fallback
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchData();
-
+    const request = window.setTimeout(() => void loadData(), 0);
     return () => {
-      isMounted = false;
+      window.clearTimeout(request);
+      loadRequestId.current += 1;
     };
-  }, [stateFilter, search]);
+  }, [loadData]);
 
   async function handleDisposalSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -218,7 +161,7 @@ export default function AdminItemsPage() {
         setRecipientOrg('');
         setCertificateUrl('');
         setDisposalSuccess('');
-        loadData();
+        void loadData();
       }, 1200);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Disposal approval failed';
@@ -235,7 +178,7 @@ export default function AdminItemsPage() {
       });
       setShowCategoryModal(false);
       setEditingCategory(null);
-      loadData();
+      void loadData();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to update category');
     }
@@ -278,7 +221,7 @@ export default function AdminItemsPage() {
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            All Items ({items.length})
+            All Items ({queueLoaded ? items.length : '—'})
           </button>
           <button
             type="button"
@@ -289,7 +232,7 @@ export default function AdminItemsPage() {
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            In Retention ({countsByState.inRetention})
+            In Retention ({countsByState?.inRetention ?? '—'})
           </button>
           <button
             type="button"
@@ -300,7 +243,7 @@ export default function AdminItemsPage() {
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Notice Period ({countsByState.noticePeriod})
+            Notice Period ({countsByState?.noticePeriod ?? '—'})
           </button>
           <button
             type="button"
@@ -311,7 +254,7 @@ export default function AdminItemsPage() {
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Disposal Pending ({countsByState.disposalPending})
+            Disposal Pending ({countsByState?.disposalPending ?? '—'})
           </button>
           <button
             type="button"
@@ -322,7 +265,7 @@ export default function AdminItemsPage() {
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Disposed ({countsByState.disposed})
+            Disposed ({countsByState?.disposed ?? '—'})
           </button>
         </div>
 
@@ -332,9 +275,20 @@ export default function AdminItemsPage() {
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs"
         >
           <Settings2 className="h-3.5 w-3.5 text-slate-500" />
-          <span>Category Retention Rules ({categories.length})</span>
+          <span>Category Retention Rules ({categoriesLoaded ? categories.length : '—'})</span>
         </button>
       </div>
+
+      {queueLoadError && (
+        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {queueLoadError}
+        </div>
+      )}
+      {categoriesLoadError && (
+        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {categoriesLoadError}
+        </div>
+      )}
 
       {/* Search & Actions Bar */}
       <div className="flex items-center gap-3">
@@ -344,14 +298,14 @@ export default function AdminItemsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && loadData()}
+            onKeyDown={(e) => e.key === 'Enter' && void loadData()}
             placeholder="Search inventory by reference, title, or custody desk..."
             className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 text-xs text-slate-900 focus:border-red-600 focus:outline-none"
           />
         </div>
         <button
           type="button"
-          onClick={loadData}
+          onClick={() => void loadData()}
           className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200"
         >
           Filter
@@ -376,6 +330,12 @@ export default function AdminItemsPage() {
               <tr>
                 <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
                   Loading campus inventory and ageing status...
+                </td>
+              </tr>
+            ) : queueLoadError ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-amber-800">
+                  Property ageing records are unavailable. Use the Filter button to retry.
                 </td>
               </tr>
             ) : items.length === 0 ? (
@@ -405,15 +365,15 @@ export default function AdminItemsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-slate-800 font-medium block">
-                        {item.category?.name || 'General Item'}
+                        {item.category?.name || 'Uncategorized'}
                       </span>
                       <span className="text-[11px] text-slate-500">
-                        {item.location?.campusZone || 'Campus Central'}
+                        {item.location?.campusZone || 'Not specified'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-[11px] text-slate-700">
-                        {item.currentCustodyDesk || 'Central Security Repository'}
+                        {item.currentCustodyDesk || 'Not recorded'}
                       </span>
                     </td>
                     <td className="px-4 py-3">

@@ -50,6 +50,7 @@ backend/.env.*
 !apps/api/.env.example
 !apps/web/.env.example
 !backend/.env.example
+!backend/.env.mongodb.example
 
 # Local Database Files
 *.sqlite3

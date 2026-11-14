@@ -7,7 +7,7 @@
 
 ## Current phase
 
-**Phase 8 - Deployment preparation: IN PROGRESS.** Phase 5's importer is implemented but source PostgreSQL integration remains BLOCKED; Phases 6 and 7 are locally VERIFIED. No production import, deployment, or cutover has occurred.
+**Phase 8 - Deployment preparation: IN PROGRESS.** Render/Vercel/Atlas staging instructions and explicit settings-selection tests are being completed. Phase 5 source PostgreSQL integration remains BLOCKED; Phases 6 and 7 are locally VERIFIED. No production import, deployment, or cutover has occurred.
 
 ## Phase status
 
@@ -21,7 +21,7 @@
 | 5 - PostgreSQL-to-MongoDB data migration tool | BLOCKED | Importer implemented and focused tests pass. Actual PostgreSQL source, copy, resume, and reconciliation integration remains unverified; isolated PostgreSQL source and Atlas access are unavailable. |
 | 6 - Automated testing | VERIFIED | Full local Mongo and SQLite backend suites, frontend unit/type/lint/build checks pass; exact results in `MONGODB_ATLAS_TEST_REPORT.md`. Atlas and PostgreSQL-source tests remain external gates. |
 | 7 - Frontend/API regression | VERIFIED | Shared API client uses `NEXT_PUBLIC_API_URL`, preserves `/api/v1`, handles Bearer refresh/errors, and does not fall back to localhost outside development. Frontend checks/build and backend API suite pass; live production browser/API integration was not run. |
-| 8 - Deployment preparation | IN PROGRESS | Prepare written Render/Vercel/Atlas instructions only. No service configuration, environment values, deployment, or paid infrastructure changes. |
+| 8 - Deployment preparation | COMPLETED | Added staging-only Render/Vercel/Atlas instructions, sanitized local Mongo env template, and explicit settings-selection regression coverage. Cloud staging, Atlas access, import, and cutover remain external gates; no service was changed or created. |
 | 9 - Rollback and recovery | NOT STARTED | Must address writes made after any future cutover. |
 | 10 - Final production readiness review | NOT STARTED | Production cutover remains disabled pending explicit approval. |
 
@@ -297,8 +297,51 @@ These were present before this migration implementation and must not be discarde
 
 ### Commit
 
-- Phase 7 verification record is pending review and commit.
+- Commit: `da03ce0 docs: verify frontend API compatibility`.
+
+## Phase 8 - Deployment preparation
+
+### Completed tasks
+
+- Added `docs/MONGODB_ATLAS_DEPLOYMENT_GUIDE.md` with a separate staging recipe for Render, Vercel Preview, and MongoDB Atlas; it explicitly preserves the live PostgreSQL service and forbids copying its PostgreSQL Blueprint into an Atlas cutover.
+- Added `backend/.env.mongodb.example` as a sanitized local-only template and allowed that example through `.gitignore`; no actual credentials are present.
+- Fixed opt-in settings selection so `config.settings_mongodb` can load in production mode without a PostgreSQL `DATABASE_URL`. The placeholder SQLite setting exists only while the shared base settings module is imported; the Mongo module replaces it before Django setup. The standard `config.settings` production path remains fail-closed and still requires PostgreSQL.
+- Reviewed the current Render Blueprint, health endpoint, build/start commands, media paths, Vercel monorepo root and workspace lockfile, API base variable, and notification mechanism. Did not modify Render or Vercel service configuration.
+- Confirmed the frontend notification implementation uses HTTP polling; the active configuration has no Django Channels, Redis, or Celery service requirement for this migration.
+- Documented that current Render `/tmp` media/evidence paths are ephemeral and durable media storage remains a release blocker.
+
+### Files created or modified
+
+- Modified `backend/config/settings.py`.
+- Added `backend/tests/test_mongodb_production_settings.py`.
+- Added `backend/.env.mongodb.example`.
+- Modified `.gitignore` to track the sanitized Mongo example.
+- Added `docs/MONGODB_ATLAS_DEPLOYMENT_GUIDE.md`.
+- Updated this tracker.
+- Existing user modifications to `PROJECT_PROGRESS.md`, legacy Mongo import files, and `MONGODB_TO_POSTGRESQL_MIGRATION_REPORT.md` were not staged or changed for this phase.
+
+### Tests and validation
+
+| Validation | Result |
+|---|---|
+| `python -m pytest -q tests/test_mongodb_production_settings.py` (Python 3.12) | PASS - 2 tests. Explicit Mongo production settings load without `DATABASE_URL`; default PostgreSQL production settings still reject a missing URL. |
+| `manage.py check` with default settings | PASS - no issues. |
+| `manage.py check --settings=config.settings_mongodb` using a local-replica-set URI for configuration-only checks | PASS - no issues; no Atlas URI was used. |
+| `makemigrations --check --dry-run --settings=config.settings` with explicit local SQLite configuration | PASS - no migration drift detected. |
+| `makemigrations --check --dry-run --settings=config.settings_mongodb` | BLOCKED - this command introspects the configured database and local MongoDB had no primary available for replica set `rs0`; the error is infrastructure connectivity, not migration drift. Phase 4's earlier fresh local Mongo schema migration and migration-check results remain recorded above. |
+| `git diff --check` | PASS - no whitespace errors. |
+| Render/Vercel/Atlas staging connectivity or deployment | NOT RUN - no staging resource/environment changes authorized or configured. |
+
+### Root cause and risks addressed
+
+- Root cause fixed: production Mongo settings imported the shared settings module, whose normal PostgreSQL guard rejected a missing `DATABASE_URL` before `settings_mongodb` could replace `DATABASES`. The guard now applies the temporary in-memory bootstrap database only when the explicitly selected settings module is MongoDB; ordinary production settings still reject SQLite and missing PostgreSQL URLs.
+- No external database was contacted by the new regression test. Its URIs and secrets are synthetic and never included in assertion output.
+- MongoDB Atlas transactions, network policy, indexes, backups, Vercel Preview integration, Render health checks, and deployed settings remain unverified until isolated staging infrastructure is available.
+
+### Commit
+
+- Phase 8 files are prepared for review and commit; no deployment was performed.
 
 ## Current outstanding work and next action
 
-Prepare Phase 8 Render/Vercel/Atlas deployment documentation only. Do not modify service configuration, environment variables, production database settings, or traffic until staging verification and explicit approval.
+Phase 8 deployment preparation is documented and locally verified. Continue with Phase 9 rollback/recovery, then Phase 10 readiness gates. Do not modify service configuration, environment variables, production database settings, or traffic until staging verification and explicit approval.

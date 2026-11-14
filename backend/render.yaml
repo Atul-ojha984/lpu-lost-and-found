@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: lpu-lost-found-backend-django
+    name: lpu-lost-found-backend-django-zf75
     runtime: python
     rootDir: backend
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
@@ -11,28 +11,32 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.5
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings_mongodb
       - key: DJANGO_ENV
         value: production
       - key: DEBUG
         value: "False"
+      - key: MONGODB_DATABASE
+        value: lpu_lost_found
       - key: SECRET_KEY
         generateValue: true
       - key: JWT_SIGNING_KEY
         generateValue: true
       - key: FIELD_ENCRYPTION_KEY
-        generateValue: true
+        value: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       - key: MEDIA_ROOT
         value: /tmp/media
       - key: PRIVATE_EVIDENCE_ROOT
         value: /tmp/private_evidence
       - key: DATABASE_URL
-        sync: false
+        value: sqlite:///:memory:
       - key: ALLOWED_HOSTS
-        sync: false
+        value: lpu-lost-found-backend-django-zf75.onrender.com,.onrender.com,localhost,127.0.0.1
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://lpu-lost-and-found-lac.vercel.app
       - key: CSRF_TRUSTED_ORIGINS
-        sync: false
+        value: https://lpu-lost-and-found-lac.vercel.app
       - key: SECURE_SSL_REDIRECT
         value: "True"
       - key: SESSION_COOKIE_SECURE
@@ -41,3 +45,5 @@ services:
         value: "True"
       - key: SECURE_HSTS_SECONDS
         value: "31536000"
+      - key: MONGODB_URI
+        sync: false
